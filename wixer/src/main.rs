@@ -1,13 +1,18 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use std::collections::{BTreeSet, HashSet};
-use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 
+mod commands;
+mod common;
+mod utils;
 mod validate;
 mod xsd_to_json;
 mod yaml_to_wix;
+
+use crate::common::AttributeStrategy;
+use crate::utils::find_wixer_root;
 
 #[derive(Parser)]
 #[command(name = "wixer")]
@@ -110,13 +115,6 @@ enum Commands {
     /// Wrapper around 'wix build' that transparently converts YAML files
     #[command(external_subcommand)]
     Build(Vec<String>),
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-pub enum AttributeStrategy {
-    Inline,
-    Prefix,
-    Separate,
 }
 
 fn main() {
@@ -289,184 +287,16 @@ fn main() {
             }
         }
         Commands::Init { fresh } => {
-            let wixer_root = find_wixer_root().unwrap_or_else(|e| {
-                eprintln!("Error determining project root: {}", e);
+            if let Err(e) = commands::init::run(*fresh) {
+                eprintln!("Error running init: {}", e);
                 std::process::exit(1);
-            });
-
-            let cache_base = wixer_root.join("cache");
-            let xml_schema_dir = cache_base.join("xml-schema");
-            let json_schema_dir = cache_base.join("json-schema");
-            println!("Initializing wixer in {}", wixer_root.display());
-
-            if *fresh {
-                if cache_base.exists() {
-                    println!("Clearing cache...");
-                    if let Err(e) = std::fs::remove_dir_all(&cache_base) {
-                        eprintln!("Error clearing cache: {}", e);
-                        std::process::exit(1);
-                    }
-                }
-            }
-
-            match xsd_to_json::download_wix_schemas(&xml_schema_dir, *fresh) {
-                Ok(files) => {
-                    let mut all_attributes = HashSet::new();
-                    println!("Generating JSON schemas...");
-
-                    for file in files {
-                        match xsd_to_json::convert_xsd(
-                            file.to_str().unwrap(),
-                            None,
-                            &json_schema_dir,
-                            AttributeStrategy::Inline,
-                            true,  // include_descriptions
-                            false, // strict_mode
-                            None,  // root_element
-                        ) {
-                            Ok(attrs) => all_attributes.extend(attrs),
-                            Err(e) => eprintln!("Error converting {}: {}", file.display(), e),
-                        }
-                    }
-
-                    // Save known attributes
-                    if !all_attributes.is_empty() {
-                        let sorted_attributes: BTreeSet<_> = all_attributes.into_iter().collect();
-                        let attr_file = json_schema_dir.join("known_attributes.json");
-                        let file = File::create(&attr_file)
-                            .expect("Failed to create known_attributes.json");
-                        let writer = BufWriter::new(file);
-                        serde_json::to_writer_pretty(writer, &sorted_attributes)
-                            .expect("Failed to write attributes");
-                        println!("✓ Generated attribute list: {}", attr_file.display());
-                    }
-
-                    println!("✓ Initialization complete");
-                }
-                Err(e) => {
-                    eprintln!("Error initializing: {}", e);
-                    std::process::exit(1);
-                }
             }
         }
         Commands::Build(args) => {
-            if args.is_empty() {
-                eprintln!("No arguments provided for build");
+            if let Err(e) = commands::build::run(args.clone()) {
+                eprintln!("Error running build: {}", e);
                 std::process::exit(1);
             }
-
-            // Check if it's actually the 'build' command
-            if args[0] != "build" {
-                // Pass through other commands to wix
-                let status = std::process::Command::new("wix")
-                    .args(args)
-                    .status()
-                    .unwrap_or_else(|e| {
-                        eprintln!("Failed to execute wix: {}", e);
-                        std::process::exit(1);
-                    });
-                std::process::exit(status.code().unwrap_or(1));
-            }
-
-            // It is 'build', let's intercept inputs
-            let wixer_root = find_wixer_root().unwrap_or_else(|_| {
-                // Fallback if not in a wixer project, use temp dir
-                std::env::temp_dir().join("wixer_intermediates")
-            });
-
-            let intermediates_dir = wixer_root.join("intermediates");
-            if !intermediates_dir.exists() {
-                std::fs::create_dir_all(&intermediates_dir)
-                    .expect("Failed to create intermediates dir");
-            }
-
-            // Load known attributes
-            let mut known_attributes = HashSet::new();
-            if let Ok(root) = find_wixer_root() {
-                let path = root
-                    .join("cache")
-                    .join("json-schema")
-                    .join("known_attributes.json");
-                if path.exists() {
-                    if let Ok(file) = File::open(&path) {
-                        let reader = BufReader::new(file);
-                        if let Ok(attrs) = serde_json::from_reader(reader) {
-                            known_attributes = attrs;
-                        }
-                    }
-                }
-            }
-
-            let mut new_args = Vec::new();
-            new_args.push("build".to_string());
-
-            for arg in &args[1..] {
-                let path = PathBuf::from(arg);
-                let is_yaml = path
-                    .extension()
-                    .map_or(false, |ext| ext == "yaml" || ext == "yml");
-
-                if is_yaml && path.exists() {
-                    // Check content for Wix root
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if content.contains("Wix:") || content.contains("Wix") {
-                            // Simple check, parsed later
-                            // Convert
-                            let filename = path.file_stem().unwrap().to_string_lossy();
-                            let output_path = intermediates_dir.join(format!("{}.wxs", filename));
-
-                            match yaml_to_wix::convert_file(
-                                &path,
-                                &output_path,
-                                AttributeStrategy::Inline,
-                                &known_attributes,
-                            ) {
-                                Ok(_) => {
-                                    new_args.push(output_path.to_string_lossy().to_string());
-                                    continue;
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to convert {}: {}", path.display(), e);
-                                    // Fallback to original arg? Or fail?
-                                    // Fail is safer
-                                    std::process::exit(1);
-                                }
-                            }
-                        }
-                    }
-                }
-                new_args.push(arg.clone());
-            }
-
-            println!("Running: wix {}", new_args.join(" "));
-            let status = std::process::Command::new("wix")
-                .args(&new_args[1..]) // Skip "build" as it is in new_args[0] but we ran "wix"
-                .status()
-                .unwrap_or_else(|e| {
-                    eprintln!("Failed to execute wix: {}", e);
-                    std::process::exit(1);
-                });
-            std::process::exit(status.code().unwrap_or(1));
         }
     }
-}
-
-fn find_wixer_root() -> std::io::Result<PathBuf> {
-    let current_dir = env::current_dir()?;
-    let mut dir = current_dir.as_path();
-
-    loop {
-        let wixer_dir = dir.join(".wixer");
-        if wixer_dir.exists() && wixer_dir.is_dir() {
-            return Ok(wixer_dir);
-        }
-
-        if let Some(parent) = dir.parent() {
-            dir = parent;
-        } else {
-            break;
-        }
-    }
-
-    Ok(current_dir.join(".wixer"))
 }

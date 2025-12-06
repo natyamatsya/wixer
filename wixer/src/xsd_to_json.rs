@@ -1,4 +1,4 @@
-use crate::AttributeStrategy;
+use crate::common::AttributeStrategy;
 use anyhow::Result;
 use roxmltree::{Document, Node};
 use serde_json::{Map, Value, json};

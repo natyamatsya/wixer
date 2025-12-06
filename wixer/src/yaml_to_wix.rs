@@ -1,4 +1,4 @@
-use crate::AttributeStrategy;
+use crate::common::AttributeStrategy;
 use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
@@ -73,12 +73,13 @@ pub fn convert_directory(
         let path = entry.path();
         if path.is_file()
             && let Some(ext) = path.extension()
-                && (ext == "yaml" || ext == "yml") {
-                    let filename = path.file_stem().unwrap().to_string_lossy();
-                    let output_path = output_dir.join(format!("{}.wxs", filename));
-                    convert_file(&path, &output_path, attribute_strategy, known_attributes)?;
-                    count += 1;
-                }
+            && (ext == "yaml" || ext == "yml")
+        {
+            let filename = path.file_stem().unwrap().to_string_lossy();
+            let output_path = output_dir.join(format!("{}.wxs", filename));
+            convert_file(&path, &output_path, attribute_strategy, known_attributes)?;
+            count += 1;
+        }
     }
 
     println!("\nConversion complete: {} files processed", count);
@@ -140,18 +141,19 @@ fn convert_element(
             // Separate strategy handling
             if strategy == AttributeStrategy::Separate {
                 if let Some(attrs) = map.get("attributes")
-                    && let Value::Mapping(attr_map) = attrs {
-                        for (k, v) in attr_map {
-                            let key = k.as_str().unwrap_or_default();
-                            if let Value::String(s) = v {
-                                elem.push_attribute((key, s.as_str()));
-                            } else if let Value::Number(n) = v {
-                                elem.push_attribute((key, n.to_string().as_str()));
-                            } else if let Value::Bool(b) = v {
-                                elem.push_attribute((key, if *b { "yes" } else { "no" }));
-                            }
+                    && let Value::Mapping(attr_map) = attrs
+                {
+                    for (k, v) in attr_map {
+                        let key = k.as_str().unwrap_or_default();
+                        if let Value::String(s) = v {
+                            elem.push_attribute((key, s.as_str()));
+                        } else if let Value::Number(n) = v {
+                            elem.push_attribute((key, n.to_string().as_str()));
+                        } else if let Value::Bool(b) = v {
+                            elem.push_attribute((key, if *b { "yes" } else { "no" }));
                         }
                     }
+                }
                 if let Some(elems) = map.get("elements") {
                     // TODO: Handle separate elements
                 }
