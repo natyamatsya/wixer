@@ -338,6 +338,12 @@ impl LanguageServer for WixerLsp {
 
     async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
         let completions = self.completions.read().await;
+        self.client
+            .log_message(
+                MessageType::LOG,
+                format!("Providing {} completions", completions.len()),
+            )
+            .await;
         Ok(Some(CompletionResponse::Array(completions.clone())))
     }
 }
