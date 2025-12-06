@@ -214,6 +214,41 @@ async fn main() {
     fmt::fmt()
         .with_writer(std::io::stderr)
         .init();
+
+    // Impersonation Check
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(name) = exe.file_stem() {
+            if name.to_string_lossy().eq_ignore_ascii_case("wix") {
+                // We are running as wix.exe
+                let args: Vec<String> = std::env::args().skip(1).collect();
+                if !args.is_empty() {
+                    let cmd = &args[0];
+                    let wixer_cmds = [
+                        "xsd-to-json", "yaml-to-wix", "wix-to-yaml", "validate", "init",
+                        "import", "export", "describe", "doc", "lsp", "map-schemas",
+                        "migrate", "upgrade", "build" // build is handled by commands::build::run anyway, but listed here
+                    ];
+                    
+                    // If it is NOT a wixer command, treat as passthrough/build wrapper immediately
+                    // But wait, 'build' is a wixer command (wrapper).
+                    // If it IS 'build', we can let clap handle it OR pass to build::run directly.
+                    // Passing to build::run directly avoids Clap parsing issues if wix build arguments conflict with wixer options?
+                    // But wixer build command is `Build(Vec<String>)` (external_subcommand), so it captures everything.
+                    
+                    // The only issue is unknown commands like 'msi'.
+                    if !wixer_cmds.contains(&cmd.as_str()) {
+                        // Passthrough
+                        if let Err(e) = commands::build::run(args) {
+                            error!("Error running wix wrapper: {}", e);
+                            std::process::exit(1);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     let cli = Cli::parse();
 
     match &cli.command {
