@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use tracing::{error, info, warn};
 use tracing_subscriber::fmt;
 
+pub mod analysis;
 pub mod commands;
 pub mod common;
 pub mod describe_db;

@@ -1,4 +1,5 @@
 use crate::wixpdb::WixPdb;
+use crate::analysis::{custom_action, util_extension};
 use anyhow::Result;
 use std::path::PathBuf;
 use tracing::info;
@@ -36,6 +37,20 @@ pub fn run(path: &PathBuf, symbol: Option<String>) -> Result<()> {
                 } else {
                     println!("  Location: <unknown>");
                 }
+                
+                // --- Semantic Analysis ---
+                match s.symbol_type.as_str() {
+                    "CustomAction" => {
+                        println!("\n[Analyzer Report]");
+                        println!("{}", custom_action::analyze_launch_app(&s.fields));
+                    },
+                    "WixCloseApplication" => {
+                        println!("\n[Analyzer Report]");
+                        println!("{}", util_extension::analyze_close_app(&s.fields));
+                    },
+                    _ => {}
+                }
+                // -------------------------
 
                 if !s.fields.is_empty() {
                     println!("\nFields:");
