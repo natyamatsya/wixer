@@ -68,9 +68,9 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext == "yaml" || ext == "yml" {
+        if path.is_file()
+            && let Some(ext) = path.extension()
+                && (ext == "yaml" || ext == "yml") {
                     count += 1;
 
                     // Determine schema to use
@@ -95,8 +95,6 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
                     }
                     println!();
                 }
-            }
-        }
     }
 
     println!("Validation complete: {}/{} valid", success_count, count);

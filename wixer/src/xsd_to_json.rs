@@ -1,7 +1,9 @@
 use crate::AttributeStrategy;
 use anyhow::Result;
 use roxmltree::{Document, Node};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -52,7 +54,7 @@ pub fn convert_xsd(
     include_descriptions: bool,
     strict_mode: bool,
     root_element: Option<&str>,
-) -> Result<()> {
+) -> Result<HashSet<String>> {
     fs::create_dir_all(output_dir)?;
 
     // TODO: Handle URL input
@@ -74,7 +76,7 @@ pub fn convert_xsd(
     serde_json::to_writer_pretty(file, &json_schema)?;
 
     println!("✓ Generated: {}", output_path.display());
-    Ok(())
+    Ok(converter.attributes.take())
 }
 
 struct XsdConverter {
@@ -82,6 +84,7 @@ struct XsdConverter {
     include_descriptions: bool,
     strict_mode: bool,
     xs_namespace: String,
+    attributes: RefCell<HashSet<String>>,
 }
 
 impl XsdConverter {
@@ -95,6 +98,7 @@ impl XsdConverter {
             include_descriptions,
             strict_mode,
             xs_namespace: "http://www.w3.org/2001/XMLSchema".to_string(),
+            attributes: RefCell::new(HashSet::new()),
         }
     }
 
@@ -111,22 +115,20 @@ impl XsdConverter {
                 if let Some(name) = node.attribute("name") {
                     definitions.insert(name.to_string(), self.convert_complex_type(node));
                 }
-            } else if node.tag_name().name() == "simpleType" && node.is_element() {
-                if let Some(name) = node.attribute("name") {
+            } else if node.tag_name().name() == "simpleType" && node.is_element()
+                && let Some(name) = node.attribute("name") {
                     definitions.insert(name.to_string(), self.convert_simple_type(node));
                 }
-            }
         }
 
         // Extract Elements
         for node in root.children() {
-            if node.tag_name().name() == "element" && node.is_element() {
-                if let Some(name) = node.attribute("name") {
+            if node.tag_name().name() == "element" && node.is_element()
+                && let Some(name) = node.attribute("name") {
                     let schema = self.convert_element(node);
                     properties.insert(name.to_string(), schema.clone());
                     definitions.insert(name.to_string(), schema);
                 }
-            }
         }
 
         let mut schema = json!({
@@ -162,11 +164,10 @@ impl XsdConverter {
         schema.insert("properties".to_string(), json!({}));
         schema.insert("additionalProperties".to_string(), json!(false));
 
-        if self.include_descriptions {
-            if let Some(desc) = self.get_annotation(node) {
+        if self.include_descriptions
+            && let Some(desc) = self.get_annotation(node) {
                 schema.insert("description".to_string(), json!(desc));
             }
-        }
 
         let mut properties = Map::new();
         let mut required = Vec::new();
@@ -178,6 +179,9 @@ impl XsdConverter {
                 // Simplified traversal for now
                 let name = child.attribute("name");
                 if let Some(attr_name) = name {
+                    // Record attribute name
+                    self.attributes.borrow_mut().insert(attr_name.to_string());
+
                     let prop_name = match self.attribute_strategy {
                         AttributeStrategy::Prefix => format!("@{}", attr_name),
                         _ => attr_name.to_string(),
@@ -216,8 +220,7 @@ impl XsdConverter {
         if let Some(simple_content) = node
             .children()
             .find(|n| n.tag_name().name() == "simpleContent")
-        {
-            if let Some(extension) = simple_content
+            && let Some(extension) = simple_content
                 .children()
                 .find(|n| n.tag_name().name() == "extension")
             {
@@ -226,6 +229,9 @@ impl XsdConverter {
                     if child.tag_name().name() == "attribute" && child.is_element() {
                         let name = child.attribute("name");
                         if let Some(attr_name) = name {
+                            // Record attribute name
+                            self.attributes.borrow_mut().insert(attr_name.to_string());
+
                             let prop_name = match self.attribute_strategy {
                                 AttributeStrategy::Prefix => format!("@{}", attr_name),
                                 _ => attr_name.to_string(),
@@ -247,14 +253,12 @@ impl XsdConverter {
                     properties.insert(value_prop.to_string(), json!({"type": json_type}));
                 }
             }
-        }
 
         // For complexContent (extensions)
         if let Some(complex_content) = node
             .children()
             .find(|n| n.tag_name().name() == "complexContent")
-        {
-            if let Some(extension) = complex_content
+            && let Some(extension) = complex_content
                 .children()
                 .find(|n| n.tag_name().name() == "extension")
             {
@@ -273,6 +277,9 @@ impl XsdConverter {
                     if child.tag_name().name() == "attribute" && child.is_element() {
                         let name = child.attribute("name");
                         if let Some(attr_name) = name {
+                            // Record attribute name
+                            self.attributes.borrow_mut().insert(attr_name.to_string());
+
                             let prop_name = match self.attribute_strategy {
                                 AttributeStrategy::Prefix => format!("@{}", attr_name),
                                 _ => attr_name.to_string(),
@@ -285,7 +292,6 @@ impl XsdConverter {
                     }
                 }
             }
-        }
 
         // For now, let's add properties to schema
         schema.insert("properties".to_string(), Value::Object(properties));
@@ -399,11 +405,10 @@ impl XsdConverter {
     fn convert_simple_type(&self, node: Node) -> Value {
         let mut schema = Map::new();
 
-        if self.include_descriptions {
-            if let Some(desc) = self.get_annotation(node) {
+        if self.include_descriptions
+            && let Some(desc) = self.get_annotation(node) {
                 schema.insert("description".to_string(), json!(desc));
             }
-        }
 
         if let Some(restriction) = node
             .children()
@@ -426,11 +431,10 @@ impl XsdConverter {
 
             let mut enums = Vec::new();
             for child in restriction.children() {
-                if child.tag_name().name() == "enumeration" {
-                    if let Some(val) = child.attribute("value") {
+                if child.tag_name().name() == "enumeration"
+                    && let Some(val) = child.attribute("value") {
                         enums.push(json!(val));
                     }
-                }
             }
             if !enums.is_empty() {
                 schema.insert("enum".to_string(), Value::Array(enums));
@@ -445,11 +449,10 @@ impl XsdConverter {
     fn convert_element(&self, node: Node) -> Value {
         let mut schema = Map::new();
 
-        if self.include_descriptions {
-            if let Some(desc) = self.get_annotation(node) {
+        if self.include_descriptions
+            && let Some(desc) = self.get_annotation(node) {
                 schema.insert("description".to_string(), json!(desc));
             }
-        }
 
         if let Some(type_name) = node.attribute("type") {
             // Reference to existing type
@@ -494,11 +497,10 @@ impl XsdConverter {
     fn convert_attribute(&self, node: Node) -> Value {
         let mut schema = Map::new();
 
-        if self.include_descriptions {
-            if let Some(desc) = self.get_annotation(node) {
+        if self.include_descriptions
+            && let Some(desc) = self.get_annotation(node) {
                 schema.insert("description".to_string(), json!(desc));
             }
-        }
 
         if let Some(type_name) = node.attribute("type") {
             let (json_types, pattern) = self.map_xsd_type(type_name);
@@ -535,12 +537,19 @@ impl XsdConverter {
             "boolean" => (vec![json!("boolean"), json!("string")], None),
             "integer" | "int" | "long" | "short" | "byte" | "nonNegativeInteger"
             | "positiveInteger" | "unsignedLong" | "unsignedInt" | "unsignedShort"
-            | "unsignedByte" | "Integer" | "LocalizableInteger" => (vec![json!("integer"), json!("string")], Some("^-?[0-9]+$")),
+            | "unsignedByte" | "Integer" | "LocalizableInteger" => {
+                (vec![json!("integer"), json!("string")], Some("^-?[0-9]+$"))
+            }
             "decimal" | "float" | "double" => (
                 vec![json!("number"), json!("string")],
                 Some("^-?[0-9]*\\.?[0-9]+$"),
             ),
-            "Guid" | "AutogenGuid" | "ComponentGuid" => (vec![json!("string")], Some("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$|\\*|PUT-GUID-HERE")),
+            "Guid" | "AutogenGuid" | "ComponentGuid" => (
+                vec![json!("string")],
+                Some(
+                    "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$|\\*|PUT-GUID-HERE",
+                ),
+            ),
             _ => (vec![json!("string")], None), // Default to string
         }
     }

@@ -1,50 +1,12 @@
 use crate::AttributeStrategy;
 use anyhow::Result;
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use serde_yaml::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
-
-const ATTRIBUTE_PROPERTIES: &[&str] = &[
-    "Id",
-    "Name",
-    "Version",
-    "Language",
-    "Manufacturer",
-    "UpgradeCode",
-    "InstallerVersion",
-    "Compressed",
-    "InstallScope",
-    "Description",
-    "Comments",
-    "DowngradeErrorMessage",
-    "Schedule",
-    "EmbedCab",
-    "CompressionLevel",
-    "Guid",
-    "Win64",
-    "Source",
-    "KeyPath",
-    "Target",
-    "WorkingDirectory",
-    "Icon",
-    "IconIndex",
-    "Root",
-    "Key",
-    "Type",
-    "Value",
-    "Title",
-    "Level",
-    "ConfigurableDirectory",
-    "SourceFile",
-    "Arguments",
-    "On",
-    "Directory",
-    "xmlns",
-    "Scope",
-];
 
 const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
 
@@ -52,6 +14,7 @@ pub fn convert_file(
     input: &Path,
     output: &Path,
     attribute_strategy: AttributeStrategy,
+    known_attributes: &HashSet<String>,
 ) -> Result<()> {
     println!("Converting {} -> {}", input.display(), output.display());
 
@@ -62,7 +25,13 @@ pub fn convert_file(
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
 
     if let Some(wix) = yaml_data.get("Wix") {
-        convert_element(&mut writer, "Wix", wix, attribute_strategy)?
+        convert_element(
+            &mut writer,
+            "Wix",
+            wix,
+            attribute_strategy,
+            known_attributes,
+        )?
     } else if let Value::Mapping(map) = &yaml_data {
         if map.len() == 1 {
             let (key, value) = map.iter().next().unwrap();
@@ -71,6 +40,7 @@ pub fn convert_file(
                 key.as_str().unwrap(),
                 value,
                 attribute_strategy,
+                known_attributes,
             )?
         } else {
             // If multiple roots or flat structure, wrap in Wix?
@@ -93,6 +63,7 @@ pub fn convert_directory(
     input_dir: &Path,
     output_dir: &Path,
     attribute_strategy: AttributeStrategy,
+    known_attributes: &HashSet<String>,
 ) -> Result<()> {
     fs::create_dir_all(output_dir)?;
 
@@ -100,16 +71,14 @@ pub fn convert_directory(
     for entry in fs::read_dir(input_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext == "yaml" || ext == "yml" {
+        if path.is_file()
+            && let Some(ext) = path.extension()
+                && (ext == "yaml" || ext == "yml") {
                     let filename = path.file_stem().unwrap().to_string_lossy();
                     let output_path = output_dir.join(format!("{}.wxs", filename));
-                    convert_file(&path, &output_path, attribute_strategy)?;
+                    convert_file(&path, &output_path, attribute_strategy, known_attributes)?;
                     count += 1;
                 }
-            }
-        }
     }
 
     println!("\nConversion complete: {} files processed", count);
@@ -121,6 +90,7 @@ fn convert_element(
     tag_name: &str,
     data: &Value,
     strategy: AttributeStrategy,
+    known_attributes: &HashSet<String>,
 ) -> Result<()> {
     match data {
         Value::Mapping(map) => {
@@ -136,7 +106,9 @@ fn convert_element(
                     AttributeStrategy::Prefix => key.starts_with('@'),
                     AttributeStrategy::Separate => false, // handled differently
                     AttributeStrategy::Inline => {
-                        ATTRIBUTE_PROPERTIES.contains(&key) && !v.is_mapping() && !v.is_sequence()
+                        (key.starts_with("xmlns") || known_attributes.contains(key))
+                            && !v.is_mapping()
+                            && !v.is_sequence()
                     }
                 };
 
@@ -167,8 +139,8 @@ fn convert_element(
 
             // Separate strategy handling
             if strategy == AttributeStrategy::Separate {
-                if let Some(attrs) = map.get("attributes") {
-                    if let Value::Mapping(attr_map) = attrs {
+                if let Some(attrs) = map.get("attributes")
+                    && let Value::Mapping(attr_map) = attrs {
                         for (k, v) in attr_map {
                             let key = k.as_str().unwrap_or_default();
                             if let Value::String(s) = v {
@@ -180,7 +152,6 @@ fn convert_element(
                             }
                         }
                     }
-                }
                 if let Some(elems) = map.get("elements") {
                     // TODO: Handle separate elements
                 }
@@ -195,10 +166,10 @@ fn convert_element(
             for (child_name, child_value) in children {
                 if let Value::Sequence(seq) = child_value {
                     for item in seq {
-                        convert_element(writer, child_name, item, strategy)?;
+                        convert_element(writer, child_name, item, strategy, known_attributes)?;
                     }
                 } else {
-                    convert_element(writer, child_name, child_value, strategy)?;
+                    convert_element(writer, child_name, child_value, strategy, known_attributes)?;
                 }
             }
 
@@ -207,7 +178,7 @@ fn convert_element(
         Value::Sequence(seq) => {
             // Should not happen at this level if called correctly
             for item in seq {
-                convert_element(writer, tag_name, item, strategy)?;
+                convert_element(writer, tag_name, item, strategy, known_attributes)?;
             }
         }
         Value::String(s) => {
