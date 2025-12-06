@@ -6,23 +6,24 @@ use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
+use tracing::{error, info};
 
 pub fn run(fresh: bool) -> Result<()> {
     let wixer_root = find_wixer_root().unwrap_or_else(|e| {
-        eprintln!("Error determining project root: {}", e);
+        error!("Error determining project root: {}", e);
         std::process::exit(1);
     });
 
     let cache_base = wixer_root.join("cache");
     let xml_schema_dir = cache_base.join("xml-schema");
     let json_schema_dir = cache_base.join("json-schema");
-    println!("Initializing wixer in {}", wixer_root.display());
+    info!(root = %wixer_root.display(), "Initializing wixer in {}", wixer_root.display());
 
     if fresh {
         if cache_base.exists() {
-            println!("Clearing cache...");
+            info!("Clearing cache...");
             if let Err(e) = std::fs::remove_dir_all(&cache_base) {
-                eprintln!("Error clearing cache: {}", e);
+                error!("Error clearing cache: {}", e);
                 std::process::exit(1);
             }
         }
@@ -31,7 +32,7 @@ pub fn run(fresh: bool) -> Result<()> {
     match xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh) {
         Ok(files) => {
             let mut all_attributes = HashSet::new();
-            println!("Generating JSON schemas...");
+            info!("Generating JSON schemas...");
 
             for file in files {
                 match xsd_to_json::convert_xsd(
@@ -44,7 +45,9 @@ pub fn run(fresh: bool) -> Result<()> {
                     None,  // root_element
                 ) {
                     Ok(attrs) => all_attributes.extend(attrs),
-                    Err(e) => eprintln!("Error converting {}: {}", file.display(), e),
+                    Err(e) => {
+                        error!(file = %file.display(), "Error converting {}: {}", file.display(), e)
+                    }
                 }
             }
 
@@ -57,13 +60,13 @@ pub fn run(fresh: bool) -> Result<()> {
                 let writer = BufWriter::new(file);
                 serde_json::to_writer_pretty(writer, &sorted_attributes)
                     .expect("Failed to write attributes");
-                println!("✓ Generated attribute list: {}", attr_file.display());
+                info!("✓ Generated attribute list: {}", attr_file.display());
             }
 
-            println!("✓ Initialization complete");
+            info!("✓ Initialization complete");
         }
         Err(e) => {
-            eprintln!("Error initializing: {}", e);
+            error!("Error initializing: {}", e);
             std::process::exit(1);
         }
     }

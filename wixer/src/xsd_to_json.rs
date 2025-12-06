@@ -1,11 +1,13 @@
 use crate::common::AttributeStrategy;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use roxmltree::{Document, Node};
 use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::{error, info, warn};
 
 pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(output_dir)?;
@@ -28,7 +30,7 @@ pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBu
         "vs.xsd",
     ];
 
-    println!("Downloading WiX v4 schemas to {}...", output_dir.display());
+    info!(dir = %output_dir.display(), "Downloading WiX v4 schemas");
     let client = reqwest::blocking::Client::new();
     let mut downloaded_files = Vec::new();
 
@@ -37,18 +39,18 @@ pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBu
         let output_path = output_dir.join(schema_path);
 
         if output_path.exists() && !force {
-            println!("✓ Using cached {}", schema_path);
+            info!(schema = %schema_path, "Using cached schema");
             downloaded_files.push(output_path);
             continue;
         }
 
-        println!("Downloading {}...", schema_path);
+        info!(schema = %schema_path, "Downloading schema");
         let content = client.get(&url).send()?.text()?;
         fs::write(&output_path, content)?;
         downloaded_files.push(output_path);
     }
 
-    println!("\nDownloaded/Verified {} schema files", schemas.len());
+    info!(count = schemas.len(), "Downloaded/Verified schema files");
     Ok(downloaded_files)
 }
 
@@ -65,11 +67,13 @@ pub fn convert_xsd(
 
     // TODO: Handle URL input
     let input_path = Path::new(input);
-    let content = fs::read_to_string(input_path)?;
+    let content = fs::read_to_string(input_path)
+        .with_context(|| format!("Failed to read input file: {}", input))?;
 
-    let converter = XsdConverter::new(attribute_strategy, include_descriptions, strict_mode);
-
-    let json_schema = converter.convert(&content, root_element)?;
+    // Calculate hash
+    let mut hasher = Sha256::new();
+    hasher.update(&content);
+    let current_hash = hex::encode(hasher.finalize());
 
     let output_path = if let Some(out) = output {
         PathBuf::from(out)
@@ -78,11 +82,40 @@ pub fn convert_xsd(
         output_dir.join(format!("{}.schema.json", filename))
     };
 
+    let hash_path = output_path.with_extension("sha256");
+    let attributes_path = output_path.with_extension("attributes.json");
+
+    // Check cache
+    if output_path.exists() && hash_path.exists() && attributes_path.exists() {
+        if let Ok(stored_hash) = fs::read_to_string(&hash_path) {
+            if stored_hash.trim() == current_hash {
+                if let Ok(attr_file) = fs::File::open(&attributes_path) {
+                    if let Ok(cached_attrs) = serde_json::from_reader(attr_file) {
+                        info!(file = %output_path.display(), "Using cached schema");
+                        return Ok(cached_attrs);
+                    }
+                }
+            }
+        }
+    }
+
+    let converter = XsdConverter::new(attribute_strategy, include_descriptions, strict_mode);
+
+    let json_schema = converter.convert(&content, root_element)?;
+
     let file = fs::File::create(&output_path)?;
     serde_json::to_writer_pretty(file, &json_schema)?;
 
-    println!("✓ Generated: {}", output_path.display());
-    Ok(converter.attributes.take())
+    // Save hash
+    fs::write(&hash_path, &current_hash)?;
+
+    // Save attributes
+    let attributes = converter.attributes.take();
+    let attr_file = fs::File::create(&attributes_path)?;
+    serde_json::to_writer_pretty(attr_file, &attributes)?;
+
+    info!(file = %output_path.display(), "Generated schema");
+    Ok(attributes)
 }
 
 struct XsdConverter {
@@ -156,7 +189,7 @@ impl XsdConverter {
                     .unwrap()
                     .extend(prop.as_object().unwrap().clone());
             } else {
-                println!("Warning: Root element '{}' not found", root_name);
+                warn!(root_element = %root_name, "Root element not found");
             }
         } else {
             schema

@@ -2,12 +2,13 @@ use anyhow::{Context, Result};
 use jsonschema::JSONSchema;
 use std::fs;
 use std::path::Path;
+use tracing::{error, info, warn};
 
 pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
-    println!(
-        "Validating {} against {}...",
-        yaml_path.display(),
-        schema_path.display()
+    info!(
+        yaml = %yaml_path.display(),
+        schema = %schema_path.display(),
+        "Validating file"
     );
 
     // Load Schema
@@ -33,23 +34,23 @@ pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
     let result = compiled_schema.validate(&json_value);
 
     if let Err(errors) = result {
-        println!("✗ Validation failed:");
+        error!("Validation failed:");
         for error in errors {
-            println!("  - {} (at {})", error, error.instance_path);
+            error!("  - {} (at {})", error, error.instance_path);
         }
         anyhow::bail!("Validation failed");
     } else {
-        println!("✓ YAML is valid!");
+        info!("YAML is valid!");
     }
 
     Ok(())
 }
 
 pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
-    println!(
-        "Validating YAML files in {} against schemas in {}...",
-        yaml_dir.display(),
-        schema_dir.display()
+    info!(
+        yaml_dir = %yaml_dir.display(),
+        schema_dir = %schema_dir.display(),
+        "Validating directory"
     );
 
     // This assumes a simple mapping or tries to match schema by name
@@ -58,7 +59,7 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
 
     let default_schema = schema_dir.join("wix.schema.json");
     if !default_schema.exists() {
-        println!("Warning: wix.schema.json not found in schema directory. Will attempt to match by filename.");
+        warn!("wix.schema.json not found in schema directory. Will attempt to match by filename.");
     }
 
     let mut count = 0;
@@ -70,34 +71,34 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
 
         if path.is_file()
             && let Some(ext) = path.extension()
-                && (ext == "yaml" || ext == "yml") {
-                    count += 1;
+            && (ext == "yaml" || ext == "yml")
+        {
+            count += 1;
 
-                    // Determine schema to use
-                    // 1. Try file specific schema: name.schema.json
-                    // 2. Try default wix.schema.json
+            // Determine schema to use
+            // 1. Try file specific schema: name.schema.json
+            // 2. Try default wix.schema.json
 
-                    let filename = path.file_stem().unwrap().to_string_lossy();
-                    let specific_schema = schema_dir.join(format!("{}.schema.json", filename));
+            let filename = path.file_stem().unwrap().to_string_lossy();
+            let specific_schema = schema_dir.join(format!("{}.schema.json", filename));
 
-                    let schema_to_use = if specific_schema.exists() {
-                        specific_schema
-                    } else if default_schema.exists() {
-                        default_schema.clone()
-                    } else {
-                        println!("Skipping {}: No matching schema found", path.display());
-                        continue;
-                    };
+            let schema_to_use = if specific_schema.exists() {
+                specific_schema
+            } else if default_schema.exists() {
+                default_schema.clone()
+            } else {
+                warn!(file = %path.display(), "Skipping: No matching schema found");
+                continue;
+            };
 
-                    match validate_file(&schema_to_use, &path) {
-                        Ok(_) => success_count += 1,
-                        Err(_) => println!("Validation failed for {}", path.display()),
-                    }
-                    println!();
-                }
+            match validate_file(&schema_to_use, &path) {
+                Ok(_) => success_count += 1,
+                Err(_) => error!(file = %path.display(), "Validation failed"),
+            }
+        }
     }
 
-    println!("Validation complete: {}/{} valid", success_count, count);
+    info!(valid = success_count, total = count, "Validation complete");
 
     if success_count < count {
         anyhow::bail!("Some files failed validation");

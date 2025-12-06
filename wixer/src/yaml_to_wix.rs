@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
+use tracing::info;
 
 const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
 
@@ -16,7 +17,7 @@ pub fn convert_file(
     attribute_strategy: AttributeStrategy,
     known_attributes: &HashSet<String>,
 ) -> Result<()> {
-    println!("Converting {} -> {}", input.display(), output.display());
+    info!(input = %input.display(), output = %output.display(), "Converting file");
 
     let content = fs::read_to_string(input)?;
     let yaml_data: Value = serde_yaml::from_str(&content)?;
@@ -55,7 +56,7 @@ pub fn convert_file(
     let result = writer.into_inner().into_inner();
     fs::write(output, result)?;
 
-    println!("✓ Successfully converted to {}", output.display());
+    info!(file = %output.display(), "Successfully converted");
     Ok(())
 }
 
@@ -82,7 +83,7 @@ pub fn convert_directory(
         }
     }
 
-    println!("\nConversion complete: {} files processed", count);
+    info!(count = count, "Conversion complete");
     Ok(())
 }
 

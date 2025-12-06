@@ -3,6 +3,8 @@ use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
+use tracing::{error, info, warn};
+use tracing_subscriber::fmt;
 
 mod commands;
 mod common;
@@ -118,6 +120,7 @@ enum Commands {
 }
 
 fn main() {
+    fmt::init();
     let cli = Cli::parse();
 
     match &cli.command {
@@ -148,17 +151,17 @@ fn main() {
                                 root_element.as_deref(),
                             ) {
                                 Ok(attrs) => all_attributes.extend(attrs),
-                                Err(e) => eprintln!("Error converting {}: {}", file.display(), e),
+                                Err(e) => error!(file = %file.display(), "Error converting: {}", e),
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("Error downloading schemas: {}", e);
+                        error!("Error downloading schemas: {}", e);
                         std::process::exit(1);
                     }
                 }
             } else if input.is_none() {
-                eprintln!("Either --input or --download-wix is required");
+                error!("Either --input or --download-wix is required");
                 std::process::exit(1);
             }
 
@@ -174,7 +177,7 @@ fn main() {
                 ) {
                     Ok(attrs) => all_attributes.extend(attrs),
                     Err(e) => {
-                        eprintln!("Error converting XSD: {}", e);
+                        error!("Error converting XSD: {}", e);
                         std::process::exit(1);
                     }
                 }
@@ -189,7 +192,7 @@ fn main() {
                 let writer = BufWriter::new(file);
                 serde_json::to_writer_pretty(writer, &sorted_attributes)
                     .expect("Failed to write attributes");
-                println!("✓ Generated attribute list: {}", attr_file.display());
+                info!("Generated attribute list: {}", attr_file.display());
             }
         }
         Commands::YamlToWix {
@@ -221,18 +224,18 @@ fn main() {
                     let reader = BufReader::new(file);
                     match serde_json::from_reader(reader) {
                         Ok(attrs) => known_attributes = attrs,
-                        Err(e) => eprintln!(
-                            "Warning: Failed to parse attributes file {}: {}",
-                            path.display(),
+                        Err(e) => warn!(
+                            file = %path.display(),
+                            "Failed to parse attributes file: {}",
                             e
                         ),
                     }
                 } else {
-                    eprintln!("Warning: Failed to open attributes file {}", path.display());
+                    warn!(file = %path.display(), "Failed to open attributes file");
                 }
             } else if *attribute_strategy == AttributeStrategy::Inline {
-                eprintln!(
-                    "Warning: No known_attributes.json found and strategy is Inline. Attribute detection may fail."
+                warn!(
+                    "No known_attributes.json found and strategy is Inline. Attribute detection may fail."
                 );
             }
 
@@ -243,7 +246,7 @@ fn main() {
                     *attribute_strategy,
                     &known_attributes,
                 ) {
-                    eprintln!("Error converting directory: {}", e);
+                    error!("Error converting directory: {}", e);
                     std::process::exit(1);
                 }
             } else if let (Some(input_path), Some(output_path)) = (input, output) {
@@ -253,11 +256,11 @@ fn main() {
                     *attribute_strategy,
                     &known_attributes,
                 ) {
-                    eprintln!("Error converting file: {}", e);
+                    error!("Error converting file: {}", e);
                     std::process::exit(1);
                 }
             } else {
-                eprintln!(
+                error!(
                     "Either provide input and output files, or use --input-dir and --output-dir"
                 );
                 std::process::exit(1);
@@ -271,30 +274,28 @@ fn main() {
         } => {
             if let (Some(s_dir), Some(y_dir)) = (schema_dir, yaml_dir) {
                 if let Err(e) = validate::validate_directory(s_dir, y_dir) {
-                    eprintln!("Error validating directory: {}", e);
+                    error!("Error validating directory: {}", e);
                     std::process::exit(1);
                 }
             } else if let (Some(schema_path), Some(yaml_path)) = (schema, yaml) {
                 if let Err(e) = validate::validate_file(schema_path, yaml_path) {
-                    eprintln!("Validation failed: {}", e);
+                    error!("Validation failed: {}", e);
                     std::process::exit(1);
                 }
             } else {
-                eprintln!(
-                    "Either provide schema and yaml files, or use --schema-dir and --yaml-dir"
-                );
+                error!("Either provide schema and yaml files, or use --schema-dir and --yaml-dir");
                 std::process::exit(1);
             }
         }
         Commands::Init { fresh } => {
             if let Err(e) = commands::init::run(*fresh) {
-                eprintln!("Error running init: {}", e);
+                error!("Error running init: {}", e);
                 std::process::exit(1);
             }
         }
         Commands::Build(args) => {
             if let Err(e) = commands::build::run(args.clone()) {
-                eprintln!("Error running build: {}", e);
+                error!("Error running build: {}", e);
                 std::process::exit(1);
             }
         }
