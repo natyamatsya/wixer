@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs::File;
 use std::io::BufReader;
 use crate::utils::find_wixer_root;

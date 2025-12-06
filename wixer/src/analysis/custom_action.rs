@@ -108,11 +108,10 @@ pub fn analyze_launch_app(fields: &[Value]) -> String {
     }
 
     // Impersonation (only applies if InScript)
-    if (type_val & CustomActionType::IN_SCRIPT) != 0 {
-        if !impersonate {
+    if (type_val & CustomActionType::IN_SCRIPT) != 0
+        && !impersonate {
             type_val |= CustomActionType::NO_IMPERSONATE;
         }
-    }
 
     // Generate description
     let mut flags = Vec::new();

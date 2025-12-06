@@ -15,7 +15,7 @@ pub fn parse_wix_action(id: &str, fields: &[Value]) -> WixActionData {
     
     // Parse ID to get Table
     let parts: Vec<&str> = id.split('/').collect();
-    let table = parts.get(0).unwrap_or(&"?").to_string();
+    let table = parts.first().unwrap_or(&"?").to_string();
 
     let action = get_val(1).and_then(|v| v.as_str()).unwrap_or("?").to_string();
     let condition = get_val(2).and_then(|v| v.as_str()).map(|s| s.to_string());

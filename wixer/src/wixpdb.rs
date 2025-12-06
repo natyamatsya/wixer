@@ -68,11 +68,10 @@ impl WixPdb {
                     if symbol_id.as_str() == Some(id) {
                         results.push(symbol);
                     }
-                } else if let Some(symbol_id_str) = symbol.id.as_str() {
-                    if symbol_id_str == id {
+                } else if let Some(symbol_id_str) = symbol.id.as_str()
+                    && symbol_id_str == id {
                         results.push(symbol);
                     }
-                }
             }
         }
         results

@@ -306,7 +306,7 @@ impl LanguageServer for WixerLsp {
                     // But we can check completions kind if we had a map.
                     // For now: First char Uppercase -> Class (0), Lowercase -> Property (1)
                     let token_type = if is_known {
-                        if key.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if key.chars().next().is_some_and(|c| c.is_uppercase()) {
                             0 // Class
                         } else {
                             1 // Property
