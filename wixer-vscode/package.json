@@ -32,7 +32,17 @@
           "description": "Path to the wixer executable"
         }
       }
-    }
+    },
+    "semanticTokenScopes": [
+        {
+            "language": "yaml",
+            "scopes": {
+                "class": ["entity.name.type.class"],
+                "property": ["variable.other.property"],
+                "string": ["string.quoted.double"]
+            }
+        }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

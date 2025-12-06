@@ -252,10 +252,120 @@ impl LanguageServer for WixerLsp {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
+                semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+                    SemanticTokensOptions {
+                        legend: SemanticTokensLegend {
+                            token_types: vec![
+                                SemanticTokenType::CLASS,    // 0: Elements
+                                SemanticTokenType::PROPERTY, // 1: Attributes
+                                SemanticTokenType::STRING,   // 2: Values
+                            ],
+                            token_modifiers: vec![],
+                        },
+                        full: Some(SemanticTokensFullOptions::Bool(true)),
+                        range: None,
+                        work_done_progress_options: WorkDoneProgressOptions::default(),
+                    },
+                )),
                 ..Default::default()
             },
             ..Default::default()
         })
+    }
+
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri;
+        let documents = self.documents.read().await;
+        let completions = self.completions.read().await;
+
+        if let Some(text) = documents.get(&uri) {
+            let mut data = Vec::new();
+            let mut prev_line = 0;
+            let mut prev_start = 0;
+
+            for (line_idx, line) in text.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
+
+                // Naive YAML key detection: "Key:"
+                if let Some(colon_idx) = line.find(':') {
+                    let key_part = &line[0..colon_idx];
+                    let key = key_part.trim();
+                    let start_col = line.find(key).unwrap_or(0);
+
+                    // Check if key is known Element (Class) or Property
+                    let is_known = completions.iter().any(|c| c.label == key);
+                    
+                    // Determine token type
+                    // Heuristic: Capitalized is likely Element (Class), lowercase is Attribute (Property)
+                    // But we can check completions kind if we had a map.
+                    // For now: First char Uppercase -> Class (0), Lowercase -> Property (1)
+                    let token_type = if is_known {
+                        if key.chars().next().map_or(false, |c| c.is_uppercase()) {
+                            0 // Class
+                        } else {
+                            1 // Property
+                        }
+                    } else {
+                        1 // Default to Property for unknown keys
+                    };
+
+                    // Relative calculations for Delta encoding
+                    let delta_line = line_idx as u32 - prev_line;
+                    let delta_start = if delta_line == 0 {
+                        start_col as u32 - prev_start
+                    } else {
+                        start_col as u32
+                    };
+
+                    data.push(SemanticToken {
+                        delta_line,
+                        delta_start,
+                        length: key.len() as u32,
+                        token_type,
+                        token_modifiers_bitset: 0,
+                    });
+
+                    prev_line = line_idx as u32;
+                    prev_start = start_col as u32;
+
+                    // Handle Value part if present on same line
+                    // "Key: Value"
+                    if colon_idx + 1 < line.len() {
+                        let val_part = &line[colon_idx + 1..];
+                        if !val_part.trim().is_empty() {
+                             // It's a value
+                             let val_start_col = colon_idx + 1 + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
+                             let val_len = val_part.trim().len();
+
+                             let delta_line_val = 0; // Same line
+                             let delta_start_val = val_start_col as u32 - prev_start;
+
+                             data.push(SemanticToken {
+                                delta_line: delta_line_val,
+                                delta_start: delta_start_val,
+                                length: val_len as u32,
+                                token_type: 2, // String
+                                token_modifiers_bitset: 0,
+                             });
+                             prev_start = val_start_col as u32;
+                        }
+                    }
+                }
+            }
+
+            return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+                result_id: None,
+                data,
+            })));
+        }
+
+        Ok(None)
     }
 
     async fn initialized(&self, _: InitializedParams) {
