@@ -9,6 +9,7 @@ use tracing_subscriber::fmt;
 pub mod commands;
 pub mod common;
 pub mod describe_db;
+pub mod project;
 mod utils;
 mod validate;
 mod wix_to_yaml;

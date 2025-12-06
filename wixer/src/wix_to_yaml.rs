@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
-use tracing::{info, warn};
+use tracing::info;
 
 pub fn convert_file(
     input: &Path,

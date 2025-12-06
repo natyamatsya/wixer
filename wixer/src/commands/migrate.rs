@@ -1,8 +1,7 @@
-use anyhow::{Context, Result};
+use crate::project::WixProject;
+use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use regex::Regex;
-use roxmltree::{Document, Node};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -22,38 +21,44 @@ pub fn run(input: PathBuf, output_dir: PathBuf, target: MigrationTarget) -> Resu
 fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     fs::create_dir_all(output_dir)?;
 
-    let content = fs::read_to_string(input).context("Failed to read input file")?;
-
-    // Pre-process to handle CPack variables
-    let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
-    let processed_content = re.replace_all(&content, |caps: &regex::Captures| {
-        let var = &caps[0];
-        if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" {
-             // Inject dummy namespaces to satisfy parser
-             " xmlns:ui=\"http://dummy\" xmlns:util=\"http://dummy\" CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
-        } else {
-            var.to_string()
-        }
-    });
-
-    let doc = Document::parse(&processed_content).context("Failed to parse WiX XML")?;
+    let is_template = input.extension().map_or(false, |e| e == "in");
     
-    // Extract Product/Package Info
-    let product = find_product(&doc).context("Could not find Product or Package element")?;
+    // Load Project
+    let root_dir = crate::utils::find_wixer_root().map(|p| p.parent().unwrap_or(&p).to_path_buf()).unwrap_or_else(|_| input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf());
+    
+    let mut project = WixProject::new();
+    project.load_from_directory(&root_dir)?;
 
-    let name = product.attribute("Name").unwrap_or("MyApplication");
-    let version = product.attribute("Version").unwrap_or("1.0.0.0");
-    let manufacturer = product.attribute("Manufacturer").unwrap_or("MyCompany");
-    let _id = product.attribute("Id").unwrap_or("auto-generated-id");
+    // Extract Info
+    let (p_name, p_ver, p_man) = project.find_product_info();
+    
+    // Use defaults if missing
+    let name = p_name.unwrap_or_else(|| "MyApplication".to_string());
+    let version = p_ver.unwrap_or_else(|| "1.0.0.0".to_string());
+    let manufacturer = p_man.unwrap_or_else(|| "MyCompany".to_string());
+
+    // Check content for CPack heuristic
+    let content = fs::read_to_string(input).unwrap_or_default();
+    let is_cpack_project = content.contains("CPACK_");
+
+    // Pick best executable
+    let executables = project.get_executables();
+    let executable = if let Some(exact) = executables.iter().find(|e| e.eq_ignore_ascii_case(&format!("{}.exe", name))) {
+        exact.clone()
+    } else if let Some(first) = executables.first() {
+        first.clone()
+    } else if is_cpack_project {
+        "$(var.CPACK_PACKAGE_NAME).exe".to_string()
+    } else {
+        "App.exe".to_string()
+    };
 
     // Clean version for MSIX (Quad format)
-    let version_quad = clean_version(version);
-
-    // Extract Executable (Entry Point)
-    let executable = find_executable(&doc).unwrap_or_else(|| "App.exe".to_string());
+    let version_quad = clean_version(&version);
 
     // Generate AppxManifest.xml
-    let manifest_path = output_dir.join("AppxManifest.xml");
+    let manifest_filename = if is_template { "AppxManifest.xml.in" } else { "AppxManifest.xml" };
+    let manifest_path = output_dir.join(manifest_filename);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
 
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
@@ -87,8 +92,8 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     let props = BytesStart::new("Properties");
     writer.write_event(Event::Start(props))?;
 
-    write_simple_element(&mut writer, "DisplayName", name)?;
-    write_simple_element(&mut writer, "PublisherDisplayName", manufacturer)?;
+    write_simple_element(&mut writer, "DisplayName", &name)?;
+    write_simple_element(&mut writer, "PublisherDisplayName", &manufacturer)?;
     write_simple_element(&mut writer, "Logo", "Assets\\StoreLogo.png")?;
 
     writer.write_event(Event::End(BytesEnd::new("Properties")))?;
@@ -127,8 +132,8 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
 
     // <uap:VisualElements>
     let mut visual = BytesStart::new("uap:VisualElements");
-    visual.push_attribute(("DisplayName", name));
-    visual.push_attribute(("Description", name));
+    visual.push_attribute(("DisplayName", name.as_str()));
+    visual.push_attribute(("Description", name.as_str()));
     visual.push_attribute(("BackgroundColor", "transparent"));
     visual.push_attribute(("Square150x150Logo", "Assets\\Square150x150Logo.png"));
     visual.push_attribute(("Square44x44Logo", "Assets\\Square44x44Logo.png"));
@@ -160,31 +165,6 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     info!("Created Assets directory at {}", assets_dir.display());
 
     Ok(())
-}
-
-fn find_product<'a>(doc: &'a Document) -> Option<Node<'a, 'a>> {
-    doc.descendants()
-        .find(|n| n.tag_name().name() == "Product" || n.tag_name().name() == "Package")
-}
-
-fn find_executable(doc: &Document) -> Option<String> {
-    // Look for File element with .exe extension
-    doc.descendants()
-        .find(|n| {
-            n.tag_name().name() == "File"
-                && n.attribute("Source")
-                    .is_some_and(|s| s.to_lowercase().ends_with(".exe"))
-        })
-        .and_then(|n| {
-            n.attribute("Source").map(|s| {
-                // Extract filename from source path
-                Path::new(s)
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string()
-            })
-        })
 }
 
 fn clean_version(v: &str) -> String {
