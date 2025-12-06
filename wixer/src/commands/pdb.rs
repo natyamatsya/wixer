@@ -1,5 +1,5 @@
 use crate::wixpdb::WixPdb;
-use crate::analysis::{custom_action, util_extension};
+use crate::analysis::{custom_action, util_extension, wix_action};
 use anyhow::Result;
 use std::path::PathBuf;
 use tracing::info;
@@ -47,6 +47,10 @@ pub fn run(path: &PathBuf, symbol: Option<String>) -> Result<()> {
                     "WixCloseApplication" => {
                         println!("\n[Analyzer Report]");
                         println!("{}", util_extension::analyze_close_app(&s.fields));
+                    },
+                    "WixAction" => {
+                        println!("\n[Analyzer Report]");
+                        println!("{}", wix_action::analyze_wix_action(&id, &s.fields));
                     },
                     _ => {}
                 }

@@ -9,6 +9,7 @@ use tracing_subscriber::fmt;
 pub mod analysis;
 pub mod commands;
 pub mod common;
+pub mod config;
 pub mod describe_db;
 pub mod project;
 pub mod schema_mapping;
@@ -218,6 +219,16 @@ enum Commands {
         /// Symbol ID to lookup
         #[arg(long)]
         symbol: Option<String>,
+    },
+    /// Visualize execution sequence
+    Sequence {
+        /// Path to .wixpdb file
+        #[arg(index = 1)]
+        path: PathBuf,
+
+        /// Filter by table name (e.g. InstallExecuteSequence)
+        #[arg(long)]
+        table: Option<String>,
     },
 }
 
@@ -515,6 +526,12 @@ async fn main() {
         Commands::InspectPdb { path, symbol } => {
             if let Err(e) = commands::pdb::run(path, symbol.clone()) {
                 error!("Error inspecting PDB: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Sequence { path, table } => {
+            if let Err(e) = commands::sequence::run(path, table.clone()) {
+                error!("Error visualizing sequence: {}", e);
                 std::process::exit(1);
             }
         }
