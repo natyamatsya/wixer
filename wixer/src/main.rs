@@ -216,9 +216,9 @@ async fn main() {
         .init();
 
     // Impersonation Check
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(name) = exe.file_stem() {
-            if name.to_string_lossy().eq_ignore_ascii_case("wix") {
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(name) = exe.file_stem()
+            && name.to_string_lossy().eq_ignore_ascii_case("wix") {
                 // We are running as wix.exe
                 let args: Vec<String> = std::env::args().skip(1).collect();
                 if !args.is_empty() {
@@ -246,8 +246,6 @@ async fn main() {
                     }
                 }
             }
-        }
-    }
 
     let cli = Cli::parse();
 

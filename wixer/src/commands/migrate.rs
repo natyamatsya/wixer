@@ -21,7 +21,7 @@ pub fn run(input: PathBuf, output_dir: PathBuf, target: MigrationTarget) -> Resu
 fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     fs::create_dir_all(output_dir)?;
 
-    let is_template = input.extension().map_or(false, |e| e == "in");
+    let is_template = input.extension().is_some_and(|e| e == "in");
     
     // Load Project
     let root_dir = crate::utils::find_wixer_root().map(|p| p.parent().unwrap_or(&p).to_path_buf()).unwrap_or_else(|_| input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf());
@@ -236,15 +236,14 @@ impl MsixManifest {
             fta.push_attribute(("Name", assoc.name.as_str()));
             
             // Resolve Logo
-            if let Some(icon_id) = &assoc.icon {
-                if let Some(src) = project.get_file_source(icon_id) {
+            if let Some(icon_id) = &assoc.icon
+                && let Some(src) = project.get_file_source(icon_id) {
                     if src.contains('@') || src.contains("$(") {
                         fta.push_attribute(("Logo", src.as_str()));
                     } else {
                         fta.push_attribute(("Logo", "Assets\\FileIcon.png"));
                     }
                 }
-            }
 
             self.writer.write_event(Event::Start(fta))?;
 
