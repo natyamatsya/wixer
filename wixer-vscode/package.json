@@ -18,7 +18,7 @@
     "languages": [
       {
         "id": "yaml",
-        "extensions": [".wys", ".wyi", ".wyl", ".ysi", ".ysi.in"],
+        "extensions": [".ywxs", ".ywxs.in", ".ywxi", ".ywxi.in", ".ywxl", ".ywxl.in", ".ywsi", ".ywsi.in"],
         "aliases": ["YAML", "WiX YAML"]
       }
     ],

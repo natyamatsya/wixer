@@ -63,7 +63,7 @@ pub fn run(
             let mut matched_ext = None;
             let mut is_template = false;
 
-            let supported_exts = ["ywxs", "ywxi", "ywxl", "ywsi", "wys", "wyi", "wyl", "ysi"];
+            let supported_exts = ["ywxs", "ywxi", "ywxl", "ywsi"];
 
             for ext in supported_exts {
                 if file_name.ends_with(&format!(".{}", ext)) {
@@ -84,17 +84,7 @@ pub fn run(
 
                 // Determine target extension (remove leading 'y')
                 // ywxs -> wxs
-                let target_ext = if ext.starts_with('y') {
-                    &ext[1..]
-                } else {
-                    match ext {
-                        "wys" => "wxs",
-                        "wyi" => "wxi",
-                        "wyl" => "wxl",
-                        "ysi" => "wsi",
-                        _ => "xml", // Fallback
-                    }
-                };
+                let target_ext = &ext[1..];
 
                 let final_output_path = if is_template {
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));

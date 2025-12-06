@@ -101,9 +101,6 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
         // Check for known extensions
         let (is_valid, target_ext) = match ext {
-            Some("wys") => (true, Some("wxs")),
-            Some("wyi") => (true, Some("wxi")),
-            Some("wyl") => (true, Some("wxl")),
             Some("ywxs") => (true, Some("wxs")),
             Some("ywxi") => (true, Some("wxi")),
             Some("ywxl") => (true, Some("wxl")),

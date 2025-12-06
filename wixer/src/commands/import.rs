@@ -61,13 +61,6 @@ pub fn run(
                 let relative_path = path.strip_prefix(input_dir).unwrap_or(path);
                 let output_path = output_dir.join(relative_path);
 
-                // Determine new extension
-                // We map by prepending 'y':
-                // .wxs -> .ywxs
-                // .wxi -> .ywxi
-                // .wxl -> .ywxl
-                // .wsi -> .ywsi
-
                 let target_ext = format!("y{}", ext);
 
                 let final_output_path = if is_template {
