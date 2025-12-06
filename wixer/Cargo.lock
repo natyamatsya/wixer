@@ -2570,6 +2570,7 @@ dependencies = [
  "hex",
  "indexmap",
  "jsonschema",
+ "lazy_static",
  "quick-xml",
  "regex",
  "reqwest 0.12.24",

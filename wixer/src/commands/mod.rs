@@ -1,4 +1,5 @@
 pub mod build;
+pub mod describe;
 pub mod doc;
 pub mod export;
 pub mod import;

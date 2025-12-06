@@ -157,6 +157,12 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
         attribute_strategy: AttributeStrategy,
     },
+    /// Describe WiX properties, variables, and concepts
+    Describe {
+        /// Search term (e.g. "ProductName", "INSTALLFOLDER")
+        #[arg(index = 1)]
+        term: String,
+    },
     /// Wrapper around 'wix build' that transparently converts YAML files
     #[command(external_subcommand)]
     Build(Vec<String>),
@@ -379,6 +385,12 @@ async fn main() {
         } => {
             if let Err(e) = commands::export::run(input_dir, output_dir, *attribute_strategy) {
                 error!("Error running export: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Describe { term } => {
+            if let Err(e) = commands::describe::run(term.clone()) {
+                error!("Error running describe: {}", e);
                 std::process::exit(1);
             }
         }
