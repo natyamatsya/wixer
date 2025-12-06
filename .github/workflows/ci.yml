@@ -1,4 +1,4 @@
-name: wixer-ci
+name: wixer
 
 on:
   push:
