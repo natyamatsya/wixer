@@ -61,21 +61,30 @@ pub fn run(
                     let output_path = output_dir.join(relative_path);
 
                     // Determine new extension
-                    // We map .wxs/.wxi/.wxl -> .yaml
-                    // And .wxs.in/.wxi.in/.wxl.in -> .yaml.in
+                    // We map:
+                    // .wxs -> .wys
+                    // .wxi -> .wyi
+                    // .wxl -> .wyl
+
+                    let target_ext = match ext {
+                        "wxs" => "wys",
+                        "wxi" => "wyi",
+                        "wxl" => "wyl",
+                        _ => "yaml", // Fallback, should not happen given supported_exts
+                    };
 
                     let final_output_path = if is_template {
                         let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
-                        // Remove .{ext}.in and add .yaml.in
+                        // Remove .{ext}.in and add .{target_ext}.in
                         let suffix = format!(".{}.in", ext);
                         let stem = file_name.trim_end_matches(&suffix);
-                        parent.join(format!("{}.yaml.in", stem))
+                        parent.join(format!("{}.{}.in", stem, target_ext))
                     } else {
-                        // Remove .{ext} and add .yaml
+                        // Remove .{ext} and add .{target_ext}
                         let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
                         let suffix = format!(".{}", ext);
                         let stem = file_name.trim_end_matches(&suffix);
-                        parent.join(format!("{}.yaml", stem))
+                        parent.join(format!("{}.{}", stem, target_ext))
                     };
 
                     // Create parent directories

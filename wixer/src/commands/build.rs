@@ -63,35 +63,67 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     for arg in &args[1..] {
         let path = PathBuf::from(arg);
-        let is_yaml = path
-            .extension()
-            .map_or(false, |ext| ext == "yaml" || ext == "yml");
 
-        if is_yaml && path.exists() {
-            // Check content for Wix root and namespace
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(yaml_data) = serde_yaml::from_str::<Value>(&content) {
-                    if is_wix_file(&yaml_data) {
-                        // Convert
-                        let filename = path.file_stem().unwrap().to_string_lossy();
-                        let output_path = intermediates_dir.join(format!("{}.wxs", filename));
+        let ext = path.extension().and_then(|e| e.to_str());
 
-                        match yaml_to_wix::convert_file(
-                            &path,
-                            &output_path,
-                            AttributeStrategy::Inline,
-                            &known_attributes,
-                        ) {
-                            Ok(_) => {
-                                new_args.push(output_path.to_string_lossy().to_string());
-                                continue;
+        // Check for known extensions
+        let (is_valid, target_ext) = match ext {
+            Some("wys") => (true, Some("wxs")),
+            Some("wyi") => (true, Some("wxi")),
+            Some("wyl") => (true, Some("wxl")),
+            Some("yaml") | Some("yml") => (true, None), // Needs content check
+            _ => (false, None),
+        };
+
+        if is_valid && path.exists() {
+            let target_extension = if let Some(t) = target_ext {
+                t
+            } else {
+                // Fallback for .yaml/.yml: check content
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(yaml_data) = serde_yaml::from_str::<Value>(&content) {
+                        if is_wix_file(&yaml_data) {
+                            if yaml_data.get("Include").is_some() {
+                                "wxi"
+                            } else if yaml_data.get("WixLocalization").is_some() {
+                                "wxl"
+                            } else {
+                                "wxs"
                             }
-                            Err(e) => {
-                                error!(file = %path.display(), "Failed to convert: {}", e);
-                                std::process::exit(1);
-                            }
+                        } else {
+                            // Not a WiX file, ignore
+                            new_args.push(arg.clone());
+                            continue;
                         }
+                    } else {
+                        // Not valid YAML, ignore
+                        new_args.push(arg.clone());
+                        continue;
                     }
+                } else {
+                    // Cannot read, ignore
+                    new_args.push(arg.clone());
+                    continue;
+                }
+            };
+
+            // Convert
+            let filename = path.file_stem().unwrap().to_string_lossy();
+            let output_path = intermediates_dir.join(format!("{}.{}", filename, target_extension));
+
+            match yaml_to_wix::convert_file(
+                &path,
+                &output_path,
+                AttributeStrategy::Inline,
+                &known_attributes,
+            ) {
+                Ok(_) => {
+                    new_args.push(output_path.to_string_lossy().to_string());
+                    continue;
+                }
+                Err(e) => {
+                    error!(file = %path.display(), "Failed to convert: {}", e);
+                    std::process::exit(1);
                 }
             }
         }
@@ -110,24 +142,40 @@ pub fn run(args: Vec<String>) -> Result<()> {
 }
 
 fn is_wix_file(data: &Value) -> bool {
+    // Check for standard Wix root
     if let Some(wix) = data.get("Wix") {
-        // Check for namespace in various forms
-        if let Some(ns) = wix.get("xmlns") {
+        return check_wix_namespace(wix);
+    }
+    // Check for Include root (wxi)
+    if let Some(_include) = data.get("Include") {
+        return true; // Simple check for now, technically namespaces might not be strict on Includes or mapped differently
+    }
+    // Check for WixLocalization root (wxl)
+    if let Some(_wxl) = data.get("WixLocalization") {
+        // WXL namespace is usually http://wixtoolset.org/schemas/v4/wxl
+        // For now, accept it if the root exists
+        return true;
+    }
+    false
+}
+
+fn check_wix_namespace(node: &Value) -> bool {
+    // Check for namespace in various forms
+    if let Some(ns) = node.get("xmlns") {
+        if ns.as_str() == Some(WIX_NAMESPACE) {
+            return true;
+        }
+    }
+    if let Some(ns) = node.get("@xmlns") {
+        if ns.as_str() == Some(WIX_NAMESPACE) {
+            return true;
+        }
+    }
+    // Also check separate attribute strategy
+    if let Some(attrs) = node.get("attributes") {
+        if let Some(ns) = attrs.get("xmlns") {
             if ns.as_str() == Some(WIX_NAMESPACE) {
                 return true;
-            }
-        }
-        if let Some(ns) = wix.get("@xmlns") {
-            if ns.as_str() == Some(WIX_NAMESPACE) {
-                return true;
-            }
-        }
-        // Also check separate attribute strategy
-        if let Some(attrs) = wix.get("attributes") {
-            if let Some(ns) = attrs.get("xmlns") {
-                if ns.as_str() == Some(WIX_NAMESPACE) {
-                    return true;
-                }
             }
         }
     }
