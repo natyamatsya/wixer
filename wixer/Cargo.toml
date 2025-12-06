@@ -16,3 +16,5 @@ roxmltree = "0.19"
 indexmap = { version = "2.2", features = ["serde"] }
 anyhow = "1.0"
 regex = "1.10"
+sha2 = "0.10.9"
+hex = "0.4.3"
