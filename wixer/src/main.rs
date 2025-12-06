@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::{BTreeSet, HashSet};
+use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
@@ -100,6 +101,12 @@ enum Commands {
         #[arg(long)]
         yaml_dir: Option<PathBuf>,
     },
+    /// Initialize wixer by downloading XSD schemas to a local cache
+    Init {
+        /// Delete existing cache and re-download schemas
+        #[arg(long)]
+        fresh: bool,
+    },
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -127,7 +134,7 @@ fn main() {
             let mut all_attributes = HashSet::new();
 
             if *download_wix {
-                match xsd_to_json::download_wix_schemas(schema_dir) {
+                match xsd_to_json::download_wix_schemas(schema_dir, false) {
                     Ok(files) => {
                         for file in files {
                             match xsd_to_json::convert_xsd(
@@ -272,5 +279,50 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::Init { fresh } => {
+            let wixer_root = find_wixer_root().unwrap_or_else(|e| {
+                eprintln!("Error determining project root: {}", e);
+                std::process::exit(1);
+            });
+
+            let cache_dir = wixer_root.join("cache");
+            println!("Initializing wixer in {}", wixer_root.display());
+
+            if *fresh && cache_dir.exists() {
+                println!("Clearing cache...");
+                if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
+                    eprintln!("Error clearing cache: {}", e);
+                    std::process::exit(1);
+                }
+            }
+
+            match xsd_to_json::download_wix_schemas(&cache_dir, *fresh) {
+                Ok(_) => println!("✓ Initialization complete"),
+                Err(e) => {
+                    eprintln!("Error initializing: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
     }
+}
+
+fn find_wixer_root() -> std::io::Result<PathBuf> {
+    let current_dir = env::current_dir()?;
+    let mut dir = current_dir.as_path();
+
+    loop {
+        let wixer_dir = dir.join(".wixer");
+        if wixer_dir.exists() && wixer_dir.is_dir() {
+            return Ok(wixer_dir);
+        }
+
+        if let Some(parent) = dir.parent() {
+            dir = parent;
+        } else {
+            break;
+        }
+    }
+
+    Ok(current_dir.join(".wixer"))
 }

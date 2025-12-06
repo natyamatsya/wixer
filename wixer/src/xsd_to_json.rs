@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn download_wix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
+pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(output_dir)?;
 
     let base_url = "https://raw.githubusercontent.com/wixtoolset/web/master/src/xsd4/";
@@ -28,7 +28,7 @@ pub fn download_wix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
         "vs.xsd",
     ];
 
-    println!("Downloading WiX v4 schemas...");
+    println!("Downloading WiX v4 schemas to {}...", output_dir.display());
     let client = reqwest::blocking::Client::new();
     let mut downloaded_files = Vec::new();
 
@@ -36,13 +36,19 @@ pub fn download_wix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
         let url = format!("{}{}", base_url, schema_path);
         let output_path = output_dir.join(schema_path);
 
+        if output_path.exists() && !force {
+            println!("✓ Using cached {}", schema_path);
+            downloaded_files.push(output_path);
+            continue;
+        }
+
         println!("Downloading {}...", schema_path);
         let content = client.get(&url).send()?.text()?;
         fs::write(&output_path, content)?;
         downloaded_files.push(output_path);
     }
 
-    println!("\nDownloaded {} schema files", schemas.len());
+    println!("\nDownloaded/Verified {} schema files", schemas.len());
     Ok(downloaded_files)
 }
 
@@ -115,20 +121,24 @@ impl XsdConverter {
                 if let Some(name) = node.attribute("name") {
                     definitions.insert(name.to_string(), self.convert_complex_type(node));
                 }
-            } else if node.tag_name().name() == "simpleType" && node.is_element()
-                && let Some(name) = node.attribute("name") {
-                    definitions.insert(name.to_string(), self.convert_simple_type(node));
-                }
+            } else if node.tag_name().name() == "simpleType"
+                && node.is_element()
+                && let Some(name) = node.attribute("name")
+            {
+                definitions.insert(name.to_string(), self.convert_simple_type(node));
+            }
         }
 
         // Extract Elements
         for node in root.children() {
-            if node.tag_name().name() == "element" && node.is_element()
-                && let Some(name) = node.attribute("name") {
-                    let schema = self.convert_element(node);
-                    properties.insert(name.to_string(), schema.clone());
-                    definitions.insert(name.to_string(), schema);
-                }
+            if node.tag_name().name() == "element"
+                && node.is_element()
+                && let Some(name) = node.attribute("name")
+            {
+                let schema = self.convert_element(node);
+                properties.insert(name.to_string(), schema.clone());
+                definitions.insert(name.to_string(), schema);
+            }
         }
 
         let mut schema = json!({
@@ -165,9 +175,10 @@ impl XsdConverter {
         schema.insert("additionalProperties".to_string(), json!(false));
 
         if self.include_descriptions
-            && let Some(desc) = self.get_annotation(node) {
-                schema.insert("description".to_string(), json!(desc));
-            }
+            && let Some(desc) = self.get_annotation(node)
+        {
+            schema.insert("description".to_string(), json!(desc));
+        }
 
         let mut properties = Map::new();
         let mut required = Vec::new();
@@ -223,36 +234,36 @@ impl XsdConverter {
             && let Some(extension) = simple_content
                 .children()
                 .find(|n| n.tag_name().name() == "extension")
-            {
-                // Handle attributes in extension
-                for child in extension.descendants() {
-                    if child.tag_name().name() == "attribute" && child.is_element() {
-                        let name = child.attribute("name");
-                        if let Some(attr_name) = name {
-                            // Record attribute name
-                            self.attributes.borrow_mut().insert(attr_name.to_string());
+        {
+            // Handle attributes in extension
+            for child in extension.descendants() {
+                if child.tag_name().name() == "attribute" && child.is_element() {
+                    let name = child.attribute("name");
+                    if let Some(attr_name) = name {
+                        // Record attribute name
+                        self.attributes.borrow_mut().insert(attr_name.to_string());
 
-                            let prop_name = match self.attribute_strategy {
-                                AttributeStrategy::Prefix => format!("@{}", attr_name),
-                                _ => attr_name.to_string(),
-                            };
-                            properties.insert(prop_name.clone(), self.convert_attribute(child));
-                            if self.strict_mode && child.attribute("use") == Some("required") {
-                                required.push(prop_name);
-                            }
+                        let prop_name = match self.attribute_strategy {
+                            AttributeStrategy::Prefix => format!("@{}", attr_name),
+                            _ => attr_name.to_string(),
+                        };
+                        properties.insert(prop_name.clone(), self.convert_attribute(child));
+                        if self.strict_mode && child.attribute("use") == Some("required") {
+                            required.push(prop_name);
                         }
                     }
                 }
-                // Add value property
-                if let Some(base) = extension.attribute("base") {
-                    let (json_type, _) = self.map_xsd_type(base);
-                    let value_prop = match self.attribute_strategy {
-                        AttributeStrategy::Inline => "_value",
-                        _ => "value",
-                    };
-                    properties.insert(value_prop.to_string(), json!({"type": json_type}));
-                }
             }
+            // Add value property
+            if let Some(base) = extension.attribute("base") {
+                let (json_type, _) = self.map_xsd_type(base);
+                let value_prop = match self.attribute_strategy {
+                    AttributeStrategy::Inline => "_value",
+                    _ => "value",
+                };
+                properties.insert(value_prop.to_string(), json!({"type": json_type}));
+            }
+        }
 
         // For complexContent (extensions)
         if let Some(complex_content) = node
@@ -261,37 +272,37 @@ impl XsdConverter {
             && let Some(extension) = complex_content
                 .children()
                 .find(|n| n.tag_name().name() == "extension")
-            {
-                // Handle base type properties - theoretically we should merge them,
-                // but for now we just handle the local additions
-                for child in extension.children() {
-                    match child.tag_name().name() {
-                        "sequence" | "choice" | "all" => {
-                            self.process_content_model(child, &mut properties, &mut required);
-                        }
-                        _ => {}
+        {
+            // Handle base type properties - theoretically we should merge them,
+            // but for now we just handle the local additions
+            for child in extension.children() {
+                match child.tag_name().name() {
+                    "sequence" | "choice" | "all" => {
+                        self.process_content_model(child, &mut properties, &mut required);
                     }
+                    _ => {}
                 }
-                // Handle attributes in extension
-                for child in extension.descendants() {
-                    if child.tag_name().name() == "attribute" && child.is_element() {
-                        let name = child.attribute("name");
-                        if let Some(attr_name) = name {
-                            // Record attribute name
-                            self.attributes.borrow_mut().insert(attr_name.to_string());
+            }
+            // Handle attributes in extension
+            for child in extension.descendants() {
+                if child.tag_name().name() == "attribute" && child.is_element() {
+                    let name = child.attribute("name");
+                    if let Some(attr_name) = name {
+                        // Record attribute name
+                        self.attributes.borrow_mut().insert(attr_name.to_string());
 
-                            let prop_name = match self.attribute_strategy {
-                                AttributeStrategy::Prefix => format!("@{}", attr_name),
-                                _ => attr_name.to_string(),
-                            };
-                            properties.insert(prop_name.clone(), self.convert_attribute(child));
-                            if self.strict_mode && child.attribute("use") == Some("required") {
-                                required.push(prop_name);
-                            }
+                        let prop_name = match self.attribute_strategy {
+                            AttributeStrategy::Prefix => format!("@{}", attr_name),
+                            _ => attr_name.to_string(),
+                        };
+                        properties.insert(prop_name.clone(), self.convert_attribute(child));
+                        if self.strict_mode && child.attribute("use") == Some("required") {
+                            required.push(prop_name);
                         }
                     }
                 }
             }
+        }
 
         // For now, let's add properties to schema
         schema.insert("properties".to_string(), Value::Object(properties));
@@ -406,9 +417,10 @@ impl XsdConverter {
         let mut schema = Map::new();
 
         if self.include_descriptions
-            && let Some(desc) = self.get_annotation(node) {
-                schema.insert("description".to_string(), json!(desc));
-            }
+            && let Some(desc) = self.get_annotation(node)
+        {
+            schema.insert("description".to_string(), json!(desc));
+        }
 
         if let Some(restriction) = node
             .children()
@@ -432,9 +444,10 @@ impl XsdConverter {
             let mut enums = Vec::new();
             for child in restriction.children() {
                 if child.tag_name().name() == "enumeration"
-                    && let Some(val) = child.attribute("value") {
-                        enums.push(json!(val));
-                    }
+                    && let Some(val) = child.attribute("value")
+                {
+                    enums.push(json!(val));
+                }
             }
             if !enums.is_empty() {
                 schema.insert("enum".to_string(), Value::Array(enums));
@@ -450,9 +463,10 @@ impl XsdConverter {
         let mut schema = Map::new();
 
         if self.include_descriptions
-            && let Some(desc) = self.get_annotation(node) {
-                schema.insert("description".to_string(), json!(desc));
-            }
+            && let Some(desc) = self.get_annotation(node)
+        {
+            schema.insert("description".to_string(), json!(desc));
+        }
 
         if let Some(type_name) = node.attribute("type") {
             // Reference to existing type
@@ -498,9 +512,10 @@ impl XsdConverter {
         let mut schema = Map::new();
 
         if self.include_descriptions
-            && let Some(desc) = self.get_annotation(node) {
-                schema.insert("description".to_string(), json!(desc));
-            }
+            && let Some(desc) = self.get_annotation(node)
+        {
+            schema.insert("description".to_string(), json!(desc));
+        }
 
         if let Some(type_name) = node.attribute("type") {
             let (json_types, pattern) = self.map_xsd_type(type_name);
