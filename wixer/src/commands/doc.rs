@@ -1,5 +1,5 @@
 use crate::utils::find_wixer_root;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use roxmltree::{Document, Node};
 use std::collections::HashMap;
 use std::fs;
@@ -26,24 +26,56 @@ pub fn run(output_dir: &Path, format: &str) -> Result<()> {
         "Generating documentation"
     );
 
-    fs::create_dir_all(output_dir)?;
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
+
+    // Create format-specific output directories
+    let html_dir = output_dir.join("html");
+    let md_dir = output_dir.join("markdown");
+    let adoc_dir = output_dir.join("asciidoc");
+
+    if format == "html" || format == "all" {
+        fs::create_dir_all(&html_dir)
+            .with_context(|| format!("Failed to create html directory: {}", html_dir.display()))?;
+    }
+    if format == "markdown" || format == "all" {
+        fs::create_dir_all(&md_dir).with_context(|| {
+            format!("Failed to create markdown directory: {}", md_dir.display())
+        })?;
+    }
+    if format == "asciidoc" || format == "all" {
+        fs::create_dir_all(&adoc_dir).with_context(|| {
+            format!(
+                "Failed to create asciidoc directory: {}",
+                adoc_dir.display()
+            )
+        })?;
+    }
 
     let mut schemas: HashMap<String, SchemaInfo> = HashMap::new();
 
     let mut schema_contents: HashMap<String, String> = HashMap::new();
-    for entry in fs::read_dir(&schema_dir)? {
+    for entry in fs::read_dir(&schema_dir)
+        .with_context(|| format!("Failed to read schema directory: {}", schema_dir.display()))?
+    {
         let entry = entry?;
         let path = entry.path();
         if path.is_file() && path.extension().map_or(false, |e| e == "xsd") {
-            let content = fs::read_to_string(&path)?;
+            let content = fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read schema file: {}", path.display()))?;
             let name = path.file_stem().unwrap().to_string_lossy().to_string();
             schema_contents.insert(name, content);
         }
     }
 
     let mut element_index: HashMap<String, Vec<String>> = HashMap::new(); // element_name -> [schema_names]
+    let mut element_relationships: HashMap<String, Vec<String>> = HashMap::new(); // parent -> [children]
 
-    // First pass: Indexing and Schema Info
+    // First pass: Indexing, Schema Info, and Relationships
     for (schema_name, content) in &schema_contents {
         let doc = Document::parse(content).unwrap();
 
@@ -63,9 +95,16 @@ pub fn run(output_dir: &Path, format: &str) -> Result<()> {
             if node.tag_name().name() == "element" && node.has_attribute("name") {
                 let name = node.attribute("name").unwrap().to_string();
                 element_index
-                    .entry(name)
+                    .entry(name.clone())
                     .or_default()
                     .push(schema_name.clone());
+
+                // Build relationships
+                let children = get_child_elements(node);
+                let child_names: Vec<String> = children.into_iter().map(|c| c.name).collect();
+                if !child_names.is_empty() {
+                    element_relationships.insert(name, child_names);
+                }
             }
         }
     }
@@ -87,26 +126,41 @@ pub fn run(output_dir: &Path, format: &str) -> Result<()> {
 
         // Generate Schema Page
         if format == "html" || format == "all" {
-            generate_html_schema_page(output_dir, schema_name, &doc)?;
+            generate_html_schema_page(&html_dir, schema_name, &doc)?;
         }
         if format == "markdown" || format == "all" {
-            generate_markdown_schema_page(output_dir, schema_name, &doc)?;
+            generate_markdown_schema_page(&md_dir, schema_name, &doc)?;
         }
         if format == "asciidoc" || format == "all" {
-            generate_asciidoc_schema_page(output_dir, schema_name, &doc)?;
+            generate_asciidoc_schema_page(&adoc_dir, schema_name, &doc)?;
         }
 
         // Generate Element Pages
         for node in doc.descendants() {
             if node.tag_name().name() == "element" && node.has_attribute("name") {
                 if format == "html" || format == "all" {
-                    generate_html_element_page(output_dir, schema_name, node)?;
+                    generate_html_element_page(
+                        &html_dir,
+                        schema_name,
+                        node,
+                        &element_relationships,
+                    )?;
                 }
                 if format == "markdown" || format == "all" {
-                    generate_markdown_element_page(output_dir, schema_name, node)?;
+                    generate_markdown_element_page(
+                        &md_dir,
+                        schema_name,
+                        node,
+                        &element_relationships,
+                    )?;
                 }
                 if format == "asciidoc" || format == "all" {
-                    generate_asciidoc_element_page(output_dir, schema_name, node)?;
+                    generate_asciidoc_element_page(
+                        &adoc_dir,
+                        schema_name,
+                        node,
+                        &element_relationships,
+                    )?;
                 }
             }
         }
@@ -129,6 +183,81 @@ fn extract_documentation(node: Node) -> Option<String> {
                 .find(|c| c.tag_name().name() == "documentation")
         })
         .and_then(|n| n.text().map(|t| t.trim().to_string()))
+}
+
+fn get_child_elements(node: Node) -> Vec<ChildInfo> {
+    let mut children = Vec::new();
+
+    // Simplified logic to find child element references
+    // In XSD, children are typically defined in complexType -> sequence/choice/all -> element
+
+    // Helper recursive function to find elements
+    fn find_elements_recursive<'a>(n: Node<'a, 'a>, list: &mut Vec<ChildInfo>) {
+        for child in n.children() {
+            if child.tag_name().name() == "element" {
+                let name = child
+                    .attribute("ref")
+                    .or_else(|| child.attribute("name"))
+                    .unwrap_or("")
+                    .to_string();
+                if !name.is_empty() {
+                    let min_occurs = child.attribute("minOccurs").unwrap_or("1").to_string();
+                    let max_occurs = child.attribute("maxOccurs").unwrap_or("1").to_string();
+                    let doc = extract_documentation(child);
+                    list.push(ChildInfo {
+                        name,
+                        min_occurs,
+                        max_occurs,
+                        doc,
+                    });
+                }
+            } else if matches!(
+                child.tag_name().name(),
+                "sequence" | "choice" | "all" | "complexType" | "complexContent" | "extension"
+            ) {
+                find_elements_recursive(child, list);
+            }
+        }
+    }
+
+    find_elements_recursive(node, &mut children);
+    children
+}
+
+struct ChildInfo {
+    name: String,
+    min_occurs: String,
+    max_occurs: String,
+    doc: Option<String>,
+}
+
+fn generate_element_mermaid(
+    element_name: &str,
+    relationships: &HashMap<String, Vec<String>>,
+) -> String {
+    let mut lines = Vec::new();
+    lines.push("graph TD".to_string());
+    lines.push(format!("    {0}[{0}]", element_name));
+
+    if let Some(children) = relationships.get(element_name) {
+        for child in children {
+            let child_id = child.replace('-', "_");
+            lines.push(format!("    {} --> {}[{}]", element_name, child_id, child));
+
+            // Grandchildren
+            if let Some(grandchildren) = relationships.get(child) {
+                for grandchild in grandchildren.iter().take(3) {
+                    // Limit to 3
+                    let grandchild_id = grandchild.replace('-', "_");
+                    lines.push(format!(
+                        "    {} --> {}[{}]",
+                        child_id, grandchild_id, grandchild
+                    ));
+                }
+            }
+        }
+    }
+    lines.join("\n")
 }
 
 fn get_attributes(node: Node) -> Vec<AttributeInfo> {
@@ -218,7 +347,7 @@ fn generate_markdown_index(
                 .unwrap_or("");
             let doc_clean = doc.replace('\n', " ").trim().to_string();
             lines.push(format!(
-                "| [{}.xsd](schema_{}.md) | `{}` | {} |",
+                "| [{}.xsd](markdown/schema_{}.md) | `{}` | {} |",
                 name, name, info.target_ns, doc_clean
             ));
         }
@@ -237,11 +366,11 @@ fn generate_markdown_index(
         if let Some(schemas) = elements.get(name) {
             let schema_links = schemas
                 .iter()
-                .map(|s| format!("`{}`", s))
+                .map(|s| format!("{}", s))
                 .collect::<Vec<_>>()
                 .join(", ");
             lines.push(format!(
-                "| [{0}](element_{0}.md) | {1} |",
+                "| [{0}](markdown/element_{0}.md) | {1} |",
                 name, schema_links
             ));
         }
@@ -307,7 +436,7 @@ fn generate_markdown_schema_page(
 
     lines.push("".to_string());
     lines.push("---".to_string());
-    lines.push("[↑ Back to Index](index.md)".to_string());
+    lines.push("[↑ Back to Index](../index.md)".to_string());
 
     let content = lines.join("\n");
     fs::write(
@@ -317,7 +446,12 @@ fn generate_markdown_schema_page(
     Ok(())
 }
 
-fn generate_markdown_element_page(output_dir: &Path, schema_name: &str, node: Node) -> Result<()> {
+fn generate_markdown_element_page(
+    output_dir: &Path,
+    schema_name: &str,
+    node: Node,
+    relationships: &HashMap<String, Vec<String>>,
+) -> Result<()> {
     let name = node.attribute("name").unwrap();
     let doc = extract_documentation(node);
 
@@ -331,6 +465,16 @@ fn generate_markdown_element_page(output_dir: &Path, schema_name: &str, node: No
         lines.push("## Description".to_string());
         lines.push("".to_string());
         lines.push(d);
+        lines.push("".to_string());
+    }
+
+    // Mermaid
+    if relationships.contains_key(name) {
+        lines.push("## Element Hierarchy".to_string());
+        lines.push("".to_string());
+        lines.push("```mermaid".to_string());
+        lines.push(generate_element_mermaid(name, relationships));
+        lines.push("```".to_string());
         lines.push("".to_string());
     }
 
@@ -356,9 +500,27 @@ fn generate_markdown_element_page(output_dir: &Path, schema_name: &str, node: No
         lines.push("".to_string());
     }
 
+    let children = get_child_elements(node);
+    if !children.is_empty() {
+        lines.push("## Child Elements".to_string());
+        lines.push("".to_string());
+        lines.push("| Element | Cardinality | Description |".to_string());
+        lines.push("|---------|-------------|-------------|".to_string());
+
+        for child in children {
+            let cardinality = format!("{}..{}", child.min_occurs, child.max_occurs);
+            let doc_str = child.doc.unwrap_or_default().replace('\n', " ");
+            lines.push(format!(
+                "| [{0}](element_{0}.md) | `{1}` | {2} |",
+                child.name, cardinality, doc_str
+            ));
+        }
+        lines.push("".to_string());
+    }
+
     lines.push("---".to_string());
     lines.push(format!(
-        "[← Back to {} Schema](schema_{}.md) | [↑ Back to Index](index.md)",
+        "[← Back to {} Schema](schema_{}.md) | [↑ Back to Index](../index.md)",
         schema_name, schema_name
     ));
 
@@ -393,9 +555,10 @@ fn generate_html_index(
                 .split('.')
                 .next()
                 .unwrap_or("");
+            let doc_clean = doc.replace('\n', " ").trim().to_string();
             html.push_str(&format!(
-                "<tr><td class=\"schema-name\"><a href=\"schema_{0}.html\">{0}.xsd</a></td><td><code>{1}</code></td><td class=\"schema-desc\">{2}</td></tr>\n",
-                name, html_escape(&info.target_ns), html_escape(doc)
+                "<tr><td class=\"schema-name\"><a href=\"html/schema_{0}.html\">{0}.xsd</a></td><td><code>{1}</code></td><td class=\"schema-desc\">{2}</td></tr>\n",
+                name, html_escape(&info.target_ns), html_escape(&doc_clean)
             ));
         }
     }
@@ -413,7 +576,7 @@ fn generate_html_index(
                 .collect::<Vec<_>>()
                 .join(", ");
             html.push_str(&format!(
-                "<tr><td class=\"elem-name\"><a href=\"element_{0}.html\">{0}</a></td><td class=\"elem-schemas\">{1}</td></tr>\n",
+                "<tr><td class=\"elem-name\"><a href=\"html/element_{0}.html\">{0}</a></td><td class=\"elem-schemas\">{1}</td></tr>\n",
                 name, html_escape(&schema_links)
             ));
         }
@@ -445,7 +608,7 @@ fn generate_html_schema_page(output_dir: &Path, schema_name: &str, doc: &Documen
     ));
 
     html.push_str(&format!(
-        "<nav class=\"breadcrumb\"><a href=\"index.html\">Index</a> &raquo; {}</nav>\n",
+        "<nav class=\"breadcrumb\"><a href=\"../index.html\">Index</a> &raquo; {}</nav>\n",
         schema_name
     ));
 
@@ -484,13 +647,22 @@ fn generate_html_schema_page(output_dir: &Path, schema_name: &str, doc: &Documen
     Ok(())
 }
 
-fn generate_html_element_page(output_dir: &Path, schema_name: &str, node: Node) -> Result<()> {
+fn generate_html_element_page(
+    output_dir: &Path,
+    schema_name: &str,
+    node: Node,
+    relationships: &HashMap<String, Vec<String>>,
+) -> Result<()> {
     let name = node.attribute("name").unwrap();
     let doc = extract_documentation(node);
 
     let mut html = String::from("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n");
     html.push_str(&format!("<title>{} - WiX v4 Schema</title>\n", name));
     html.push_str(&get_css());
+    // Add Mermaid
+    if relationships.contains_key(name) {
+        html.push_str("<script type=\"module\">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true });</script>\n");
+    }
     html.push_str("</head>\n<body>\n<div class=\"container\">\n");
 
     html.push_str(&format!("<div class=\"header\"><h1>{}</h1>", name));
@@ -499,13 +671,21 @@ fn generate_html_element_page(output_dir: &Path, schema_name: &str, node: Node) 
         schema_name
     ));
 
-    html.push_str(&format!("<nav class=\"breadcrumb\"><a href=\"index.html\">Index</a> &raquo; <a href=\"schema_{0}.html\">{0}</a> &raquo; {1}</nav>\n", schema_name, name));
+    html.push_str(&format!("<nav class=\"breadcrumb\"><a href=\"../index.html\">Index</a> &raquo; <a href=\"schema_{0}.html\">{0}</a> &raquo; {1}</nav>\n", schema_name, name));
 
     if let Some(d) = doc {
         html.push_str(&format!(
             "<div class=\"description\"><p>{}</p></div>\n",
             html_escape(&d)
         ));
+    }
+
+    // Mermaid
+    if relationships.contains_key(name) {
+        html.push_str("<div class=\"section\"><h2>Element Hierarchy</h2>\n");
+        html.push_str("<div class=\"mermaid\">\n");
+        html.push_str(&generate_element_mermaid(name, relationships));
+        html.push_str("\n</div>\n</div>\n");
     }
 
     let attributes = get_attributes(node);
@@ -520,6 +700,20 @@ fn generate_html_element_page(output_dir: &Path, schema_name: &str, node: Node) 
             html.push_str(&format!(
                 "<tr><td class=\"attr-name\">{}</td><td class=\"attr-type\">{}</td><td class=\"attr-use {}\">{}</td><td class=\"doc\">{}</td></tr>\n",
                 html_escape(&attr.name), html_escape(&attr.type_name), use_class, html_escape(&attr.use_attr), html_escape(attr.doc.as_deref().unwrap_or(""))
+            ));
+        }
+        html.push_str("</tbody></table></div>\n");
+    }
+
+    let children = get_child_elements(node);
+    if !children.is_empty() {
+        html.push_str("<div class=\"section\"><h2>Child Elements</h2>\n<table class=\"children-table\"><thead><tr><th>Element</th><th>Cardinality</th><th>Description</th></tr></thead><tbody>\n");
+        for child in children {
+            let cardinality = format!("{}..{}", child.min_occurs, child.max_occurs);
+            let doc_str = child.doc.unwrap_or_default();
+            html.push_str(&format!(
+                "<tr><td class=\"child-name\"><a href=\"element_{0}.html\">{0}</a></td><td class=\"cardinality\">{1}</td><td class=\"doc\">{2}</td></tr>\n",
+                html_escape(&child.name), html_escape(&cardinality), html_escape(&doc_str)
             ));
         }
         html.push_str("</tbody></table></div>\n");
@@ -556,7 +750,7 @@ fn generate_asciidoc_index(
                 .unwrap_or("");
             let doc_clean = doc.replace('\n', " ").trim().to_string();
             adoc.push_str(&format!(
-                "|link:schema_{0}.html[{0}.xsd] |`{1}` |{2}\n",
+                "|link:asciidoc/schema_{0}.adoc[{0}.xsd] |`{1}` |{2}\n",
                 name, info.target_ns, doc_clean
             ));
         }
@@ -571,9 +765,13 @@ fn generate_asciidoc_index(
 
     for name in sorted_elements {
         if let Some(schemas) = elements.get(name) {
-            let schema_links = schemas.join(", ");
+            let schema_links = schemas
+                .iter()
+                .map(|s| format!("link:asciidoc/schema_{}.adoc[{}]", s, s))
+                .collect::<Vec<_>>()
+                .join(", ");
             adoc.push_str(&format!(
-                "|link:element_{0}.html[{0}] |{1}\n",
+                "|link:asciidoc/element_{0}.adoc[{0}] |{1}\n",
                 name, schema_links
             ));
         }
@@ -627,9 +825,9 @@ fn generate_asciidoc_schema_page(
             .replace('\n', " ")
             .trim()
             .to_string();
-        adoc.push_str(&format!("|link:element_{0}.html[{0}] |{1}\n", name, brief));
+        adoc.push_str(&format!("|link:element_{0}.adoc[{0}] |{1}\n", name, brief));
     }
-    adoc.push_str("|===\n\nlink:index.html[Back to Index]\n");
+    adoc.push_str("|===\n\nlink:../index.adoc[Back to Index]\n");
 
     fs::write(
         output_dir.join(format!("schema_{}.adoc", schema_name)),
@@ -638,7 +836,12 @@ fn generate_asciidoc_schema_page(
     Ok(())
 }
 
-fn generate_asciidoc_element_page(output_dir: &Path, schema_name: &str, node: Node) -> Result<()> {
+fn generate_asciidoc_element_page(
+    output_dir: &Path,
+    schema_name: &str,
+    node: Node,
+    relationships: &HashMap<String, Vec<String>>,
+) -> Result<()> {
     let name = node.attribute("name").unwrap();
     let doc = extract_documentation(node);
 
@@ -648,6 +851,14 @@ fn generate_asciidoc_element_page(output_dir: &Path, schema_name: &str, node: No
         adoc.push_str("== Description\n\n");
         adoc.push_str(&d);
         adoc.push_str("\n\n");
+    }
+
+    // Mermaid
+    if relationships.contains_key(name) {
+        adoc.push_str("== Element Hierarchy\n\n");
+        adoc.push_str("[mermaid]\n....\n");
+        adoc.push_str(&generate_element_mermaid(name, relationships));
+        adoc.push_str("\n....\n\n");
     }
 
     let attributes = get_attributes(node);
@@ -668,8 +879,22 @@ fn generate_asciidoc_element_page(output_dir: &Path, schema_name: &str, node: No
         adoc.push_str("|===\n\n");
     }
 
+    let children = get_child_elements(node);
+    if !children.is_empty() {
+        adoc.push_str("== Child Elements\n\n[cols=\"1,1,3\",options=\"header\"]\n|===\n|Element |Cardinality |Description\n");
+        for child in children {
+            let cardinality = format!("{}..{}", child.min_occurs, child.max_occurs);
+            let doc_str = child.doc.unwrap_or_default().replace('\n', " ");
+            adoc.push_str(&format!(
+                "|link:element_{0}.adoc[{0}] |`{1}` |{2}\n",
+                child.name, cardinality, doc_str
+            ));
+        }
+        adoc.push_str("|===\n\n");
+    }
+
     adoc.push_str(&format!(
-        "link:schema_{0}.html[Back to Schema] | link:index.html[Back to Index]\n",
+        "link:schema_{0}.adoc[Back to Schema] | link:../index.adoc[Back to Index]\n",
         schema_name
     ));
 
