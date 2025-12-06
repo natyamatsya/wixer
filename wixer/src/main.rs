@@ -10,6 +10,7 @@ mod commands;
 mod common;
 mod utils;
 mod validate;
+mod wix_to_yaml;
 mod xsd_to_json;
 mod yaml_to_wix;
 
@@ -90,6 +91,20 @@ enum Commands {
         #[arg(long)]
         attributes_file: Option<PathBuf>,
     },
+    /// Convert WiX XML to YAML
+    WixToYaml {
+        /// Input WiX XML file
+        #[arg(index = 1)]
+        input: PathBuf,
+
+        /// Output YAML file
+        #[arg(index = 2)]
+        output: PathBuf,
+
+        /// Attribute handling strategy
+        #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
+        attribute_strategy: AttributeStrategy,
+    },
     /// Validate YAML against JSON Schema
     Validate {
         /// JSON Schema file
@@ -127,9 +142,12 @@ enum Commands {
         #[arg(long, default_value = "markdown")]
         format: String,
     },
+    /// Start the WiX Language Server
+    Lsp,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     fmt::init();
     let cli = Cli::parse();
 
@@ -276,6 +294,19 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::WixToYaml {
+            input,
+            output,
+            attribute_strategy,
+        } => {
+            let known_attributes = HashSet::new(); // TODO: Load if needed, but import is looser
+            if let Err(e) =
+                wix_to_yaml::convert_file(input, output, *attribute_strategy, &known_attributes)
+            {
+                error!("Error converting WiX to YAML: {}", e);
+                std::process::exit(1);
+            }
+        }
         Commands::Validate {
             schema,
             yaml,
@@ -312,6 +343,12 @@ fn main() {
         Commands::Doc { output_dir, format } => {
             if let Err(e) = commands::doc::run(output_dir, format) {
                 error!("Error generating documentation: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Lsp => {
+            if let Err(e) = commands::lsp::run().await {
+                error!("Error running LSP: {}", e);
                 std::process::exit(1);
             }
         }

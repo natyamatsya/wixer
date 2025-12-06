@@ -1,0 +1,9 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="TestPackage" Version="1.0.0.0" Manufacturer="Test" UpgradeCode="PUT-GUID-HERE">
+    <MajorUpgrade DowngradeErrorMessage="Newer version installed" />
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="Main">
+      <ComponentGroupRef Id="Components" />
+    </Feature>
+  </Package>
+</Wix>
