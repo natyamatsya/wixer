@@ -129,6 +129,20 @@ enum Commands {
         #[arg(long)]
         fresh: bool,
     },
+    /// Recursively import WiX files from a directory
+    Import {
+        /// Input directory containing .wxs or .wxs.in files
+        #[arg(index = 1)]
+        input_dir: PathBuf,
+
+        /// Output directory for .yaml files
+        #[arg(index = 2)]
+        output_dir: PathBuf,
+
+        /// Attribute handling strategy
+        #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
+        attribute_strategy: AttributeStrategy,
+    },
     /// Wrapper around 'wix build' that transparently converts YAML files
     #[command(external_subcommand)]
     Build(Vec<String>),
@@ -331,6 +345,16 @@ async fn main() {
         Commands::Init { fresh } => {
             if let Err(e) = commands::init::run(*fresh) {
                 error!("Error running init: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Import {
+            input_dir,
+            output_dir,
+            attribute_strategy,
+        } => {
+            if let Err(e) = commands::import::run(input_dir, output_dir, *attribute_strategy) {
+                error!("Error running import: {}", e);
                 std::process::exit(1);
             }
         }

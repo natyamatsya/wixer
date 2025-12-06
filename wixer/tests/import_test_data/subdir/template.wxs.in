@@ -1,0 +1,5 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="@PRODUCT_NAME@" Version="@PRODUCT_VERSION@" UpgradeCode="PUT-GUID-HERE">
+    <MajorUpgrade DowngradeErrorMessage="Newer version installed" />
+  </Package>
+</Wix>

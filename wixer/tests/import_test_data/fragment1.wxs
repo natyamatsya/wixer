@@ -1,0 +1,9 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <ComponentGroup Id="MainComponents">
+      <Component Id="Comp1" Guid="PUT-GUID-HERE">
+        <File Source="file1.txt" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>
