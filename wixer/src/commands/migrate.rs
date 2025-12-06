@@ -43,10 +43,14 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
 
     // Executable
     let executables = project.get_executables();
+    let shortcuts = project.get_shortcut_targets();
+
     let executable = if let Some(exact) = executables.iter().find(|e| e.eq_ignore_ascii_case(&format!("{}.exe", name))) {
         exact.clone()
     } else if let Some(first) = executables.first() {
         first.clone()
+    } else if let Some(sc) = shortcuts.first() {
+        sc.clone()
     } else if is_cpack_project {
         "$(var.CPACK_PACKAGE_NAME).exe".to_string()
     } else {
