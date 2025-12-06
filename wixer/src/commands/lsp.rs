@@ -26,7 +26,7 @@ impl WixerLsp {
     }
 
     async fn load_schemas(&self) {
-        let schema_dir = self.wixer_root.join("json-schemas");
+        let schema_dir = self.wixer_root.join("cache").join("json-schema");
         if !schema_dir.exists() {
             self.client
                 .log_message(MessageType::WARNING, "Schema directory not found")
@@ -62,32 +62,39 @@ impl WixerLsp {
 
     async fn validate_document(&self, uri: Url, version: Option<i32>, text: String) {
         let schemas = self.schemas.read().await;
-        // Simple heuristic: use wix.schema.json for everything for now, or try to match filename
-        // Ideally we check for a magic comment or configuration
+        
+        let path = PathBuf::from(uri.path());
+        let filename = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-        // Try to find a schema that matches the file name
-        let filename = PathBuf::from(uri.path())
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
+        // Schema selection strategy:
+        // 1. Exact match by filename
+        // 2. Match by extension
+        // 3. Default to "wix"
 
-        let schema = schemas.get(&filename).or_else(|| schemas.get("wix"));
+        let extension_schema = match ext {
+            "wyl" => "wixloc",
+            _ => "wix",
+        };
+
+        let schema = schemas.get(&filename)
+            .or_else(|| schemas.get(extension_schema))
+            .or_else(|| schemas.get("wix"));
 
         if let Some(schema) = schema {
-            let diagnostics = if let Ok(yaml_val) = serde_yaml::from_str::<serde_yaml::Value>(&text)
-            {
-                if let Ok(json_val) = serde_json::to_value(yaml_val) {
-                    match schema.validate(&json_val) {
-                        Ok(_) => vec![],
-                        Err(errors) => {
-                            errors
+            let diagnostics = match serde_yaml::from_str::<serde_yaml::Value>(&text) {
+                Ok(yaml_val) => {
+                    if let Ok(mut json_val) = serde_json::to_value(yaml_val) {
+                        // Strip xmlns
+                        remove_xmlns(&mut json_val);
+
+                        match schema.validate(&json_val) {
+                            Ok(_) => vec![],
+                            Err(errors) => errors
                                 .map(|e| {
+                                    let range = find_range(&text, &e.instance_path.to_string());
                                     Diagnostic {
-                                        range: Range {
-                                            start: Position::new(0, 0), // Placeholder, jsonschema doesn't give line/col easily for YAML source
-                                            end: Position::new(0, 0),
-                                        },
+                                        range,
                                         severity: Some(DiagnosticSeverity::ERROR),
                                         code: None,
                                         code_description: None,
@@ -98,30 +105,81 @@ impl WixerLsp {
                                         data: None,
                                     }
                                 })
-                                .collect()
+                                .collect(),
                         }
+                    } else {
+                        vec![] // JSON conversion error
                     }
-                } else {
-                    vec![] // JSON conversion error
                 }
-            } else {
-                vec![Diagnostic {
-                    range: Range::default(),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    code: None,
-                    code_description: None,
-                    source: Some("wixer".to_string()),
-                    message: "Invalid YAML syntax".to_string(),
-                    related_information: None,
-                    tags: None,
-                    data: None,
-                }]
+                Err(e) => {
+                    let range = if let Some(loc) = e.location() {
+                        Range {
+                            start: Position::new(loc.line() as u32 - 1, loc.column() as u32 - 1),
+                            end: Position::new(loc.line() as u32 - 1, loc.column() as u32),
+                        }
+                    } else {
+                        Range::default()
+                    };
+                    vec![Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: None,
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: e.to_string(),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    }]
+                }
             };
 
             self.client
                 .publish_diagnostics(uri, diagnostics, version)
                 .await;
         }
+    }
+}
+
+fn find_range(text: &str, instance_path: &str) -> Range {
+    let segments: Vec<&str> = instance_path.trim_start_matches('/').split('/').collect();
+    if segments.is_empty() {
+        return Range::default();
+    }
+
+    // Try to find the last segment that is not a number (array index)
+    let target_key = segments.iter().rev().find(|s| s.parse::<usize>().is_err());
+
+    if let Some(key) = target_key {
+        // Simple heuristic: find the first occurrence of "Key:"
+        // TODO: Improve this by parsing indentation or path tracking
+        let pattern = format!("{}:", key);
+        if let Some((line_idx, line)) = text.lines().enumerate().find(|(_, l)| l.contains(&pattern)) {
+            let col_idx = line.find(&pattern).unwrap_or(0);
+            return Range {
+                start: Position::new(line_idx as u32, col_idx as u32),
+                end: Position::new(line_idx as u32, (col_idx + pattern.len()) as u32),
+            };
+        }
+    }
+
+    Range::default()
+}
+
+fn remove_xmlns(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.retain(|k, _| !k.starts_with("xmlns"));
+            for (_, v) in map.iter_mut() {
+                remove_xmlns(v);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                remove_xmlns(v);
+            }
+        }
+        _ => {}
     }
 }
 
