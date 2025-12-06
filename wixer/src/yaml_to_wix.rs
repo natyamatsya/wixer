@@ -167,7 +167,7 @@ fn convert_element(
                         }
                     }
                 }
-                if let Some(elems) = map.get("elements") {
+                if let Some(_elems) = map.get("elements") {
                     // TODO: Handle separate elements
                 }
             }

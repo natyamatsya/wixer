@@ -1,27 +1,32 @@
+use crate::describe_db::{self, WixProperty};
+use crate::utils::find_wixer_root;
 use anyhow::Result;
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct WixProperty {
-    name: String,
-    kind: String, // "Property", "Directory", "Preprocessor", "CPack"
-    description: String,
-    docs_url: Option<String>,
-    #[serde(default)]
-    tags: Vec<String>,
-}
-
-lazy_static::lazy_static! {
-    static ref PROPERTIES: Vec<WixProperty> = {
-        let json = include_str!("../../assets/knowledge_base.json");
-        serde_json::from_str(json).expect("Failed to parse knowledge_base.json")
-    };
-}
+use tracing::warn;
 
 pub fn run(term: String) -> Result<()> {
     let term_lower = term.to_lowercase();
 
-    let matches: Vec<&WixProperty> = PROPERTIES
+    // Find project root to load DB
+    let properties = if let Ok(root) = find_wixer_root() {
+        describe_db::load(&root).unwrap_or_else(|e| {
+            warn!(
+                "Failed to load description database: {}. Run 'wixer init' to generate it.",
+                e
+            );
+            vec![]
+        })
+    } else {
+        warn!("Not in a wixer project. Description database not loaded. Run 'wixer init'.");
+        vec![]
+    };
+
+    if properties.is_empty() {
+        println!("Description database is empty or could not be loaded.");
+        println!("Try running 'wixer init' to generate it.");
+        return Ok(());
+    }
+
+    let matches: Vec<&WixProperty> = properties
         .iter()
         .filter(|p| p.name.to_lowercase().contains(&term_lower))
         .collect();

@@ -6,8 +6,9 @@ use std::path::PathBuf;
 use tracing::{error, info, warn};
 use tracing_subscriber::fmt;
 
-mod commands;
-mod common;
+pub mod commands;
+pub mod common;
+pub mod describe_db;
 mod utils;
 mod validate;
 mod wix_to_yaml;
@@ -200,7 +201,7 @@ async fn main() {
             let mut all_attributes = HashSet::new();
 
             if *download_wix {
-                match xsd_to_json::download_wix_schemas(schema_dir, false) {
+                match xsd_to_json::download_wix_schemas(schema_dir, false).await {
                     Ok(files) => {
                         for file in files {
                             match xsd_to_json::convert_xsd(
@@ -363,7 +364,7 @@ async fn main() {
             }
         }
         Commands::Init { fresh } => {
-            if let Err(e) = commands::init::run(*fresh) {
+            if let Err(e) = commands::init::run(*fresh).await {
                 error!("Error running init: {}", e);
                 std::process::exit(1);
             }

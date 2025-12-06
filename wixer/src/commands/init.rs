@@ -1,14 +1,14 @@
 use crate::common::AttributeStrategy;
+use crate::describe_db;
 use crate::utils::find_wixer_root;
 use crate::xsd_to_json;
 use anyhow::Result;
 use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::BufWriter;
-use std::path::Path;
 use tracing::{error, info};
 
-pub fn run(fresh: bool) -> Result<()> {
+pub async fn run(fresh: bool) -> Result<()> {
     let wixer_root = find_wixer_root().unwrap_or_else(|e| {
         error!("Error determining project root: {}", e);
         std::process::exit(1);
@@ -29,7 +29,7 @@ pub fn run(fresh: bool) -> Result<()> {
         }
     }
 
-    match xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh) {
+    match xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh).await {
         Ok(files) => {
             let mut all_attributes = HashSet::new();
             info!("Generating JSON schemas...");
@@ -69,6 +69,13 @@ pub fn run(fresh: bool) -> Result<()> {
             error!("Error initializing: {}", e);
             std::process::exit(1);
         }
+    }
+
+    // Generate description database
+    if let Err(e) = describe_db::generate(&wixer_root) {
+        error!("Failed to generate description database: {}", e);
+    } else {
+        info!("Generated description database");
     }
 
     Ok(())

@@ -7,9 +7,9 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
-pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBuf>> {
+pub async fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(output_dir)?;
 
     let base_url = "https://raw.githubusercontent.com/wixtoolset/web/master/src/xsd4/";
@@ -31,7 +31,7 @@ pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBu
     ];
 
     info!(dir = %output_dir.display(), "Downloading WiX v4 schemas");
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::Client::new();
     let mut downloaded_files = Vec::new();
 
     for schema_path in schemas {
@@ -45,7 +45,7 @@ pub fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBu
         }
 
         info!(schema = %schema_path, "Downloading schema");
-        let content = client.get(&url).send()?.text()?;
+        let content = client.get(&url).send().await?.text().await?;
         fs::write(&output_path, content)?;
         downloaded_files.push(output_path);
     }
@@ -122,7 +122,7 @@ struct XsdConverter {
     attribute_strategy: AttributeStrategy,
     include_descriptions: bool,
     strict_mode: bool,
-    xs_namespace: String,
+    _xs_namespace: String,
     attributes: RefCell<HashSet<String>>,
 }
 
@@ -136,7 +136,7 @@ impl XsdConverter {
             attribute_strategy,
             include_descriptions,
             strict_mode,
-            xs_namespace: "http://www.w3.org/2001/XMLSchema".to_string(),
+            _xs_namespace: "http://www.w3.org/2001/XMLSchema".to_string(),
             attributes: RefCell::new(HashSet::new()),
         }
     }
@@ -409,7 +409,7 @@ impl XsdConverter {
                     let mut elem_schema = self.convert_element(child);
 
                     let max_occurs = child.attribute("maxOccurs").unwrap_or("1");
-                    let min_occurs = child.attribute("minOccurs").unwrap_or("1");
+                    let _min_occurs = child.attribute("minOccurs").unwrap_or("1");
 
                     let is_array = max_occurs == "unbounded"
                         || (max_occurs.parse::<u32>().unwrap_or(1) > 1)
