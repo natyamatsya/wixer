@@ -49,7 +49,7 @@ impl DocGenerator for HtmlGenerator {
             if let Some(schemas) = context.elements.get(name) {
                 let schema_links = schemas
                     .iter()
-                    .map(|s| format!("{}", s))
+                    .map(|s| s.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
                 html.push_str(&format!(

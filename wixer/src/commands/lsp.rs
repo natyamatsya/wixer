@@ -38,19 +38,17 @@ impl WixerLsp {
         if let Ok(entries) = fs::read_dir(schema_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "json") {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(json) = serde_json::from_str::<Value>(&content) {
-                            if let Ok(compiled) = jsonschema::JSONSchema::compile(&json) {
-                                let name = path
-                                    .file_stem()
-                                    .unwrap()
-                                    .to_string_lossy()
-                                    .replace(".schema", "");
-                                schemas.insert(name, compiled);
-                            }
-                        }
-                    }
+                if path.extension().is_some_and(|e| e == "json")
+                    && let Ok(content) = fs::read_to_string(&path)
+                    && let Ok(json) = serde_json::from_str::<Value>(&content)
+                    && let Ok(compiled) = jsonschema::JSONSchema::compile(&json)
+                {
+                    let name = path
+                        .file_stem()
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace(".schema", "");
+                    schemas.insert(name, compiled);
                 }
             }
         }
@@ -177,7 +175,7 @@ pub async fn run() -> anyhow::Result<()> {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = tower_lsp::LspService::new(|client| WixerLsp::new(client));
+    let (service, socket) = tower_lsp::LspService::new(WixerLsp::new);
     tower_lsp::Server::new(stdin, stdout, socket)
         .serve(service)
         .await;

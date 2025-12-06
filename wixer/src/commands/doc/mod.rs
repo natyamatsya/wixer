@@ -79,7 +79,7 @@ pub fn run(output_dir: &Path, format: &str) -> Result<()> {
     {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |e| e == "xsd") {
+        if path.is_file() && path.extension().is_some_and(|e| e == "xsd") {
             let content = fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read schema file: {}", path.display()))?;
             let name = path.file_stem().unwrap().to_string_lossy().to_string();

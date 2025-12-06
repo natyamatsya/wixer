@@ -32,9 +32,9 @@ pub fn run() -> Result<()> {
         for entry in WalkDir::new(&msix_root) {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "xsd") {
+            if path.extension().is_some_and(|e| e == "xsd") {
                 let file_name = path.file_name().unwrap().to_string_lossy().to_string();
-                let content = match fs::read_to_string(&path) {
+                let content = match fs::read_to_string(path) {
                     Ok(c) => c,
                     Err(_) => continue, // Skip unreadable
                 };
@@ -42,24 +42,24 @@ pub fn run() -> Result<()> {
                 // Simple parsing to get element names
                 if let Ok(doc) = Document::parse(&content) {
                     for node in doc.descendants() {
-                        if node.tag_name().name() == "element" {
-                            if let Some(name) = node.attribute("name") {
-                                msix_elements.insert(name.to_string(), file_name.clone());
-                            }
+                        if node.tag_name().name() == "element"
+                            && let Some(name) = node.attribute("name")
+                        {
+                            msix_elements.insert(name.to_string(), file_name.clone());
                         }
                         // Also map complexTypes as they often back elements
-                        if node.tag_name().name() == "complexType" {
-                            if let Some(name) = node.attribute("name") {
-                                // Strip CT_ prefix common in MSIX
-                                let clean_name = if let Some(stripped) = name.strip_prefix("CT_") {
-                                    stripped
-                                } else {
-                                    name
-                                };
-                                msix_elements
-                                    .entry(clean_name.to_string())
-                                    .or_insert_with(|| file_name.clone());
-                            }
+                        if node.tag_name().name() == "complexType"
+                            && let Some(name) = node.attribute("name")
+                        {
+                            // Strip CT_ prefix common in MSIX
+                            let clean_name = if let Some(stripped) = name.strip_prefix("CT_") {
+                                stripped
+                            } else {
+                                name
+                            };
+                            msix_elements
+                                .entry(clean_name.to_string())
+                                .or_insert_with(|| file_name.clone());
                         }
                     }
                 }

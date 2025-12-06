@@ -20,13 +20,11 @@ pub async fn run(fresh: bool) -> Result<()> {
     let json_schema_dir = cache_base.join("json-schema");
     info!(root = %wixer_root.display(), "Initializing wixer in {}", wixer_root.display());
 
-    if fresh {
-        if cache_base.exists() {
-            info!("Clearing cache...");
-            if let Err(e) = std::fs::remove_dir_all(&cache_base) {
-                error!("Error clearing cache: {}", e);
-                std::process::exit(1);
-            }
+    if fresh && cache_base.exists() {
+        info!("Clearing cache...");
+        if let Err(e) = std::fs::remove_dir_all(&cache_base) {
+            error!("Error clearing cache: {}", e);
+            std::process::exit(1);
         }
     }
 

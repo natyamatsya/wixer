@@ -159,7 +159,7 @@ fn find_executable(doc: &Document) -> Option<String> {
         .find(|n| {
             n.tag_name().name() == "File"
                 && n.attribute("Source")
-                    .map_or(false, |s| s.to_lowercase().ends_with(".exe"))
+                    .is_some_and(|s| s.to_lowercase().ends_with(".exe"))
         })
         .and_then(|n| {
             n.attribute("Source").map(|s| {

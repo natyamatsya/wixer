@@ -48,12 +48,12 @@ pub fn run(args: Vec<String>) -> Result<()> {
             .join("cache")
             .join("json-schema")
             .join("known_attributes.json");
-        if path.exists() {
-            if let Ok(file) = File::open(&path) {
-                let reader = BufReader::new(file);
-                if let Ok(attrs) = serde_json::from_reader(reader) {
-                    known_attributes = attrs;
-                }
+        if path.exists()
+            && let Ok(file) = File::open(&path)
+        {
+            let reader = BufReader::new(file);
+            if let Ok(attrs) = serde_json::from_reader(reader) {
+                known_attributes = attrs;
             }
         }
     }
@@ -161,23 +161,22 @@ fn is_wix_file(data: &Value) -> bool {
 
 fn check_wix_namespace(node: &Value) -> bool {
     // Check for namespace in various forms
-    if let Some(ns) = node.get("xmlns") {
-        if ns.as_str() == Some(WIX_NAMESPACE) {
-            return true;
-        }
+    if let Some(ns) = node.get("xmlns")
+        && ns.as_str() == Some(WIX_NAMESPACE)
+    {
+        return true;
     }
-    if let Some(ns) = node.get("@xmlns") {
-        if ns.as_str() == Some(WIX_NAMESPACE) {
-            return true;
-        }
+    if let Some(ns) = node.get("@xmlns")
+        && ns.as_str() == Some(WIX_NAMESPACE)
+    {
+        return true;
     }
     // Also check separate attribute strategy
-    if let Some(attrs) = node.get("attributes") {
-        if let Some(ns) = attrs.get("xmlns") {
-            if ns.as_str() == Some(WIX_NAMESPACE) {
-                return true;
-            }
-        }
+    if let Some(attrs) = node.get("attributes")
+        && let Some(ns) = attrs.get("xmlns")
+        && ns.as_str() == Some(WIX_NAMESPACE)
+    {
+        return true;
     }
     false
 }

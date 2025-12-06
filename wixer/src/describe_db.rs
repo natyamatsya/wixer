@@ -29,35 +29,30 @@ pub fn generate(root: &Path) -> Result<()> {
         for entry in fs::read_dir(schema_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "json") {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(json) = serde_json::from_str::<Value>(&content) {
-                        if let Some(definitions) =
-                            json.get("definitions").and_then(|d| d.as_object())
-                        {
-                            for (name, def) in definitions {
-                                // Extract description
-                                let description = def
-                                    .get("description")
-                                    .and_then(|d| d.as_str())
-                                    .unwrap_or("No description available.")
-                                    .to_string();
+            if path.extension().is_some_and(|e| e == "json")
+                && let Ok(content) = fs::read_to_string(&path)
+                && let Ok(json) = serde_json::from_str::<Value>(&content)
+                && let Some(definitions) = json.get("definitions").and_then(|d| d.as_object())
+            {
+                for (name, def) in definitions {
+                    // Extract description
+                    let description = def
+                        .get("description")
+                        .and_then(|d| d.as_str())
+                        .unwrap_or("No description available.")
+                        .to_string();
 
-                                // Determine file source for tags
-                                let schema_name = path.file_stem().unwrap().to_string_lossy();
-                                let tags =
-                                    vec!["Element".to_string(), schema_name.replace(".schema", "")];
+                    // Determine file source for tags
+                    let schema_name = path.file_stem().unwrap().to_string_lossy();
+                    let tags = vec!["Element".to_string(), schema_name.replace(".schema", "")];
 
-                                properties.push(WixProperty {
-                                    name: name.clone(),
-                                    kind: "Element".to_string(),
-                                    description,
-                                    docs_url: None,
-                                    tags,
-                                });
-                            }
-                        }
-                    }
+                    properties.push(WixProperty {
+                        name: name.clone(),
+                        kind: "Element".to_string(),
+                        description,
+                        docs_url: None,
+                        tags,
+                    });
                 }
             }
         }

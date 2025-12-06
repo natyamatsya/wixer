@@ -3,7 +3,6 @@ use anyhow::Result;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 use serde_json::{Map, Value};
-use serde_yaml;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -138,14 +137,14 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
             }
             Ok(Event::Text(e)) => {
                 let text = e.unescape()?.to_string();
-                if !text.trim().is_empty() {
-                    if let Some((_, map)) = stack.last_mut() {
-                        // Determine text property name based on strategy/convention
-                        // For now using "_value" as seen in yaml_to_wix or "text"
-                        // yaml_to_wix uses: const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
-                        // Let's use _value to be safe/standard
-                        map.insert("_value".to_string(), Value::String(text));
-                    }
+                if !text.trim().is_empty()
+                    && let Some((_, map)) = stack.last_mut()
+                {
+                    // Determine text property name based on strategy/convention
+                    // For now using "_value" as seen in yaml_to_wix or "text"
+                    // yaml_to_wix uses: const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
+                    // Let's use _value to be safe/standard
+                    map.insert("_value".to_string(), Value::String(text));
                 }
             }
             Ok(Event::Eof) => break,

@@ -79,15 +79,13 @@ pub fn get_attributes(node: Node) -> Vec<AttributeInfo> {
 
         // Check content models (simpleContent, complexContent)
         for content in complex.children() {
-            if content.tag_name().name() == "simpleContent"
-                || content.tag_name().name() == "complexContent"
-            {
-                if let Some(extension) = content
+            if (content.tag_name().name() == "simpleContent"
+                || content.tag_name().name() == "complexContent")
+                && let Some(extension) = content
                     .children()
                     .find(|n| n.tag_name().name() == "extension")
-                {
-                    extract_from(extension, &mut attrs);
-                }
+            {
+                extract_from(extension, &mut attrs);
             }
         }
     }

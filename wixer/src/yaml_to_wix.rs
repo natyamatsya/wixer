@@ -102,10 +102,10 @@ fn convert_element(
             let mut text_content = None;
 
             // Handle comment if present
-            if let Some(comment) = map.get(COMMENT_PROPERTY) {
-                if let Value::String(s) = comment {
-                    writer.write_event(Event::Comment(BytesText::new(s)))?;
-                }
+            if let Some(comment) = map.get(COMMENT_PROPERTY)
+                && let Value::String(s) = comment
+            {
+                writer.write_event(Event::Comment(BytesText::new(s)))?;
             }
 
             // Collect attributes

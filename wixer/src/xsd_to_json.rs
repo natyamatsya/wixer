@@ -155,17 +155,16 @@ pub fn convert_xsd(
     let attributes_path = output_path.with_extension("attributes.json");
 
     // Check cache
-    if output_path.exists() && hash_path.exists() && attributes_path.exists() {
-        if let Ok(stored_hash) = fs::read_to_string(&hash_path) {
-            if stored_hash.trim() == current_hash {
-                if let Ok(attr_file) = fs::File::open(&attributes_path) {
-                    if let Ok(cached_attrs) = serde_json::from_reader(attr_file) {
-                        info!(file = %output_path.display(), "Using cached schema");
-                        return Ok(cached_attrs);
-                    }
-                }
-            }
-        }
+    if output_path.exists()
+        && hash_path.exists()
+        && attributes_path.exists()
+        && let Ok(stored_hash) = fs::read_to_string(&hash_path)
+        && stored_hash.trim() == current_hash
+        && let Ok(attr_file) = fs::File::open(&attributes_path)
+        && let Ok(cached_attrs) = serde_json::from_reader(attr_file)
+    {
+        info!(file = %output_path.display(), "Using cached schema");
+        return Ok(cached_attrs);
     }
 
     let converter = XsdConverter::new(attribute_strategy, include_descriptions, strict_mode);

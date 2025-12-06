@@ -11,16 +11,16 @@ pub struct MarkdownGenerator;
 
 impl DocGenerator for MarkdownGenerator {
     fn generate_index(&self, output_dir: &Path, context: &IndexContext) -> Result<()> {
-        let mut lines = Vec::new();
-        lines.push("# WiX Toolset v4 Schema Documentation".to_string());
-        lines.push("".to_string());
-        lines.push("Comprehensive reference for WiX v4 XML schemas".to_string());
-        lines.push("".to_string());
-
-        lines.push("## Schema Files".to_string());
-        lines.push("".to_string());
-        lines.push("| Schema | Namespace | Description |".to_string());
-        lines.push("|--------|-----------|-------------|".to_string());
+        let mut lines = vec![
+            "# WiX Toolset v4 Schema Documentation".to_string(),
+            "".to_string(),
+            "Comprehensive reference for WiX v4 XML schemas".to_string(),
+            "".to_string(),
+            "## Schema Files".to_string(),
+            "".to_string(),
+            "| Schema | Namespace | Description |".to_string(),
+            "|--------|-----------|-------------|".to_string(),
+        ];
 
         let mut sorted_schemas: Vec<_> = context.schemas.keys().collect();
         sorted_schemas.sort();
@@ -55,7 +55,7 @@ impl DocGenerator for MarkdownGenerator {
             if let Some(schemas) = context.elements.get(name) {
                 let schema_links = schemas
                     .iter()
-                    .map(|s| format!("{}", s))
+                    .map(|s| s.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
                 lines.push(format!(

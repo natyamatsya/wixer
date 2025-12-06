@@ -116,12 +116,11 @@ fn convert_node(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> 
     for child in node.children() {
         if child.is_element() {
             convert_node(child, writer)?;
-        } else if child.is_text() {
-            if let Some(text) = child.text() {
-                if !text.trim().is_empty() {
-                    writer.write_event(Event::Text(BytesText::new(text)))?;
-                }
-            }
+        } else if child.is_text()
+            && let Some(text) = child.text()
+            && !text.trim().is_empty()
+        {
+            writer.write_event(Event::Text(BytesText::new(text)))?;
         }
     }
 
