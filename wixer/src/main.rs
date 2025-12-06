@@ -195,6 +195,16 @@ enum Commands {
         #[arg(long, value_enum)]
         target: commands::migrate::MigrationTarget,
     },
+    /// Upgrade WiX v3 files to v4/v6
+    Upgrade {
+        /// Input file
+        #[arg(index = 1)]
+        input: PathBuf,
+
+        /// Output file
+        #[arg(index = 2)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -444,6 +454,12 @@ async fn main() {
                 commands::migrate::run(input.clone(), output_dir.clone(), target.clone())
             {
                 error!("Error migrating: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Upgrade { input, output } => {
+            if let Err(e) = commands::upgrade::run(input.clone(), output.clone()) {
+                error!("Error upgrading: {}", e);
                 std::process::exit(1);
             }
         }
