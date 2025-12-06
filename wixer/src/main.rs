@@ -117,6 +117,16 @@ enum Commands {
     /// Wrapper around 'wix build' that transparently converts YAML files
     #[command(external_subcommand)]
     Build(Vec<String>),
+    /// Generate documentation from XSD schemas
+    Doc {
+        /// Output directory for documentation
+        #[arg(long, default_value = "wix_docs")]
+        output_dir: PathBuf,
+
+        /// Format to generate (markdown, html, or all)
+        #[arg(long, default_value = "markdown")]
+        format: String,
+    },
 }
 
 fn main() {
@@ -296,6 +306,12 @@ fn main() {
         Commands::Build(args) => {
             if let Err(e) = commands::build::run(args.clone()) {
                 error!("Error running build: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Doc { output_dir, format } => {
+            if let Err(e) = commands::doc::run(output_dir, format) {
+                error!("Error generating documentation: {}", e);
                 std::process::exit(1);
             }
         }
