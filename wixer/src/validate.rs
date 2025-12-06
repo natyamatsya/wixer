@@ -27,8 +27,11 @@ pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
     let yaml_value: serde_yaml::Value =
         serde_yaml::from_str(&yaml_content).with_context(|| "Failed to parse YAML")?;
 
-    let json_value =
+    let mut json_value =
         serde_json::to_value(yaml_value).with_context(|| "Failed to convert YAML to JSON")?;
+
+    // Pre-process JSON to remove xmlns attributes which are not in the schema
+    remove_xmlns(&mut json_value);
 
     // Validate
     let result = compiled_schema.validate(&json_value);
@@ -44,6 +47,23 @@ pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn remove_xmlns(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.retain(|k, _| !k.starts_with("xmlns"));
+            for (_, v) in map.iter_mut() {
+                remove_xmlns(v);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                remove_xmlns(v);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
@@ -70,20 +90,31 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
         let path = entry.path();
 
         if path.is_file()
-            && let Some(ext) = path.extension()
-            && (ext == "yaml" || ext == "yml")
+            && let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && ["yaml", "yml", "wys", "wyi", "wyl", "ysi"].contains(&ext)
         {
             count += 1;
 
             // Determine schema to use
             // 1. Try file specific schema: name.schema.json
-            // 2. Try default wix.schema.json
+            // 2. Try extension based schema
+            // 3. Try default wix.schema.json
 
             let filename = path.file_stem().unwrap().to_string_lossy();
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            
             let specific_schema = schema_dir.join(format!("{}.schema.json", filename));
+            
+            let extension_schema_name = match ext {
+                "wyl" => "wixloc.schema.json",
+                _ => "wix.schema.json",
+            };
+            let extension_schema = schema_dir.join(extension_schema_name);
 
             let schema_to_use = if specific_schema.exists() {
                 specific_schema
+            } else if extension_schema.exists() {
+                extension_schema
             } else if default_schema.exists() {
                 default_schema.clone()
             } else {

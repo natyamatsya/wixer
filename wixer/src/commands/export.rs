@@ -58,7 +58,7 @@ pub fn run(
             && let Some(file_name) = path.file_name().and_then(|n| n.to_str())
         {
             // Supported Wixer YAML extensions
-            let supported_exts = ["wys", "wyi", "wyl"];
+            let supported_exts = ["wys", "wyi", "wyl", "ysi"];
 
             let mut matched_ext = None;
             let mut is_template = false;
@@ -85,11 +85,13 @@ pub fn run(
                 // .wys -> .wxs
                 // .wyi -> .wxi
                 // .wyl -> .wxl
+                // .ysi -> .wsi
 
                 let target_ext = match ext {
                     "wys" => "wxs",
                     "wyi" => "wxi",
                     "wyl" => "wxl",
+                    "ysi" => "wsi",
                     _ => "xml", // Fallback
                 };
 

@@ -39,7 +39,7 @@ pub fn run(
             && let Some(file_name) = path.file_name().and_then(|n| n.to_str())
         {
             // Supported WiX extensions
-            let supported_exts = ["wxs", "wxi", "wxl"];
+            let supported_exts = ["wxs", "wxi", "wxl", "wsi"];
 
             let mut matched_ext = None;
             let mut is_template = false;
@@ -66,11 +66,13 @@ pub fn run(
                 // .wxs -> .wys
                 // .wxi -> .wyi
                 // .wxl -> .wyl
+                // .wsi -> .ysi
 
                 let target_ext = match ext {
                     "wxs" => "wys",
                     "wxi" => "wyi",
                     "wxl" => "wyl",
+                    "wsi" => "ysi",
                     _ => "yaml", // Fallback, should not happen given supported_exts
                 };
 

@@ -11,6 +11,7 @@ use tracing::info;
 
 const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
 const COMMENT_PROPERTY: &str = "_comment";
+const CPACK_VAR_KEY: &str = "CPACK_WIX_CUSTOM_XMLNS_EXPANDED";
 
 pub fn convert_file(
     input: &Path,
@@ -55,7 +56,13 @@ pub fn convert_file(
     };
 
     let result = writer.into_inner().into_inner();
-    fs::write(output, result)?;
+    let s = String::from_utf8(result)?;
+
+    // Post-process to restore CPack variables
+    // Include the leading space in search to remove it during replacement, restoring original no-space format
+    let s = s.replace(" CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"", "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@");
+
+    fs::write(output, s)?;
 
     info!(file = %output.display(), "Successfully converted");
     Ok(())
@@ -120,7 +127,7 @@ fn convert_element(
                     AttributeStrategy::Prefix => key.starts_with('@'),
                     AttributeStrategy::Separate => false, // handled differently
                     AttributeStrategy::Inline => {
-                        (key.starts_with("xmlns") || known_attributes.contains(key))
+                        (key.starts_with("xmlns") || known_attributes.contains(key) || key == CPACK_VAR_KEY)
                             && !v.is_mapping()
                             && !v.is_sequence()
                     }
