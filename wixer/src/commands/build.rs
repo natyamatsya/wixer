@@ -104,6 +104,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
             Some("wys") => (true, Some("wxs")),
             Some("wyi") => (true, Some("wxi")),
             Some("wyl") => (true, Some("wxl")),
+            Some("ywxs") => (true, Some("wxs")),
+            Some("ywxi") => (true, Some("wxi")),
+            Some("ywxl") => (true, Some("wxl")),
+            Some("ywsi") => (true, Some("wsi")),
             Some("yaml") | Some("yml") => (true, None), // Needs content check
             _ => (false, None),
         };

@@ -57,11 +57,13 @@ pub fn run(
         if path.is_file()
             && let Some(file_name) = path.file_name().and_then(|n| n.to_str())
         {
-            // Supported Wixer YAML extensions
-            let supported_exts = ["wys", "wyi", "wyl", "ysi"];
-
+            // Check for known YAML extensions (prepend y)
+            // ywxs, ywxi, ywxl, ywsi
+            // Also check for .in templates
             let mut matched_ext = None;
             let mut is_template = false;
+
+            let supported_exts = ["ywxs", "ywxi", "ywxl", "ywsi", "wys", "wyi", "wyl", "ysi"];
 
             for ext in supported_exts {
                 if file_name.ends_with(&format!(".{}", ext)) {
@@ -76,23 +78,22 @@ pub fn run(
             }
 
             if let Some(ext) = matched_ext {
-                // Calculate relative path to preserve structure
+                // Calculate relative path
                 let relative_path = path.strip_prefix(input_dir).unwrap_or(path);
                 let output_path = output_dir.join(relative_path);
 
-                // Determine new extension
-                // We map:
-                // .wys -> .wxs
-                // .wyi -> .wxi
-                // .wyl -> .wxl
-                // .ysi -> .wsi
-
-                let target_ext = match ext {
-                    "wys" => "wxs",
-                    "wyi" => "wxi",
-                    "wyl" => "wxl",
-                    "ysi" => "wsi",
-                    _ => "xml", // Fallback
+                // Determine target extension (remove leading 'y')
+                // ywxs -> wxs
+                let target_ext = if ext.starts_with('y') {
+                    &ext[1..]
+                } else {
+                    match ext {
+                        "wys" => "wxs",
+                        "wyi" => "wxi",
+                        "wyl" => "wxl",
+                        "ysi" => "wsi",
+                        _ => "xml", // Fallback
+                    }
                 };
 
                 let final_output_path = if is_template {

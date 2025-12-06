@@ -62,19 +62,13 @@ pub fn run(
                 let output_path = output_dir.join(relative_path);
 
                 // Determine new extension
-                // We map:
-                // .wxs -> .wys
-                // .wxi -> .wyi
-                // .wxl -> .wyl
-                // .wsi -> .ysi
+                // We map by prepending 'y':
+                // .wxs -> .ywxs
+                // .wxi -> .ywxi
+                // .wxl -> .ywxl
+                // .wsi -> .ywsi
 
-                let target_ext = match ext {
-                    "wxs" => "wys",
-                    "wxi" => "wyi",
-                    "wxl" => "wyl",
-                    "wsi" => "ysi",
-                    _ => "yaml", // Fallback, should not happen given supported_exts
-                };
+                let target_ext = format!("y{}", ext);
 
                 let final_output_path = if is_template {
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
