@@ -139,6 +139,43 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     visual.push_attribute(("Square44x44Logo", "Assets\\Square44x44Logo.png"));
     writer.write_event(Event::Empty(visual))?;
 
+    // Extensions (File Associations)
+    let associations = project.get_file_associations();
+    if !associations.is_empty() {
+        let exts = BytesStart::new("Extensions");
+        writer.write_event(Event::Start(exts))?;
+
+        for assoc in associations {
+            let mut ext = BytesStart::new("uap:Extension");
+            ext.push_attribute(("Category", "windows.fileTypeAssociation"));
+            writer.write_event(Event::Start(ext))?;
+
+            let mut fta = BytesStart::new("uap:FileTypeAssociation");
+            fta.push_attribute(("Name", assoc.name.as_str()));
+            writer.write_event(Event::Start(fta))?;
+
+            if let Some(desc) = &assoc.description {
+                write_simple_element(&mut writer, "uap:DisplayName", desc)?;
+            }
+            
+            // TODO: Logo (assoc.icon) mapping?
+
+            let supported = BytesStart::new("uap:SupportedFileTypes");
+            writer.write_event(Event::Start(supported))?;
+
+            for file_ext in assoc.extensions {
+                let dot_ext = if file_ext.starts_with('.') { file_ext } else { format!(".{}", file_ext) };
+                write_simple_element(&mut writer, "uap:FileType", &dot_ext)?;
+            }
+
+            writer.write_event(Event::End(BytesEnd::new("uap:SupportedFileTypes")))?;
+            writer.write_event(Event::End(BytesEnd::new("uap:FileTypeAssociation")))?;
+            writer.write_event(Event::End(BytesEnd::new("uap:Extension")))?;
+        }
+
+        writer.write_event(Event::End(BytesEnd::new("Extensions")))?;
+    }
+
     writer.write_event(Event::End(BytesEnd::new("Application")))?;
     writer.write_event(Event::End(BytesEnd::new("Applications")))?;
 

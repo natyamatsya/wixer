@@ -10,6 +10,7 @@ pub mod commands;
 pub mod common;
 pub mod describe_db;
 pub mod project;
+pub mod schema_mapping;
 mod utils;
 mod validate;
 mod wix_to_yaml;
