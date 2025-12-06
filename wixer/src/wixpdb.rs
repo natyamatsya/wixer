@@ -25,6 +25,8 @@ pub struct Symbol {
     pub id: serde_json::Value,
     #[serde(default)]
     pub ln: Option<SourceLocation>,
+    #[serde(default)]
+    pub fields: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
