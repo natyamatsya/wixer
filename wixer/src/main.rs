@@ -179,6 +179,8 @@ enum Commands {
     },
     /// Start the WiX Language Server
     Lsp,
+    /// Map WiX schemas to MSIX schemas
+    MapSchemas,
 }
 
 #[tokio::main]
@@ -410,6 +412,12 @@ async fn main() {
         Commands::Lsp => {
             if let Err(e) = commands::lsp::run().await {
                 error!("Error running LSP: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::MapSchemas => {
+            if let Err(e) = commands::map_schemas::run() {
+                error!("Error mapping schemas: {}", e);
                 std::process::exit(1);
             }
         }

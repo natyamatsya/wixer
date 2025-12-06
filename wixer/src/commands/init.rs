@@ -16,6 +16,7 @@ pub async fn run(fresh: bool) -> Result<()> {
 
     let cache_base = wixer_root.join("cache");
     let xml_schema_dir = cache_base.join("xml-schema");
+    let msix_schema_dir = cache_base.join("msix-xsd-schema");
     let json_schema_dir = cache_base.join("json-schema");
     info!(root = %wixer_root.display(), "Initializing wixer in {}", wixer_root.display());
 
@@ -69,6 +70,12 @@ pub async fn run(fresh: bool) -> Result<()> {
             error!("Error initializing: {}", e);
             std::process::exit(1);
         }
+    }
+
+    // Download MSIX schemas
+    if let Err(e) = xsd_to_json::download_msix_schemas(&msix_schema_dir, fresh).await {
+        error!("Error downloading MSIX schemas: {}", e);
+        std::process::exit(1);
     }
 
     // Generate description database

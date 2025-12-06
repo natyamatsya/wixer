@@ -54,6 +54,75 @@ pub async fn download_wix_schemas(output_dir: &Path, force: bool) -> Result<Vec<
     Ok(downloaded_files)
 }
 
+pub async fn download_msix_schemas(output_dir: &Path, force: bool) -> Result<Vec<PathBuf>> {
+    fs::create_dir_all(output_dir)?;
+
+    let client = reqwest::Client::builder().user_agent("wixer").build()?;
+
+    let base_api = "https://api.github.com/repos/microsoft/msix-packaging/contents/resources/AppxPackaging/Manifest/Schema";
+
+    info!(dir = %output_dir.display(), "Fetching MSIX schema list...");
+
+    let resp = client.get(base_api).send().await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("Failed to fetch MSIX schema list: {}", resp.status());
+    }
+
+    let contents: Vec<Value> = resp.json().await?;
+    let mut downloaded_files = Vec::new();
+
+    for item in contents {
+        if item["type"] == "dir" {
+            let name = item["name"].as_str().unwrap();
+            // Filter for year-like directories to avoid grabbing unrelated folders if any appear
+            if !name.chars().all(char::is_numeric) {
+                continue;
+            }
+
+            let year_dir = output_dir.join(name);
+            fs::create_dir_all(&year_dir)?;
+
+            let dir_url = item["url"].as_str().unwrap();
+            let resp = client.get(dir_url).send().await?;
+            if !resp.status().is_success() {
+                warn!(
+                    "Failed to fetch schema list for {}: {}",
+                    name,
+                    resp.status()
+                );
+                continue;
+            }
+
+            let dir_contents: Vec<Value> = resp.json().await?;
+            for file_item in dir_contents {
+                if file_item["type"] == "file" {
+                    let file_name = file_item["name"].as_str().unwrap();
+                    if file_name.ends_with(".xsd") {
+                        let download_url = file_item["download_url"].as_str().unwrap();
+                        let output_path = year_dir.join(file_name);
+
+                        if output_path.exists() && !force {
+                            downloaded_files.push(output_path);
+                            continue;
+                        }
+
+                        info!(schema = %file_name, "Downloading MSIX schema");
+                        let content = client.get(download_url).send().await?.text().await?;
+                        fs::write(&output_path, content)?;
+                        downloaded_files.push(output_path);
+                    }
+                }
+            }
+        }
+    }
+
+    info!(
+        count = downloaded_files.len(),
+        "Downloaded/Verified MSIX schema files"
+    );
+    Ok(downloaded_files)
+}
+
 pub fn convert_xsd(
     input: &str,
     output: Option<&str>,
