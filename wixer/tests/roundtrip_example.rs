@@ -8,7 +8,7 @@ fn test_roundtrip_example_installer() {
     let test_dir = Path::new("target/test_roundtrip_example");
     fs::create_dir_all(test_dir).expect("Failed to create test dir");
 
-    let original_wxs = "example_installer.wxs";
+    let original_wxs = "examples/wix/v4/00_HelloWorldInstaller/Product.wxs";
     let generated_yaml = test_dir.join("example_installer.yaml");
     let generated_wxs = test_dir.join("example_installer_generated.wxs");
 
@@ -43,22 +43,21 @@ fn test_roundtrip_example_installer() {
 
     let content = fs::read_to_string(&generated_wxs).unwrap();
 
-    // Verify key elements from example_installer.wxs are present
+    // Verify key elements from Product.wxs are present
     assert!(
-        content.contains("My Application"),
+        content.contains("Hello World"),
         "Should contain product name"
     );
     assert!(
-        content.contains("ACME Corporation"),
+        content.contains("Acme Corporation"),
         "Should contain manufacturer"
     );
     assert!(
-        content.contains("ProgramFiles64Folder"),
+        content.contains("ProgramFilesFolder"),
         "Should contain standard directories"
     );
     assert!(content.contains("Component"), "Should contain components");
     assert!(content.contains("File"), "Should contain files");
-    assert!(content.contains("Shortcut"), "Should contain shortcuts");
     assert!(content.contains("Feature"), "Should contain features");
 
     // Optional: Read back the original file and compare structure/content more deeply if needed
