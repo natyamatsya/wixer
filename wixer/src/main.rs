@@ -1,0 +1,213 @@
+use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
+
+mod validate;
+mod xsd_to_json;
+mod yaml_to_wix;
+
+#[derive(Parser)]
+#[command(name = "wixer")]
+#[command(about = "WiX Installer Toolkit", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Convert XSD schemas to JSON Schema
+    XsdToJson {
+        /// Input XSD file path or URL
+        #[arg(short, long)]
+        input: Option<String>,
+
+        /// Output JSON Schema file
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Download all WiX v4 schemas from GitHub
+        #[arg(long)]
+        download_wix: bool,
+
+        /// Directory for downloaded schemas
+        #[arg(long, default_value = "schemas")]
+        schema_dir: PathBuf,
+
+        /// Directory for generated JSON schemas
+        #[arg(long, default_value = "json-schemas")]
+        output_dir: PathBuf,
+
+        /// How to handle XML attributes
+        #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
+        attribute_strategy: AttributeStrategy,
+
+        /// Exclude descriptions from schemas
+        #[arg(long)]
+        no_descriptions: bool,
+
+        /// Enable strict mode (enforce required fields)
+        #[arg(long)]
+        strict: bool,
+
+        /// Root element name for schema
+        #[arg(long)]
+        root_element: Option<String>,
+    },
+    /// Convert YAML to WiX XML
+    YamlToWix {
+        /// Input YAML file
+        #[arg(index = 1)]
+        input: Option<PathBuf>,
+
+        /// Output WiX XML file
+        #[arg(index = 2)]
+        output: Option<PathBuf>,
+
+        /// Input directory containing YAML files
+        #[arg(long)]
+        input_dir: Option<PathBuf>,
+
+        /// Output directory for WiX XML files
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// Attribute handling strategy (must match XSD conversion)
+        #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
+        attribute_strategy: AttributeStrategy,
+    },
+    /// Validate YAML against JSON Schema
+    Validate {
+        /// JSON Schema file
+        #[arg(index = 1)]
+        schema: Option<PathBuf>,
+
+        /// YAML file to validate
+        #[arg(index = 2)]
+        yaml: Option<PathBuf>,
+
+        /// Directory containing JSON schemas
+        #[arg(long)]
+        schema_dir: Option<PathBuf>,
+
+        /// Directory containing YAML files to validate
+        #[arg(long)]
+        yaml_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum AttributeStrategy {
+    Inline,
+    Prefix,
+    Separate,
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    match &cli.command {
+        Commands::XsdToJson {
+            input,
+            output,
+            download_wix,
+            schema_dir,
+            output_dir,
+            attribute_strategy,
+            no_descriptions,
+            strict,
+            root_element,
+        } => {
+            if *download_wix {
+                match xsd_to_json::download_wix_schemas(schema_dir) {
+                    Ok(files) => {
+                        for file in files {
+                            if let Err(e) = xsd_to_json::convert_xsd(
+                                file.to_str().unwrap(),
+                                None,
+                                output_dir,
+                                *attribute_strategy,
+                                !*no_descriptions,
+                                *strict,
+                                root_element.as_deref(),
+                            ) {
+                                eprintln!("Error converting {}: {}", file.display(), e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error downloading schemas: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            } else if input.is_none() {
+                eprintln!("Either --input or --download-wix is required");
+                std::process::exit(1);
+            }
+
+            if let Some(input_path) = input {
+                if let Err(e) = xsd_to_json::convert_xsd(
+                    input_path,
+                    output.as_deref(),
+                    output_dir,
+                    *attribute_strategy,
+                    !*no_descriptions,
+                    *strict,
+                    root_element.as_deref(),
+                ) {
+                    eprintln!("Error converting XSD: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::YamlToWix {
+            input,
+            output,
+            input_dir,
+            output_dir,
+            attribute_strategy,
+        } => {
+            if let (Some(in_dir), Some(out_dir)) = (input_dir, output_dir) {
+                if let Err(e) = yaml_to_wix::convert_directory(in_dir, out_dir, *attribute_strategy)
+                {
+                    eprintln!("Error converting directory: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let (Some(input_path), Some(output_path)) = (input, output) {
+                if let Err(e) =
+                    yaml_to_wix::convert_file(input_path, output_path, *attribute_strategy)
+                {
+                    eprintln!("Error converting file: {}", e);
+                    std::process::exit(1);
+                }
+            } else {
+                eprintln!(
+                    "Either provide input and output files, or use --input-dir and --output-dir"
+                );
+                std::process::exit(1);
+            }
+        }
+        Commands::Validate {
+            schema,
+            yaml,
+            schema_dir,
+            yaml_dir,
+        } => {
+            if let (Some(s_dir), Some(y_dir)) = (schema_dir, yaml_dir) {
+                if let Err(e) = validate::validate_directory(s_dir, y_dir) {
+                    eprintln!("Error validating directory: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let (Some(schema_path), Some(yaml_path)) = (schema, yaml) {
+                if let Err(e) = validate::validate_file(schema_path, yaml_path) {
+                    eprintln!("Validation failed: {}", e);
+                    std::process::exit(1);
+                }
+            } else {
+                eprintln!(
+                    "Either provide schema and yaml files, or use --schema-dir and --yaml-dir"
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+}
