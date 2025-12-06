@@ -23,3 +23,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tower-lsp = "0.20"
 walkdir = "2.4"
 lazy_static = "1.4"
+zip = "6.0.0"

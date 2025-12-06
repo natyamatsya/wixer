@@ -16,6 +16,7 @@ mod validate;
 mod wix_to_yaml;
 mod xsd_to_json;
 mod yaml_to_wix;
+pub mod wixpdb;
 
 use crate::common::AttributeStrategy;
 use crate::utils::find_wixer_root;
@@ -206,6 +207,16 @@ enum Commands {
         /// Output file
         #[arg(index = 2)]
         output: Option<PathBuf>,
+    },
+    /// Inspect WiX PDB file
+    InspectPdb {
+        /// Path to .wixpdb file
+        #[arg(index = 1)]
+        path: PathBuf,
+
+        /// Symbol ID to lookup
+        #[arg(long)]
+        symbol: Option<String>,
     },
 }
 
@@ -497,6 +508,12 @@ async fn main() {
         Commands::Upgrade { input, output } => {
             if let Err(e) = commands::upgrade::run(input.clone(), output.clone()) {
                 error!("Error upgrading: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::InspectPdb { path, symbol } => {
+            if let Err(e) = commands::pdb::run(path, symbol.clone()) {
+                error!("Error inspecting PDB: {}", e);
                 std::process::exit(1);
             }
         }
