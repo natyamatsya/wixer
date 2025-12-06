@@ -181,6 +181,20 @@ enum Commands {
     Lsp,
     /// Map WiX schemas to MSIX schemas
     MapSchemas,
+    /// Migrate WiX project to another format
+    Migrate {
+        /// Input WiX file
+        #[arg(index = 1)]
+        input: PathBuf,
+
+        /// Output directory
+        #[arg(index = 2)]
+        output_dir: PathBuf,
+
+        /// Migration target
+        #[arg(long, value_enum)]
+        target: commands::migrate::MigrationTarget,
+    },
 }
 
 #[tokio::main]
@@ -418,6 +432,18 @@ async fn main() {
         Commands::MapSchemas => {
             if let Err(e) = commands::map_schemas::run() {
                 error!("Error mapping schemas: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Migrate {
+            input,
+            output_dir,
+            target,
+        } => {
+            if let Err(e) =
+                commands::migrate::run(input.clone(), output_dir.clone(), target.clone())
+            {
+                error!("Error migrating: {}", e);
                 std::process::exit(1);
             }
         }

@@ -6,3 +6,4 @@ pub mod import;
 pub mod init;
 pub mod lsp;
 pub mod map_schemas;
+pub mod migrate;
