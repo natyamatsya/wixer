@@ -69,4 +69,13 @@ fn test_recursive_import() {
         wxl_content.contains("Welcome to My Application"),
         "Should import string value"
     );
+
+    // Check comments
+    let comment_wys = output_dir.join("comment.wys");
+    assert!(comment_wys.exists(), "comment.wys should exist");
+    let comment_content = fs::read_to_string(comment_wys).unwrap();
+    assert!(
+        comment_content.contains("_comment: ' This is a test comment '"),
+        "Should preserve XML comments"
+    );
 }

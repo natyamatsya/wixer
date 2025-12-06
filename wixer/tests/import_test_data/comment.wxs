@@ -1,0 +1,6 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- This is a test comment -->
+  <Package Name="CommentTest" Version="1.0.0.0">
+    <MajorUpgrade />
+  </Package>
+</Wix>

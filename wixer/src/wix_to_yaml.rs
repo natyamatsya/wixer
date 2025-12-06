@@ -38,6 +38,7 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
     let mut buf = Vec::new();
     let mut stack: Vec<(String, Map<String, Value>)> = Vec::new();
     let mut root_map: Option<Map<String, Value>> = None;
+    let mut pending_comment: Option<String> = None;
 
     // Helper to add child to parent
     fn add_child(parent: &mut Map<String, Value>, name: String, child: Value) {
@@ -58,6 +59,11 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
             Ok(Event::Start(e)) => {
                 let name = String::from_utf8(e.name().as_ref().to_vec())?;
                 let mut map = Map::new();
+
+                // Attach pending comment
+                if let Some(comment) = pending_comment.take() {
+                    map.insert("_comment".to_string(), Value::String(comment));
+                }
 
                 for attr in e.attributes() {
                     let attr = attr?;
@@ -113,6 +119,10 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
                     root.insert(name, Value::Object(map));
                     root_map = Some(root);
                 }
+            }
+            Ok(Event::Comment(e)) => {
+                let comment = e.unescape()?.to_string();
+                pending_comment = Some(comment);
             }
             Ok(Event::End(_)) => {
                 if let Some((name, map)) = stack.pop() {

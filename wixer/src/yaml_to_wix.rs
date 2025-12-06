@@ -10,6 +10,7 @@ use std::path::Path;
 use tracing::info;
 
 const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
+const COMMENT_PROPERTY: &str = "_comment";
 
 pub fn convert_file(
     input: &Path,
@@ -100,9 +101,20 @@ fn convert_element(
             let mut children = Vec::new();
             let mut text_content = None;
 
+            // Handle comment if present
+            if let Some(comment) = map.get(COMMENT_PROPERTY) {
+                if let Value::String(s) = comment {
+                    writer.write_event(Event::Comment(BytesText::new(s)))?;
+                }
+            }
+
             // Collect attributes
             for (k, v) in map {
                 let key = k.as_str().unwrap_or_default();
+
+                if key == COMMENT_PROPERTY {
+                    continue;
+                }
 
                 let is_attribute = match strategy {
                     AttributeStrategy::Prefix => key.starts_with('@'),
