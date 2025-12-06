@@ -3,13 +3,17 @@ from bs4 import BeautifulSoup
 import json
 import os
 import re
+import sys
+
+print("Script starting...", file=sys.stderr)
 
 # URLs to scrape
 MSI_PROPS_URL = "https://learn.microsoft.com/en-us/windows/win32/msi/property-reference"
 
 def scrape_msi_properties():
-    print(f"Scraping {MSI_PROPS_URL}...")
+    print(f"Scraping {MSI_PROPS_URL}...", file=sys.stderr)
     response = requests.get(MSI_PROPS_URL)
+    print(f"Response status: {response.status_code}", file=sys.stderr)
     response.raise_for_status()
     
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -18,6 +22,7 @@ def scrape_msi_properties():
     
     # Microsoft docs usually put this in a table
     tables = soup.find_all('table')
+    print(f"Found {len(tables)} tables", file=sys.stderr)
     
     for table in tables:
         rows = table.find_all('tr')
@@ -46,6 +51,10 @@ def scrape_msi_properties():
                     if version_match:
                         tags.append(f"MSI {version_match.group(1)}")
                     
+                    # Debug print
+                    if name == "ACTION":
+                        print(f"Debug: ACTION tags: {tags}")
+
                     properties.append({
                         "name": name,
                         "kind": "Property",
@@ -110,3 +119,6 @@ def main():
         json.dump(all_props, f, indent=2)
         
     print(f"Updated {output_path}")
+
+if __name__ == "__main__":
+    main()
