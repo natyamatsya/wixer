@@ -35,10 +35,38 @@ fn test_recursive_import() {
         "subdir/template.yaml.in should exist"
     );
 
+    let config_yaml = output_dir.join("config.yaml");
+    assert!(config_yaml.exists(), "config.yaml should exist");
+
+    let localization_yaml = output_dir.join("en-us.yaml");
+    assert!(localization_yaml.exists(), "en-us.yaml should exist");
+
     // Check content of template to ensure @VAR@ syntax is preserved/handled
     let content = fs::read_to_string(template_yaml_in).unwrap();
     assert!(
         content.contains("@PRODUCT_NAME@"),
         "Should preserve CMake variables"
+    );
+
+    // Check config.yaml
+    let config_content = fs::read_to_string(config_yaml).unwrap();
+    assert!(
+        config_content.contains("Include"),
+        "Should import Include element"
+    );
+    assert!(
+        config_content.contains("WixPerMachineFolder"),
+        "Should import property value"
+    );
+
+    // Check localization
+    let wxl_content = fs::read_to_string(localization_yaml).unwrap();
+    assert!(
+        wxl_content.contains("WixLocalization"),
+        "Should import WixLocalization element"
+    );
+    assert!(
+        wxl_content.contains("Welcome to My Application"),
+        "Should import string value"
     );
 }

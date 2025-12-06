@@ -1,0 +1,4 @@
+<Include>
+  <?define ProductVersion="1.0.0.0" ?>
+  <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
+</Include>

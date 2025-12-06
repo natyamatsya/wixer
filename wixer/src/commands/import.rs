@@ -37,28 +37,45 @@ pub fn run(
         let path = entry.path();
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                // Determine if it is a WiX file or a WiX template file
-                let is_wix = file_name.ends_with(".wxs");
-                let is_wix_in = file_name.ends_with(".wxs.in");
+                // Supported WiX extensions
+                let supported_exts = ["wxs", "wxi", "wxl"];
 
-                if is_wix || is_wix_in {
+                let mut matched_ext = None;
+                let mut is_template = false;
+
+                for ext in supported_exts {
+                    if file_name.ends_with(&format!(".{}", ext)) {
+                        matched_ext = Some(ext);
+                        is_template = false;
+                        break;
+                    } else if file_name.ends_with(&format!(".{}.in", ext)) {
+                        matched_ext = Some(ext);
+                        is_template = true;
+                        break;
+                    }
+                }
+
+                if let Some(ext) = matched_ext {
                     // Calculate relative path to preserve structure
                     let relative_path = path.strip_prefix(input_dir).unwrap_or(path);
                     let output_path = output_dir.join(relative_path);
 
                     // Determine new extension
-                    let final_output_path = if is_wix_in {
-                        // replace .wxs.in with .yaml.in
-                        // But careful: path.with_extension replaces the *last* extension.
-                        // "file.wxs.in" -> "file.wxs.yaml" if we just set yaml.
-                        // We want "file.yaml.in".
-                        // Let's construct the name manually.
+                    // We map .wxs/.wxi/.wxl -> .yaml
+                    // And .wxs.in/.wxi.in/.wxl.in -> .yaml.in
+
+                    let final_output_path = if is_template {
                         let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
-                        let stem = file_name.trim_end_matches(".wxs.in");
+                        // Remove .{ext}.in and add .yaml.in
+                        let suffix = format!(".{}.in", ext);
+                        let stem = file_name.trim_end_matches(&suffix);
                         parent.join(format!("{}.yaml.in", stem))
                     } else {
-                        // replace .wxs with .yaml
-                        output_path.with_extension("yaml")
+                        // Remove .{ext} and add .yaml
+                        let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+                        let suffix = format!(".{}", ext);
+                        let stem = file_name.trim_end_matches(&suffix);
+                        parent.join(format!("{}.yaml", stem))
                     };
 
                     // Create parent directories
