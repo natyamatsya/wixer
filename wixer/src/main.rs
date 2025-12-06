@@ -209,7 +209,9 @@ enum Commands {
 
 #[tokio::main]
 async fn main() {
-    fmt::init();
+    fmt::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let cli = Cli::parse();
 
     match &cli.command {

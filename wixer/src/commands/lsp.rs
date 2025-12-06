@@ -12,6 +12,9 @@ use tower_lsp::{Client, LanguageServer};
 pub struct WixerLsp {
     client: Client,
     schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
+    docs: Arc<RwLock<HashMap<String, String>>>,
+    completions: Arc<RwLock<Vec<CompletionItem>>>,
+    documents: Arc<RwLock<HashMap<Url, String>>>,
     wixer_root: PathBuf,
 }
 
@@ -21,6 +24,9 @@ impl WixerLsp {
         Self {
             client,
             schemas: Arc::new(RwLock::new(HashMap::new())),
+            docs: Arc::new(RwLock::new(HashMap::new())),
+            completions: Arc::new(RwLock::new(Vec::new())),
+            documents: Arc::new(RwLock::new(HashMap::new())),
             wixer_root,
         }
     }
@@ -35,27 +41,79 @@ impl WixerLsp {
         }
 
         let mut schemas = self.schemas.write().await;
+        let mut docs = self.docs.write().await;
+        let mut completions = self.completions.write().await;
+        
         if let Ok(entries) = fs::read_dir(schema_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "json")
                     && let Ok(content) = fs::read_to_string(&path)
                     && let Ok(json) = serde_json::from_str::<Value>(&content)
-                    && let Ok(compiled) = jsonschema::JSONSchema::compile(&json)
                 {
-                    let name = path
-                        .file_stem()
-                        .unwrap()
-                        .to_string_lossy()
-                        .replace(".schema", "");
-                    schemas.insert(name, compiled);
+                    // Compile schema
+                    if let Ok(compiled) = jsonschema::JSONSchema::compile(&json) {
+                        let name = path
+                            .file_stem()
+                            .unwrap()
+                            .to_string_lossy()
+                            .replace(".schema", "");
+                        schemas.insert(name, compiled);
+                    }
+
+                    // Extract documentation and completions
+                    if let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) {
+                        for (def_name, def_schema) in definitions {
+                            // Element description
+                            let desc = def_schema.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                            if let Some(d) = &desc {
+                                docs.insert(def_name.clone(), d.clone());
+                            }
+
+                            // Add element completion
+                            completions.push(CompletionItem {
+                                label: def_name.clone(),
+                                kind: Some(CompletionItemKind::CLASS),
+                                documentation: desc.map(|d| Documentation::MarkupContent(MarkupContent {
+                                    kind: MarkupKind::Markdown,
+                                    value: d,
+                                })),
+                                ..Default::default()
+                            });
+
+                            // Attribute descriptions and completions
+                            if let Some(props) = def_schema.get("properties").and_then(|p| p.as_object()) {
+                                for (prop_name, prop_schema) in props {
+                                    let prop_desc = prop_schema.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                                    
+                                    if let Some(d) = &prop_desc {
+                                        docs.entry(prop_name.clone()).or_insert_with(|| d.clone());
+                                    }
+
+                                    completions.push(CompletionItem {
+                                        label: prop_name.clone(),
+                                        kind: Some(CompletionItemKind::PROPERTY),
+                                        documentation: prop_desc.map(|d| Documentation::MarkupContent(MarkupContent {
+                                            kind: MarkupKind::Markdown,
+                                            value: d,
+                                        })),
+                                        ..Default::default()
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+        // Dedup completions
+        completions.sort_by(|a, b| a.label.cmp(&b.label));
+        completions.dedup_by(|a, b| a.label == b.label);
+
         self.client
             .log_message(
                 MessageType::INFO,
-                format!("Loaded {} schemas", schemas.len()),
+                format!("Loaded {} schemas and {} completions", schemas.len(), completions.len()),
             )
             .await;
     }
@@ -192,6 +250,8 @@ impl LanguageServer for WixerLsp {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
+                completion_provider: Some(CompletionOptions::default()),
                 ..Default::default()
             },
             ..Default::default()
@@ -209,6 +269,10 @@ impl LanguageServer for WixerLsp {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        {
+            let mut docs = self.documents.write().await;
+            docs.insert(params.text_document.uri.clone(), params.text_document.text.clone());
+        }
         self.validate_document(
             params.text_document.uri,
             Some(params.text_document.version),
@@ -219,6 +283,10 @@ impl LanguageServer for WixerLsp {
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         if let Some(change) = params.content_changes.first() {
+            {
+                let mut docs = self.documents.write().await;
+                docs.insert(params.text_document.uri.clone(), change.text.clone());
+            }
             self.validate_document(
                 params.text_document.uri,
                 Some(params.text_document.version),
@@ -226,6 +294,51 @@ impl LanguageServer for WixerLsp {
             )
             .await;
         }
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let docs_map = self.docs.read().await;
+        let documents = self.documents.read().await;
+        
+        let uri = &params.text_document_position_params.text_document.uri;
+        if let Some(text) = documents.get(uri) {
+            let pos = params.text_document_position_params.position;
+            if let Some(line) = text.lines().nth(pos.line as usize) {
+                // Simple word extraction
+                let col = pos.character as usize;
+                if col >= line.len() {
+                    return Ok(None);
+                }
+
+                // Find word boundaries
+                let start = line[..col]
+                    .rfind(|c: char| !c.is_alphanumeric() && c != '_' && c != '.')
+                    .map(|i| i + 1)
+                    .unwrap_or(0);
+                let end = line[col..]
+                    .find(|c: char| !c.is_alphanumeric() && c != '_' && c != '.')
+                    .map(|i| col + i)
+                    .unwrap_or(line.len());
+
+                let word = &line[start..end];
+                
+                if let Some(desc) = docs_map.get(word) {
+                    return Ok(Some(Hover {
+                        contents: HoverContents::Markup(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: format!("**{}**\n\n{}", word, desc),
+                        }),
+                        range: None,
+                    }));
+                }
+            }
+        }
+        Ok(None) 
+    }
+
+    async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let completions = self.completions.read().await;
+        Ok(Some(CompletionResponse::Array(completions.clone())))
     }
 }
 
