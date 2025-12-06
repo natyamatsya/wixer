@@ -143,6 +143,20 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
         attribute_strategy: AttributeStrategy,
     },
+    /// Recursively export YAML files to WiX XML
+    Export {
+        /// Input directory containing .wys, .wyi, .wyl files
+        #[arg(index = 1)]
+        input_dir: PathBuf,
+
+        /// Output directory for WiX files
+        #[arg(index = 2)]
+        output_dir: PathBuf,
+
+        /// Attribute handling strategy
+        #[arg(long, value_enum, default_value_t = AttributeStrategy::Inline)]
+        attribute_strategy: AttributeStrategy,
+    },
     /// Wrapper around 'wix build' that transparently converts YAML files
     #[command(external_subcommand)]
     Build(Vec<String>),
@@ -355,6 +369,16 @@ async fn main() {
         } => {
             if let Err(e) = commands::import::run(input_dir, output_dir, *attribute_strategy) {
                 error!("Error running import: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Export {
+            input_dir,
+            output_dir,
+            attribute_strategy,
+        } => {
+            if let Err(e) = commands::export::run(input_dir, output_dir, *attribute_strategy) {
+                error!("Error running export: {}", e);
                 std::process::exit(1);
             }
         }
