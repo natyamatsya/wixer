@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use regex::Regex;
 use roxmltree::{Document, Node};
 use std::fs;
 use std::io::Cursor;
@@ -22,8 +23,21 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     fs::create_dir_all(output_dir)?;
 
     let content = fs::read_to_string(input).context("Failed to read input file")?;
-    let doc = Document::parse(&content).context("Failed to parse WiX XML")?;
 
+    // Pre-process to handle CPack variables
+    let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
+    let processed_content = re.replace_all(&content, |caps: &regex::Captures| {
+        let var = &caps[0];
+        if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" {
+             // Inject dummy namespaces to satisfy parser
+             " xmlns:ui=\"http://dummy\" xmlns:util=\"http://dummy\" CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
+        } else {
+            var.to_string()
+        }
+    });
+
+    let doc = Document::parse(&processed_content).context("Failed to parse WiX XML")?;
+    
     // Extract Product/Package Info
     let product = find_product(&doc).context("Could not find Product or Package element")?;
 
