@@ -1,0 +1,40 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    ProductCode: '*'
+    Language: '1033'
+    Manufacturer: Natyamatsya
+    Name: Weather Forecast API (Rust/Axum)
+    UpgradeCode: '{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}'
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MajorUpgrade:
+      DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
+    MediaTemplate:
+      EmbedCab: yes
+    Property:
+      Id: WEATHER_API_PORT
+      Value: '5000'
+    StandardDirectory:
+      Id: ProgramFiles64Folder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: WeatherForecastAPI
+    ComponentGroup:
+      Directory: INSTALLFOLDER
+      Id: ProductComponents
+      Component:
+        Id: cmpWeatherApi
+        Guid: '*'
+        File:
+          Id: weather_api_exe
+          Name: weather-api.exe
+          KeyPath: yes
+          Source: $(var.BinarySource)\weather-api.exe
+    Feature:
+      Id: MainFeature
+      Title: Weather Forecast API
+      Description: Installs the Weather Forecast REST API service
+      ComponentGroupRef:
+        Id: ProductComponents
