@@ -1,0 +1,88 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default",
+      "description": "Default build configuration",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "wixer-rel",
+      "displayName": "Wixer Release",
+      "description": "Release build with wixer impersonation",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "wixer-rel",
+      "configurePreset": "wixer-rel"
+    },
+    {
+      "name": "wixer-yaml-export",
+      "displayName": "Export YAML to WiX XML",
+      "configurePreset": "wixer-rel",
+      "targets": ["wixer_yaml_export"]
+    }
+  ],
+  "packagePresets": [
+    {
+      "name": "wixer-rel-pkg",
+      "displayName": "Wixer MSI Package",
+      "description": "Build MSI installer using WiX with wixer impersonation",
+      "configurePreset": "wixer-rel",
+      "generators": ["WIX"],
+      "environment": {
+        "WIX": "${sourceDir}/build/_wixer_impersonate",
+        "WIXER_CONFIG": "${sourceDir}/build/_wixer_impersonate/wixer.yaml",
+        "PATH": "${sourceDir}/build/_wixer_impersonate/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "wixer-rel-msix",
+      "displayName": "Wixer MSIX Package",
+      "description": "Build MSIX package using MakeAppX",
+      "configurePreset": "wixer-rel",
+      "generators": ["External"]
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "wixer-rel-pkg",
+      "displayName": "Build & Package MSI",
+      "description": "Configure, export YAML, and build MSI package",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "wixer-rel"
+        },
+        {
+          "type": "build",
+          "name": "wixer-yaml-export"
+        },
+        {
+          "type": "package",
+          "name": "wixer-rel-pkg"
+        }
+      ]
+    }
+  ]
+}
