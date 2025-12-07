@@ -153,6 +153,28 @@ fn convert_element(
                     if let Value::String(s) = v {
                         text_content = Some(s);
                     }
+                } else if strategy == AttributeStrategy::Separate && key == "elements" {
+                    match v {
+                        Value::Mapping(child_map) => {
+                            for (child_key, child_value) in child_map {
+                                if let Some(child_name) = child_key.as_str() {
+                                    children.push((child_name, child_value));
+                                }
+                            }
+                        }
+                        Value::Sequence(seq) => {
+                            for item in seq {
+                                if let Value::Mapping(child_map) = item {
+                                    for (child_key, child_value) in child_map {
+                                        if let Some(child_name) = child_key.as_str() {
+                                            children.push((child_name, child_value));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 } else {
                     children.push((key, v));
                 }
@@ -173,9 +195,6 @@ fn convert_element(
                             elem.push_attribute((key, if *b { "yes" } else { "no" }));
                         }
                     }
-                }
-                if let Some(_elems) = map.get("elements") {
-                    // TODO: Handle separate elements
                 }
             }
 
