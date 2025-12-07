@@ -159,6 +159,61 @@ impl Transformation for CustomActionTransform {
 }
 
 // ============================================================================
+// Deprecated Attribute Removal
+// ============================================================================
+
+/// Removes deprecated attributes from various elements
+/// - Win64 attribute (removed in v4, platform is determined by build)
+pub struct RemoveDeprecatedAttributes;
+
+impl RemoveDeprecatedAttributes {
+    /// Attributes that should be removed entirely in v4
+    const DEPRECATED_ATTRS: &'static [&'static str] = &["Win64"];
+    
+    /// Elements that commonly have these deprecated attributes
+    const ELEMENTS: &'static [&'static str] = &[
+        "RegistrySearch",
+        "Component",
+        "CustomAction",
+        "ServiceInstall",
+    ];
+}
+
+impl Transformation for RemoveDeprecatedAttributes {
+    fn name(&self) -> &'static str {
+        "RemoveDeprecatedAttributes"
+    }
+
+    fn applies_to(&self, node: &Node) -> bool {
+        let tag = node.tag_name().name();
+        Self::ELEMENTS.contains(&tag)
+            && node.attributes().any(|a| Self::DEPRECATED_ATTRS.contains(&a.name()))
+    }
+
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+        let tag_name = node.tag_name().name();
+        let mut elem = BytesStart::new(tag_name);
+
+        // Copy attributes, skipping deprecated ones
+        for attr in node.attributes() {
+            if !Self::DEPRECATED_ATTRS.contains(&attr.name()) {
+                elem.push_attribute((attr.name(), attr.value()));
+            }
+        }
+
+        // Check for children
+        let has_children = node.children().any(|c| c.is_element());
+        if has_children {
+            writer.write_event(Event::Start(elem))?;
+            Ok(false) // Let pipeline process children
+        } else {
+            writer.write_event(Event::Empty(elem))?;
+            Ok(true)
+        }
+    }
+}
+
+// ============================================================================
 // Factory function
 // ============================================================================
 
@@ -168,5 +223,6 @@ pub fn standard_transformations() -> Vec<Box<dyn Transformation>> {
         Box::new(ConditionToLaunch),
         Box::new(InnerTextToCondition),
         Box::new(CustomActionTransform),
+        Box::new(RemoveDeprecatedAttributes),
     ]
 }

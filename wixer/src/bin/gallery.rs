@@ -217,26 +217,35 @@ fn main() -> Result<()> {
                 let content = fs::read_to_string(&yaml_path).unwrap_or_default();
                 let is_xml = content.trim_start().starts_with("<?xml") || content.trim_start().starts_with("<Wix");
                 
-                let (build_dir, build_file) = if is_xml {
+                // Check if this is a multi-file project (has more than one .wxs file)
+                let all_wxs = find_all_wxs(&v4_example_dir);
+                let is_multi_file = all_wxs.len() > 1;
+                
+                let result = if is_xml || is_multi_file {
                     // Build from v4 XML directly using wix.exe
-                    let v4_product = find_product_wxs(&v4_example_dir);
-                    if let Some(wxs_path) = v4_product {
-                        (v4_example_dir.clone(), wxs_path)
-                    } else {
+                    // For multi-file projects, we need to build all wxs files together
+                    if all_wxs.is_empty() {
                         println!("✗ (no v4 wxs found)");
                         stats.build_errors += 1;
                         continue;
                     }
+                    
+                    // Build all wxs files together
+                    let mut cmd = Command::new(&args.wixer);
+                    cmd.current_dir(&v4_example_dir);
+                    cmd.arg("build");
+                    for wxs in &all_wxs {
+                        cmd.arg(wxs.to_str().unwrap());
+                    }
+                    cmd.args(["-o", msi_path.to_str().unwrap()]);
+                    cmd.output()
                 } else {
-                    // Build from YAML using wixer
-                    (yaml_example_dir.clone(), yaml_path)
+                    // Build from YAML using wixer (single file)
+                    Command::new(&args.wixer)
+                        .current_dir(&yaml_example_dir)
+                        .args(["build", yaml_path.to_str().unwrap(), "-o", msi_path.to_str().unwrap()])
+                        .output()
                 };
-                
-                // Run from the example directory so Source paths resolve correctly
-                let result = Command::new(&args.wixer)
-                    .current_dir(&build_dir)
-                    .args(["build", build_file.to_str().unwrap(), "-o", msi_path.to_str().unwrap()])
-                    .output();
                 
                 match result {
                     Ok(output) if output.status.success() => {
@@ -284,17 +293,19 @@ fn find_product_yaml(dir: &Path) -> Option<PathBuf> {
         .map(|e| e.path().to_path_buf())
 }
 
-fn find_product_wxs(dir: &Path) -> Option<PathBuf> {
+/// Find all .wxs files in a directory (for multi-file builds)
+fn find_all_wxs(dir: &Path) -> Vec<PathBuf> {
     WalkDir::new(dir)
         .into_iter()
         .filter_map(|e| e.ok())
-        .find(|e| {
+        .filter(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| s == "Product.wxs")
+                .map(|s| s.ends_with(".wxs") && !s.ends_with(".wxi"))
                 .unwrap_or(false)
         })
         .map(|e| e.path().to_path_buf())
+        .collect()
 }
 
 #[derive(Default)]
