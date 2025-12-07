@@ -1,6 +1,6 @@
 use crate::dirs;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,6 +14,7 @@ pub struct WixerLsp {
     schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
     docs: Arc<RwLock<HashMap<String, String>>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
+    symbols: Arc<RwLock<HashMap<String, SchemaSymbolInfo>>>,
     documents: Arc<RwLock<HashMap<Url, String>>>,
 }
 
@@ -24,6 +25,7 @@ impl WixerLsp {
             schemas: Arc::new(RwLock::new(HashMap::new())),
             docs: Arc::new(RwLock::new(HashMap::new())),
             completions: Arc::new(RwLock::new(Vec::new())),
+            symbols: Arc::new(RwLock::new(HashMap::new())),
             documents: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -47,6 +49,7 @@ impl WixerLsp {
         let mut schemas = self.schemas.write().await;
         let mut docs = self.docs.write().await;
         let mut completions = self.completions.write().await;
+        let mut symbols = self.symbols.write().await;
         
         if let Ok(entries) = fs::read_dir(schema_dir) {
             for entry in entries.flatten() {
@@ -75,6 +78,10 @@ impl WixerLsp {
                             }
 
                             // Add element completion
+                            symbols
+                                .entry(def_name.clone())
+                                .and_modify(|info| info.kind = SchemaSymbolKind::Element)
+                                .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Element, def_schema));
                             completions.push(CompletionItem {
                                 label: def_name.clone(),
                                 kind: Some(CompletionItemKind::CLASS),
@@ -94,6 +101,10 @@ impl WixerLsp {
                                         docs.entry(prop_name.clone()).or_insert_with(|| d.clone());
                                     }
 
+                                    symbols
+                                        .entry(prop_name.clone())
+                                        .and_modify(|info| info.update_from_schema(SchemaSymbolKind::Attribute, prop_schema))
+                                        .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Attribute, prop_schema));
                                     completions.push(CompletionItem {
                                         label: prop_name.clone(),
                                         kind: Some(CompletionItemKind::PROPERTY),
@@ -303,6 +314,75 @@ fn remove_xmlns(value: &mut serde_json::Value) {
     }
 }
 
+fn extract_value_segment(val_part: &str) -> &str {
+    let trimmed = val_part.trim_start();
+    let without_comment = trimmed.split('#').next().unwrap_or(trimmed);
+    without_comment.trim()
+}
+
+fn determine_value_token_type(value: &str, symbol: Option<&SchemaSymbolInfo>) -> u32 {
+    let stripped = strip_quotes(value);
+
+    if let Some(info) = symbol {
+        if let Some(enum_values) = &info.enum_values {
+            if enum_values.contains(stripped) {
+                return 3; // enum member
+            }
+        }
+
+        if let Some(kind) = info.value_kind {
+            match kind {
+                SchemaValueType::Boolean => {
+                    if is_boolean_literal(stripped) {
+                        return 5;
+                    }
+                }
+                SchemaValueType::Number | SchemaValueType::Integer => {
+                    if is_numeric_literal(stripped) {
+                        return 4;
+                    }
+                }
+            }
+        }
+    }
+
+    if is_boolean_literal(stripped) {
+        return 5;
+    }
+    if is_numeric_literal(stripped) {
+        return 4;
+    }
+
+    2
+}
+
+fn strip_quotes(value: &str) -> &str {
+    let trimmed = value.trim();
+    if trimmed.len() >= 2 {
+        let bytes = trimmed.as_bytes();
+        if (bytes[0] == b'"' && bytes[trimmed.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[trimmed.len() - 1] == b'\'')
+        {
+            return &trimmed[1..trimmed.len() - 1];
+        }
+    }
+    trimmed
+}
+
+fn is_boolean_literal(value: &str) -> bool {
+    matches!(value, "true" | "false" | "yes" | "no" | "on" | "off")
+}
+
+fn is_numeric_literal(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    if value.starts_with("0x") || value.starts_with("0X") {
+        return value[2..].chars().all(|c| c.is_ascii_hexdigit());
+    }
+    value.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+')
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for WixerLsp {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
@@ -320,7 +400,10 @@ impl LanguageServer for WixerLsp {
                             token_types: vec![
                                 SemanticTokenType::CLASS,    // 0: Elements
                                 SemanticTokenType::PROPERTY, // 1: Attributes
-                                SemanticTokenType::STRING,   // 2: Values
+                                SemanticTokenType::STRING,   // 2: Strings
+                                SemanticTokenType::ENUM_MEMBER, // 3: Enum values
+                                SemanticTokenType::NUMBER,   // 4: Numbers
+                                SemanticTokenType::BOOLEAN,  // 5: Booleans
                             ],
                             token_modifiers: vec![],
                         },
@@ -342,6 +425,7 @@ impl LanguageServer for WixerLsp {
         let uri = params.text_document.uri;
         let documents = self.documents.read().await;
         let completions = self.completions.read().await;
+        let symbols = self.symbols.read().await;
 
         if let Some(text) = documents.get(&uri) {
             let mut data = Vec::new();
@@ -364,17 +448,20 @@ impl LanguageServer for WixerLsp {
                     let is_known = completions.iter().any(|c| c.label == key);
                     
                     // Determine token type
-                    // Heuristic: Capitalized is likely Element (Class), lowercase is Attribute (Property)
-                    // But we can check completions kind if we had a map.
-                    // For now: First char Uppercase -> Class (0), Lowercase -> Property (1)
-                    let token_type = if is_known {
+                    let token_type = if let Some(info) = symbols.get(key) {
+                        match info.kind {
+                            SchemaSymbolKind::Element => 0,
+                            SchemaSymbolKind::Attribute => 1,
+                            SchemaSymbolKind::EnumValue => 3,
+                        }
+                    } else if is_known {
                         if key.chars().next().is_some_and(|c| c.is_uppercase()) {
-                            0 // Class
+                            0
                         } else {
-                            1 // Property
+                            1
                         }
                     } else {
-                        1 // Default to Property for unknown keys
+                        1
                     };
 
                     // Relative calculations for Delta encoding
@@ -401,21 +488,22 @@ impl LanguageServer for WixerLsp {
                     if colon_idx + 1 < line.len() {
                         let val_part = &line[colon_idx + 1..];
                         if !val_part.trim().is_empty() {
-                             // It's a value
-                             let val_start_col = colon_idx + 1 + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
-                             let val_len = val_part.trim().len();
+                             let value_segment = extract_value_segment(val_part);
+                             if !value_segment.is_empty() {
+                                 let val_start_col = colon_idx + 1 + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
+                                 let value_token_type = determine_value_token_type(value_segment, symbols.get(key));
+                                 let delta_line_val = 0; // Same line
+                                 let delta_start_val = val_start_col as u32 - prev_start;
 
-                             let delta_line_val = 0; // Same line
-                             let delta_start_val = val_start_col as u32 - prev_start;
-
-                             data.push(SemanticToken {
-                                delta_line: delta_line_val,
-                                delta_start: delta_start_val,
-                                length: val_len as u32,
-                                token_type: 2, // String
-                                token_modifiers_bitset: 0,
-                             });
-                             prev_start = val_start_col as u32;
+                                 data.push(SemanticToken {
+                                    delta_line: delta_line_val,
+                                    delta_start: delta_start_val,
+                                    length: value_segment.len() as u32,
+                                    token_type: value_token_type,
+                                    token_modifiers_bitset: 0,
+                                 });
+                                 prev_start = val_start_col as u32;
+                             }
                         }
                     }
                 }
