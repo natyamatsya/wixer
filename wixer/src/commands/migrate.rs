@@ -1,5 +1,9 @@
 use crate::project::WixProject;
-use anyhow::Result;
+use crate::yaml_to_wix;
+use crate::common::AttributeStrategy;
+use crate::constants::{EXT_WXS_YAML, EXT_WXI_YAML, EXT_WXL_YAML};
+use crate::utils::load_known_attributes;
+use anyhow::{Context, Result};
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use std::fs;
@@ -23,11 +27,80 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
 
     let is_template = input.extension().is_some_and(|e| e == "in");
     
-    // Load Project
-    let root_dir = crate::utils::find_project_root().unwrap_or_else(|_| input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf());
+    // Check if input is YAML - if so, convert to temp XML first
+    let input_str = input.to_string_lossy();
+    let is_yaml = input_str.ends_with(EXT_WXS_YAML) 
+        || input_str.ends_with(EXT_WXI_YAML) 
+        || input_str.ends_with(EXT_WXL_YAML);
     
+    let temp_dir = if is_yaml {
+        let temp = output_dir.join("wixer_temp");
+        fs::create_dir_all(&temp)?;
+        Some(temp)
+    } else {
+        None
+    };
+    
+    // Load Project - either from converted YAML or directly from XML
     let mut project = WixProject::new();
-    project.load_from_directory(&root_dir)?;
+    
+    if is_yaml {
+        // Convert YAML to XML in temp directory
+        let temp_dir = temp_dir.as_ref().unwrap();
+        let known_attributes = load_known_attributes(None, true);
+        
+        // Convert the input file
+        let xml_filename = input.file_name()
+            .map(|n| n.to_string_lossy().replace(".yaml", ""))
+            .unwrap_or_else(|| "converted.wxs".to_string());
+        let xml_path = temp_dir.join(&xml_filename);
+        
+        yaml_to_wix::convert_file(
+            input,
+            &xml_path,
+            AttributeStrategy::Inline,
+            &known_attributes,
+        ).with_context(|| format!("Failed to convert YAML file: {}", input.display()))?;
+        
+        info!("Converted YAML to XML: {}", xml_path.display());
+        
+        // Also convert any other YAML files in the same directory
+        if let Some(parent) = input.parent() 
+            && parent.exists() 
+        {
+            for entry in fs::read_dir(parent)? {
+                let entry = entry?;
+                let path = entry.path();
+                let path_str = path.to_string_lossy();
+                
+                if path != input && (path_str.ends_with(EXT_WXS_YAML) 
+                    || path_str.ends_with(EXT_WXI_YAML) 
+                    || path_str.ends_with(EXT_WXL_YAML)) 
+                {
+                    let xml_name = path.file_name()
+                        .map(|n| n.to_string_lossy().replace(".yaml", ""))
+                        .unwrap_or_default();
+                    let xml_out = temp_dir.join(&xml_name);
+                    
+                    if let Err(e) = yaml_to_wix::convert_file(
+                        &path,
+                        &xml_out,
+                        AttributeStrategy::Inline,
+                        &known_attributes,
+                    ) {
+                        info!("Skipping {}: {}", path.display(), e);
+                    }
+                }
+            }
+        }
+        
+        // Load from temp directory
+        project.load_from_directory(temp_dir)?;
+    } else {
+        // Load from input directory (original behavior)
+        let root_dir = input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+        project.load_from_directory(&root_dir)?;
+    }
 
     // Extract Info
     let (p_name, p_ver, p_man) = project.find_product_info();
@@ -123,10 +196,15 @@ impl MsixManifest {
         Ok(())
     }
 
-    fn map_identity(&mut self, _name: &str, publisher: &str, version: &str) -> Result<()> {
+    fn map_identity(&mut self, name: &str, publisher: &str, version: &str) -> Result<()> {
         let publisher_dn = format!("CN={}", publisher);
+        // Create package identity name: Publisher.ProductName (no spaces, alphanumeric)
+        let safe_name = format!("{}.{}", 
+            publisher.replace(' ', ""),
+            name.replace(' ', "")
+        );
         let mut identity = BytesStart::new("Identity");
-        identity.push_attribute(("Name", "MyPackage")); // Should use safe name
+        identity.push_attribute(("Name", safe_name.as_str()));
         identity.push_attribute(("Publisher", publisher_dn.as_str()));
         identity.push_attribute(("Version", version));
         identity.push_attribute(("ProcessorArchitecture", "x64"));
