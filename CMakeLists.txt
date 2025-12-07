@@ -24,12 +24,19 @@ if(WIN32)
     install(FILES ${CMAKE_BINARY_DIR}/AppxManifest.xml DESTINATION .)
     install(DIRECTORY assets DESTINATION .)
 
-    # Set up wixer impersonation for transparent YAML support
+    # Set up wixer impersonation
     include(WixerImpersonate)
     wixer_impersonate(
         WIXER_EXE "${CMAKE_SOURCE_DIR}/target/release/wixer.exe"
         VERBOSE
         INSPECT_PDB
+    )
+
+    # Export YAML WiX sources to XML (pre-build step)
+    set(WIXER_EXECUTABLE "${CMAKE_SOURCE_DIR}/target/release/wixer.exe")
+    wixer_add_yaml_sources(wixer_yaml_export
+        "${CMAKE_SOURCE_DIR}"
+        "${CMAKE_BINARY_DIR}/wix"
     )
 endif()
 

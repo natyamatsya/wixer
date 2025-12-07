@@ -180,3 +180,87 @@ echo   PATH prepended with wixer bin dir
 
     message(STATUS "  Helper scripts: wixer_env.ps1, wixer_env.sh, wixer_env.cmd")
 endfunction()
+
+# wixer_add_yaml_sources(<target> <yaml_source_dir> <output_dir>)
+#
+# Adds a custom command to export YAML WiX sources to XML before building.
+# The exported XML files can then be used with CPACK_WIX_EXTRA_SOURCES or
+# as standalone WiX sources.
+#
+# Arguments:
+#   target         - Name for the custom target (e.g., wixer_yaml_export)
+#   yaml_source_dir - Directory containing .wxs.yaml, .wxi.yaml, .wxl.yaml files
+#   output_dir     - Directory where .wxs, .wxi, .wxl files will be generated
+#
+# Sets in parent scope:
+#   WIXER_YAML_OUTPUT_DIR   - The output directory
+#   WIXER_YAML_OUTPUT_FILES - List of generated XML files
+#
+# Example:
+#   set(WIXER_EXECUTABLE "${CMAKE_SOURCE_DIR}/target/release/wixer.exe")
+#   wixer_add_yaml_sources(wixer_yaml_export
+#       "${CMAKE_SOURCE_DIR}/wix"
+#       "${CMAKE_BINARY_DIR}/wix"
+#   )
+#   # Use with CPack WIX generator:
+#   set(CPACK_WIX_EXTRA_SOURCES ${WIXER_YAML_OUTPUT_FILES})
+#   # Or build standalone: ninja wixer_yaml_export
+#
+function(wixer_add_yaml_sources TARGET_NAME YAML_SOURCE_DIR OUTPUT_DIR)
+    # Find wixer executable
+    if(DEFINED WIXER_EXECUTABLE)
+        set(_WIXER_EXE "${WIXER_EXECUTABLE}")
+    else()
+        find_program(_WIXER_EXE wixer)
+        if(NOT _WIXER_EXE)
+            message(FATAL_ERROR "wixer executable not found. Set WIXER_EXECUTABLE or ensure wixer is in PATH.")
+        endif()
+    endif()
+
+    # Glob YAML source files
+    file(GLOB_RECURSE _YAML_SOURCES
+        "${YAML_SOURCE_DIR}/*.wxs.yaml"
+        "${YAML_SOURCE_DIR}/*.wxi.yaml"
+        "${YAML_SOURCE_DIR}/*.wxl.yaml"
+    )
+
+    if(NOT _YAML_SOURCES)
+        message(WARNING "No YAML WiX sources found in ${YAML_SOURCE_DIR}")
+        return()
+    endif()
+
+    # Create output directory
+    file(MAKE_DIRECTORY "${OUTPUT_DIR}")
+
+    # Compute expected output files
+    set(_OUTPUT_FILES "")
+    foreach(_yaml ${_YAML_SOURCES})
+        get_filename_component(_name ${_yaml} NAME)
+        # Remove .yaml extension to get .wxs, .wxi, or .wxl
+        string(REGEX REPLACE "\\.yaml$" "" _xml_name "${_name}")
+        list(APPEND _OUTPUT_FILES "${OUTPUT_DIR}/${_xml_name}")
+    endforeach()
+
+    # Add custom command to export YAML to XML
+    add_custom_command(
+        OUTPUT ${_OUTPUT_FILES}
+        COMMAND "${_WIXER_EXE}" export "${YAML_SOURCE_DIR}" "${OUTPUT_DIR}"
+        DEPENDS ${_YAML_SOURCES}
+        COMMENT "Exporting WiX YAML sources to XML"
+        VERBATIM
+    )
+
+    # Add custom target that depends on the output files
+    add_custom_target(${TARGET_NAME}
+        DEPENDS ${_OUTPUT_FILES}
+    )
+
+    # Export variables to parent scope
+    set(WIXER_YAML_OUTPUT_DIR "${OUTPUT_DIR}" PARENT_SCOPE)
+    set(WIXER_YAML_OUTPUT_FILES "${_OUTPUT_FILES}" PARENT_SCOPE)
+
+    message(STATUS "Wixer YAML export configured:")
+    message(STATUS "  Source dir: ${YAML_SOURCE_DIR}")
+    message(STATUS "  Output dir: ${OUTPUT_DIR}")
+    message(STATUS "  Sources: ${_YAML_SOURCES}")
+endfunction()
