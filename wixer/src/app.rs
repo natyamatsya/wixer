@@ -60,7 +60,7 @@ pub async fn run() -> Result<()> {
             attribute_strategy,
             attributes_file,
         } => {
-            let task = spawn_blocking(move || {
+            run_blocking(move || {
                 handle_yaml_to_wix(
                     input,
                     output,
@@ -71,16 +71,13 @@ pub async fn run() -> Result<()> {
                 )
             })
             .await?;
-            task?;
         }
         Commands::WixToYaml {
             input,
             output,
             attribute_strategy,
         } => {
-            let task = spawn_blocking(move || handle_wix_to_yaml(input, output, attribute_strategy))
-                .await?;
-            task?;
+            run_blocking(move || handle_wix_to_yaml(input, output, attribute_strategy)).await?;
         }
         Commands::Validate {
             schema,
@@ -88,63 +85,51 @@ pub async fn run() -> Result<()> {
             schema_dir,
             yaml_dir,
         } => {
-            let task = spawn_blocking(move || handle_validate(schema, yaml, schema_dir, yaml_dir))
-                .await?;
-            task?;
+            run_blocking(move || handle_validate(schema, yaml, schema_dir, yaml_dir)).await?;
         }
         Commands::Import {
             input_dir,
             output_dir,
             attribute_strategy,
         } => {
-            let task = spawn_blocking(move || commands::import::run(&input_dir, &output_dir, attribute_strategy))
+            run_blocking(move || commands::import::run(&input_dir, &output_dir, attribute_strategy))
                 .await?;
-            task?;
         }
         Commands::Export {
             input_dir,
             output_dir,
             attribute_strategy,
         } => {
-            let task = spawn_blocking(move || commands::export::run(&input_dir, &output_dir, attribute_strategy))
+            run_blocking(move || commands::export::run(&input_dir, &output_dir, attribute_strategy))
                 .await?;
-            task?;
         }
         Commands::Describe { term } => {
-            let task = spawn_blocking(move || commands::describe::run(term)).await?;
-            task?;
+            run_blocking(move || commands::describe::run(term)).await?;
         }
         Commands::Build(args) => {
-            let task = spawn_blocking(move || commands::build::run(args)).await?;
-            task?;
+            run_blocking(move || commands::build::run(args)).await?;
         }
         Commands::Doc { output_dir, format } => {
-            let task = spawn_blocking(move || commands::doc::run(&output_dir, &format)).await?;
-            task?;
+            run_blocking(move || commands::doc::run(&output_dir, &format)).await?;
         }
         Commands::MapSchemas => {
-            let task = spawn_blocking(commands::map_schemas::run).await?;
-            task?;
+            run_blocking(commands::map_schemas::run).await?;
         }
         Commands::Migrate {
             input,
             output_dir,
             target,
         } => {
-            let task = spawn_blocking(move || commands::migrate::run(input, output_dir, target)).await?;
-            task?;
+            run_blocking(move || commands::migrate::run(input, output_dir, target)).await?;
         }
         Commands::Upgrade { input, output } => {
-            let task = spawn_blocking(move || commands::upgrade::run(input, output)).await?;
-            task?;
+            run_blocking(move || commands::upgrade::run(input, output)).await?;
         }
         Commands::InspectPdb { path, symbol } => {
-            let task = spawn_blocking(move || commands::pdb::run(&path, symbol)).await?;
-            task?;
+            run_blocking(move || commands::pdb::run(&path, symbol)).await?;
         }
         Commands::Sequence { path, table } => {
-            let task = spawn_blocking(move || commands::sequence::run(&path, table)).await?;
-            task?;
+            run_blocking(move || commands::sequence::run(&path, table)).await?;
         }
         Commands::Lsp => {
             commands::lsp::run().await?;
@@ -346,6 +331,16 @@ fn handle_validate(
     }
 
     bail!("Either provide schema and yaml files, or use --schema-dir and --yaml-dir");
+}
+
+async fn run_blocking<F, T>(f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    spawn_blocking(move || f())
+        .await
+        .map_err(|e| anyhow!("Blocking task failed: {e}"))?
 }
 
 #[derive(Parser)]

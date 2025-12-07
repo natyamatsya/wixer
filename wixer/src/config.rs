@@ -13,7 +13,7 @@ pub struct WixerConfig {
     #[serde(default)]
     pub build: BuildConfig,
     #[serde(default)]
-    pub profiles: HashMap<String, BuildConfig>,
+    pub profiles: HashMap<String, ProfileBuildConfig>,
     #[serde(default)]
     pub logging: LoggingConfig,
 }
@@ -34,22 +34,45 @@ pub struct LoggingConfig {
     pub file: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct ProfileBuildConfig {
+    pub inspect_pdb: Option<bool>,
+    pub inspect_symbols: Option<Vec<String>>,
+    pub verbose: Option<bool>,
+    pub real_wix_path: Option<String>,
+}
+
+impl ProfileBuildConfig {
+    fn apply(&self, target: &mut BuildConfig) {
+        if let Some(value) = self.inspect_pdb {
+            target.inspect_pdb = value;
+        }
+
+        if let Some(values) = &self.inspect_symbols {
+            target.inspect_symbols = values.clone();
+        }
+
+        if let Some(value) = self.verbose {
+            target.verbose = value;
+        }
+
+        if let Some(path) = &self.real_wix_path {
+            target.real_wix_path = Some(path.clone());
+        }
+    }
+}
+
 impl WixerConfig {
     pub fn get_build_config(&self, profile: Option<&str>) -> BuildConfig {
+        let mut merged = self.build.clone();
+
         if let Some(p) = profile
-            && let Some(profile_config) = self.profiles.get(p) {
-                // Merge profile config with default build config
-                // Profile takes precedence for defined values (conceptually)
-                // But for simplicity, we'll return the profile config with fallbacks from default if fields were Option
-                // Since our fields are mostly flags, we'll just return the profile config
-                // but we should probably copy over the real_wix_path if missing
-                let mut merged = profile_config.clone();
-                if merged.real_wix_path.is_none() {
-                    merged.real_wix_path = self.build.real_wix_path.clone();
-                }
-                return merged;
-            }
-        self.build.clone()
+            && let Some(profile_config) = self.profiles.get(p)
+        {
+            profile_config.apply(&mut merged);
+        }
+
+        merged
     }
 
     pub fn load() -> Self {
