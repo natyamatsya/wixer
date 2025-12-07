@@ -2,26 +2,146 @@
 skip_core_tasks = true
 default_to_workspace = false
 
+# =============================================================================
+# Core Build Tasks
+# =============================================================================
+
 [tasks.build-release]
+description = "Build wixer in release mode"
 command = "cargo"
 args = ["build", "--release"]
 
+# =============================================================================
+# YAML Export Tasks
+# =============================================================================
+
+[tasks.yaml-export]
+description = "Export WiX YAML sources to XML"
+dependencies = ["build-release"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer", "--", "export", ".", "target/wix"]
+
+# =============================================================================
+# MSI Installer Tasks (using wixer build)
+# =============================================================================
+
 [tasks.wix-installer]
+description = "Build MSI installer from YAML using wixer"
 dependencies = ["build-release"]
 command = "cargo"
 args = ["run", "--release", "--bin", "wixer", "--", "build", "wixer.wxs.yaml", "-o", "target/wixer.msi"]
 
-[tasks.msix-prepare]
-dependencies = ["wix-installer"]
+# =============================================================================
+# MSIX Packaging Tasks
+# =============================================================================
+
+[tasks.msix-migrate]
+description = "Generate AppxManifest from WiX YAML using wixer migrate"
+dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer", "--", "migrate", "--target", "msix", ".wixer/intermediates/wixer.wxs", "target/msix"]
+args = ["run", "--release", "--bin", "wixer", "--", "migrate", "--target", "msix", "./wixer.wxs.yaml", "target/msix"]
+
+[tasks.msix-prepare]
+description = "Prepare MSIX staging directory"
+dependencies = ["msix-migrate"]
+script_runner = "@shell"
+script = '''
+# Copy executable to MSIX staging
+cp target/release/wixer.exe target/msix/
+# Copy assets
+cp -r assets target/msix/
+'''
 
 [tasks.msix-pack]
+description = "Create MSIX package using MakeAppx"
 dependencies = ["msix-prepare"]
 script_runner = "@shell"
 script = '''
 MakeAppx pack /d target/msix /p target/wixer.msix /o
 '''
 
+[tasks.msix-bundle]
+description = "Create MSIX bundle"
+dependencies = ["msix-pack"]
+script_runner = "@shell"
+script = '''
+mkdir -p target/msix-bundle
+cp target/wixer.msix target/msix-bundle/
+MakeAppx bundle /d target/msix-bundle /p target/wixer.msixbundle /bv 0.1.0.0 /o
+'''
+
+# =============================================================================
+# CMake-based Tasks (using presets)
+# =============================================================================
+
+[tasks.cmake-configure]
+description = "Configure CMake build with wixer impersonation"
+dependencies = ["build-release"]
+command = "cmake"
+args = ["--preset", "wixer-rel"]
+
+[tasks.cmake-configure-auto]
+description = "Configure CMake build with auto MSIX from YAML"
+dependencies = ["build-release"]
+command = "cmake"
+args = ["--preset", "wixer-rel-auto"]
+
+[tasks.cmake-yaml-export]
+description = "Export YAML to XML via CMake"
+dependencies = ["cmake-configure"]
+command = "cmake"
+args = ["--build", "--preset", "wixer-yaml-export"]
+
+[tasks.cmake-msi]
+description = "Build MSI installer via CMake/CPack with wixer impersonation"
+dependencies = ["cmake-yaml-export"]
+script_runner = "@shell"
+script = '''
+cd build
+. ./wixer_env.ps1
+cpack -G WIX
+'''
+
+[tasks.cmake-msix-legacy]
+description = "Build MSIX via CMake/CPack (legacy AppxManifest.xml.in)"
+dependencies = ["cmake-configure"]
+command = "cpack"
+args = ["--preset", "wixer-rel-msix"]
+
+[tasks.cmake-msix-auto]
+description = "Build MSIX via CMake/CPack (auto-generated from YAML)"
+command = "cmake"
+args = ["--workflow", "--preset", "wixer-auto-msix"]
+
+[tasks.cmake-full]
+description = "Full CMake workflow: configure, export YAML, build MSI"
+command = "cmake"
+args = ["--workflow", "--preset", "wixer-rel-pkg"]
+
+# =============================================================================
+# Convenience Aliases
+# =============================================================================
+
+[tasks.msi]
+description = "Build MSI installer (alias for wix-installer)"
+dependencies = ["wix-installer"]
+
+[tasks.msix]
+description = "Build MSIX package (alias for msix-pack)"
+dependencies = ["msix-pack"]
+
+[tasks.msix-auto]
+description = "Build MSIX with auto-generated AppxManifest from YAML"
+dependencies = ["cmake-msix-auto"]
+
+[tasks.all]
+description = "Build all packages (MSI + MSIX)"
+dependencies = ["wix-installer", "msix-bundle"]
+
+# =============================================================================
+# Default Task
+# =============================================================================
+
 [tasks.default]
-dependencies = ["wix-installer", "msix-pack"]
+description = "Build MSI and MSIX packages"
+dependencies = ["all"]
