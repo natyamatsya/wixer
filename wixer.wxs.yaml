@@ -1,15 +1,14 @@
 Wix:
-  Product:
-    Id: '*'
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Package:
     Name: 'Wixer'
     Language: '1033'
     Version: '1.0.0.0'
     Manufacturer: 'Natyamatsya'
     UpgradeCode: 'd0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a'
-    Package:
-      InstallerVersion: '200'
-      Compressed: 'yes'
-      InstallScope: 'perMachine'
+    InstallerVersion: '200'
+    Compressed: 'yes'
+    Scope: 'perMachine'
     MajorUpgrade:
       DowngradeErrorMessage: 'A newer version of [ProductName] is already installed.'
     MediaTemplate:
@@ -20,14 +19,11 @@ Wix:
       Level: '1'
       ComponentGroupRef:
         Id: 'ProductComponents'
-    Directory:
-      Id: 'TARGETDIR'
-      Name: 'SourceDir'
+    StandardDirectory:
+      Id: 'ProgramFiles64Folder'
       Directory:
-        Id: 'ProgramFilesFolder'
-        Directory:
-          Id: 'INSTALLFOLDER'
-          Name: 'Wixer'
+        Id: 'INSTALLFOLDER'
+        Name: 'Wixer'
     ComponentGroup:
       Id: 'ProductComponents'
       Directory: 'INSTALLFOLDER'

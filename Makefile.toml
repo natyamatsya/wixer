@@ -13,7 +13,7 @@ args = ["run", "--release", "--bin", "wixer", "--", "build", "wixer.wxs.yaml", "
 [tasks.msix-prepare]
 dependencies = ["wix-installer"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer", "--", "migrate", ".wixer/intermediates/wixer.wxs", "target/msix", "msix"]
+args = ["run", "--release", "--bin", "wixer", "--", "migrate", "--target", "msix", ".wixer/intermediates/wixer.wxs", "target/msix"]
 
 [tasks.msix-pack]
 dependencies = ["msix-prepare"]

@@ -85,9 +85,18 @@ pub fn load_known_attributes(explicit: Option<&Path>, warn_on_missing_inline: bo
 
     if warn_on_missing_inline {
         warn!(
-            "No known_attributes.json found and strategy is Inline. Attribute detection may fail."
+            "No known_attributes.json found. Using default attribute list."
         );
     }
 
-    HashSet::new()
+    let defaults = [
+        "Id", "Name", "Version", "Manufacturer", "UpgradeCode", "Language", "Codepage",
+        "Title", "Description", "Level", "Source", "KeyPath", "Compressed", "Scope",
+        "InstallerVersion", "EmbedCab", "DowngradeErrorMessage", "Guid", "Directory",
+        "Target", "DiskId", "Vital", "Hidden", "System", "ReadOnly", "Checksum",
+        "PatchGroup", "Part", "File", "Component", "Feature", "Property", "Condition",
+        "Value", "Type", "Action", "Sequence", "Before", "After", "Cost", "Key"
+    ];
+
+    defaults.iter().map(|s| s.to_string()).collect()
 }

@@ -127,7 +127,13 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
             // Convert
             let filename = path.file_stem().unwrap().to_string_lossy();
-            let output_file_path = intermediates_dir.join(format!("{}.{}", filename, target_extension));
+            let output_filename = if filename.ends_with(&format!(".{}", target_extension)) {
+                filename.to_string()
+            } else {
+                format!("{}.{}", filename, target_extension)
+            };
+            
+            let output_file_path = intermediates_dir.join(output_filename);
 
             yaml_to_wix::convert_file(
                 &path,
