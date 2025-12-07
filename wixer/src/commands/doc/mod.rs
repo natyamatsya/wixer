@@ -4,7 +4,7 @@ mod mermaid;
 mod parser;
 mod types;
 
-use crate::utils::find_wixer_root;
+use crate::dirs;
 use anyhow::{Context, Result};
 use backends::asciidoc::AsciiDocGenerator;
 use backends::html::HtmlGenerator;
@@ -15,16 +15,12 @@ use roxmltree::Document;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use tracing::{error, info};
+use tracing::info;
 use types::SchemaInfo;
 
 pub fn run(output_dir: &Path, format: &str) -> Result<()> {
-    let wixer_root = find_wixer_root().unwrap_or_else(|e| {
-        error!("Error determining project root: {}", e);
-        std::process::exit(1);
-    });
-
-    let schema_dir = wixer_root.join("cache").join("xml-schema");
+    let cache_dir = dirs::get_cache_dir()?;
+    let schema_dir = cache_dir.join("xml-schema");
     if !schema_dir.exists() {
         anyhow::bail!(
             "Schema directory not found at {}. Please run 'wixer init' first.",

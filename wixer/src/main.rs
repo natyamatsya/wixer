@@ -15,6 +15,7 @@ pub mod config;
 pub mod describe_db;
 pub mod project;
 pub mod schema_mapping;
+pub mod dirs;
 mod utils;
 mod validate;
 mod wix_to_yaml;
@@ -23,7 +24,7 @@ mod yaml_to_wix;
 pub mod wixpdb;
 
 use crate::common::AttributeStrategy;
-use crate::utils::find_wixer_root;
+use crate::utils::find_project_root;
 
 #[derive(Parser)]
 #[command(name = "wixer")]
@@ -386,8 +387,13 @@ async fn main() {
                 Some(p.clone())
             } else if PathBuf::from("json-schemas/known_attributes.json").exists() {
                 Some(PathBuf::from("json-schemas/known_attributes.json"))
-            } else if let Ok(root) = find_wixer_root() {
+            } else if let Ok(cache_dir) = crate::dirs::get_cache_dir() 
+                && cache_dir.join("json-schema").join("known_attributes.json").exists() 
+            {
+                Some(cache_dir.join("json-schema").join("known_attributes.json"))
+            } else if let Ok(root) = find_project_root() {
                 let path = root
+                    .join(".wixer")
                     .join("cache")
                     .join("json-schema")
                     .join("known_attributes.json");

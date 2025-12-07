@@ -1,4 +1,4 @@
-use crate::utils::find_wixer_root;
+use crate::dirs;
 use anyhow::Result;
 use roxmltree::Document;
 use serde_json::Value;
@@ -13,8 +13,7 @@ pub struct SchemaMapper {
 
 impl SchemaMapper {
     pub fn new() -> Result<Self> {
-        let wixer_root = find_wixer_root()?;
-        let cache = wixer_root.join("cache");
+        let cache = dirs::get_cache_dir()?;
         
         // Load WiX definitions
         let wix_json_path = cache.join("json-schema/wix.schema.json");

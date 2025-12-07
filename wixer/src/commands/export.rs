@@ -1,5 +1,6 @@
 use crate::common::AttributeStrategy;
-use crate::utils::find_wixer_root;
+use crate::utils::find_project_root;
+use crate::dirs;
 use crate::yaml_to_wix;
 use anyhow::{Context, Result};
 use std::collections::HashSet;
@@ -24,21 +25,21 @@ pub fn run(
 
     // Load known attributes
     let mut known_attributes = HashSet::new();
-    if let Ok(root) = find_wixer_root() {
-        let path = root
-            .join("cache")
-            .join("json-schema")
-            .join("known_attributes.json");
-        if path.exists()
-            && let Ok(file) = File::open(&path)
-        {
+
+    let global_path = dirs::get_cache_dir().ok().map(|d| d.join("json-schema").join("known_attributes.json"));
+    let local_path = find_project_root().ok().map(|r| r.join(".wixer").join("cache").join("json-schema").join("known_attributes.json"));
+
+    let path = global_path.filter(|p| p.exists()).or(local_path.filter(|p| p.exists()));
+
+    if let Some(path) = path {
+        if let Ok(file) = File::open(&path) {
             let reader = BufReader::new(file);
             if let Ok(attrs) = serde_json::from_reader(reader) {
                 known_attributes = attrs;
             }
         }
     } else {
-        warn!("Could not find project root, attribute detection might be limited");
+        warn!("Could not find known_attributes.json, attribute detection might be limited");
     }
 
     let mut count = 0;

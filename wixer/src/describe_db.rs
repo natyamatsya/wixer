@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
-use std::path::Path;
 use tracing::info;
+use crate::dirs;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WixProperty {
@@ -15,7 +15,7 @@ pub struct WixProperty {
     pub tags: Vec<String>,
 }
 
-pub fn generate(root: &Path) -> Result<()> {
+pub fn generate() -> Result<()> {
     info!("Generating description database...");
 
     // 1. Load embedded properties
@@ -24,7 +24,8 @@ pub fn generate(root: &Path) -> Result<()> {
         serde_json::from_str(embedded_json).context("Failed to parse embedded knowledge base")?;
 
     // 2. Load properties from JSON schemas
-    let schema_dir = root.join("cache").join("json-schema");
+    let cache_dir = dirs::get_cache_dir()?;
+    let schema_dir = cache_dir.join("json-schema");
     if schema_dir.exists() {
         for entry in fs::read_dir(schema_dir)? {
             let entry = entry?;
@@ -59,7 +60,10 @@ pub fn generate(root: &Path) -> Result<()> {
     }
 
     // 3. Save to cache
-    let output_path = root.join("cache").join("describe.json");
+    let output_path = cache_dir.join("describe.json");
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let file = File::create(&output_path)?;
     serde_json::to_writer(file, &properties)?;
 
@@ -67,14 +71,15 @@ pub fn generate(root: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn load(root: &Path) -> Result<Vec<WixProperty>> {
-    let cache_file = root.join("cache").join("describe.json");
+pub fn load() -> Result<Vec<WixProperty>> {
+    let cache_dir = dirs::get_cache_dir()?;
+    let cache_file = cache_dir.join("describe.json");
     if !cache_file.exists() {
         // If it doesn't exist, try to generate it (implicit init) or fall back to embedded
         // For safety, let's return just the embedded ones + warning?
         // Or just error saying "run init"
         // Better: generate it now.
-        generate(root)?;
+        generate()?;
     }
 
     let file = File::open(cache_file)?;

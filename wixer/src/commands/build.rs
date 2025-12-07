@@ -1,5 +1,6 @@
 use crate::common::AttributeStrategy;
-use crate::utils::find_wixer_root;
+use crate::utils::find_project_root;
+use crate::dirs;
 use crate::yaml_to_wix;
 use crate::config::WixerConfig;
 use crate::commands::pdb;
@@ -59,31 +60,46 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     // It is 'build', let's intercept inputs
-    let wixer_root = find_wixer_root().unwrap_or_else(|_| {
-        // Fallback if not in a wixer project, use temp dir
-        std::env::temp_dir().join("wixer_intermediates")
-    });
+    let intermediates_dir = if let Ok(root) = find_project_root() {
+        root.join(".wixer").join("intermediates")
+    } else {
+         std::env::temp_dir().join("wixer_intermediates")
+    };
 
-    let intermediates_dir = wixer_root.join("intermediates");
     if !intermediates_dir.exists() {
         std::fs::create_dir_all(&intermediates_dir).expect("Failed to create intermediates dir");
     }
 
     // Load known attributes
     let mut known_attributes = HashSet::new();
-    if let Ok(root) = find_wixer_root() {
-        let path = root
-            .join("cache")
-            .join("json-schema")
-            .join("known_attributes.json");
-        if path.exists()
-            && let Ok(file) = File::open(&path)
-        {
+    // Try global cache first
+    let global_attr_path = dirs::get_cache_dir().ok()
+        .map(|d| d.join("json-schema").join("known_attributes.json"));
+
+    if let Some(path) = global_attr_path.as_ref().filter(|p| p.exists()) 
+        && let Ok(file) = File::open(path) {
             let reader = BufReader::new(file);
             if let Ok(attrs) = serde_json::from_reader(reader) {
                 known_attributes = attrs;
             }
-        }
+    } 
+    
+    // Fallback to project legacy cache if empty
+    if known_attributes.is_empty() 
+        && let Ok(root) = find_project_root() {
+            let path = root
+                .join(".wixer")
+                .join("cache")
+                .join("json-schema")
+                .join("known_attributes.json");
+            if path.exists()
+                && let Ok(file) = File::open(&path)
+            {
+                let reader = BufReader::new(file);
+                if let Ok(attrs) = serde_json::from_reader(reader) {
+                    known_attributes = attrs;
+                }
+            }
     }
 
     let mut new_args = Vec::new();

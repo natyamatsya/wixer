@@ -1,5 +1,4 @@
 use crate::describe_db::{self, WixProperty};
-use crate::utils::find_wixer_root;
 use anyhow::Result;
 use tracing::warn;
 use strsim::jaro_winkler;
@@ -7,19 +6,14 @@ use strsim::jaro_winkler;
 pub fn run(term: String) -> Result<()> {
     let term_lower = term.to_lowercase();
 
-    // Find project root to load DB
-    let properties = if let Ok(root) = find_wixer_root() {
-        describe_db::load(&root).unwrap_or_else(|e| {
-            warn!(
-                "Failed to load description database: {}. Run 'wixer init' to generate it.",
-                e
-            );
-            vec![]
-        })
-    } else {
-        warn!("Not in a wixer project. Description database not loaded. Run 'wixer init'.");
+    // Load DB from global cache
+    let properties = describe_db::load().unwrap_or_else(|e| {
+        warn!(
+            "Failed to load description database: {}. Run 'wixer init' to generate it.",
+            e
+        );
         vec![]
-    };
+    });
 
     if properties.is_empty() {
         println!("Description database is empty or could not be loaded.");

@@ -1,6 +1,6 @@
 use crate::common::AttributeStrategy;
 use crate::describe_db;
-use crate::utils::find_wixer_root;
+use crate::dirs;
 use crate::xsd_to_json;
 use anyhow::Result;
 use std::collections::{BTreeSet, HashSet};
@@ -9,16 +9,19 @@ use std::io::BufWriter;
 use tracing::{error, info};
 
 pub async fn run(fresh: bool) -> Result<()> {
-    let wixer_root = find_wixer_root().unwrap_or_else(|e| {
-        error!("Error determining project root: {}", e);
+    let cache_base = dirs::get_cache_dir().unwrap_or_else(|e| {
+        error!("Error determining cache directory: {}", e);
         std::process::exit(1);
     });
 
-    let cache_base = wixer_root.join("cache");
+    if !cache_base.exists() {
+        std::fs::create_dir_all(&cache_base)?;
+    }
+
     let xml_schema_dir = cache_base.join("xml-schema");
     let msix_schema_dir = cache_base.join("msix-xsd-schema");
     let json_schema_dir = cache_base.join("json-schema");
-    info!(root = %wixer_root.display(), "Initializing wixer in {}", wixer_root.display());
+    info!(cache = %cache_base.display(), "Initializing wixer schemas");
 
     if fresh && cache_base.exists() {
         info!("Clearing cache...");
@@ -77,7 +80,7 @@ pub async fn run(fresh: bool) -> Result<()> {
     }
 
     // Generate description database
-    if let Err(e) = describe_db::generate(&wixer_root) {
+    if let Err(e) = describe_db::generate() {
         error!("Failed to generate description database: {}", e);
     } else {
         info!("Generated description database");

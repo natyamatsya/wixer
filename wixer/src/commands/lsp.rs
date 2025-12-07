@@ -1,4 +1,4 @@
-use crate::utils::find_wixer_root;
+use crate::dirs;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
@@ -15,24 +15,28 @@ pub struct WixerLsp {
     docs: Arc<RwLock<HashMap<String, String>>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
     documents: Arc<RwLock<HashMap<Url, String>>>,
-    wixer_root: PathBuf,
 }
 
 impl WixerLsp {
     pub fn new(client: Client) -> Self {
-        let wixer_root = find_wixer_root().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             client,
             schemas: Arc::new(RwLock::new(HashMap::new())),
             docs: Arc::new(RwLock::new(HashMap::new())),
             completions: Arc::new(RwLock::new(Vec::new())),
             documents: Arc::new(RwLock::new(HashMap::new())),
-            wixer_root,
         }
     }
 
     async fn load_schemas(&self) {
-        let schema_dir = self.wixer_root.join("cache").join("json-schema");
+        let cache_dir = match dirs::get_cache_dir() {
+            Ok(d) => d,
+            Err(_) => {
+                 self.client.log_message(MessageType::WARNING, "Could not determine cache directory").await;
+                 return;
+            }
+        };
+        let schema_dir = cache_dir.join("json-schema");
         if !schema_dir.exists() {
             self.client
                 .log_message(MessageType::WARNING, "Schema directory not found")

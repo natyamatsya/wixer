@@ -2,7 +2,8 @@ use serde::Deserialize;
 use std::path::Path;
 use std::fs::File;
 use std::io::BufReader;
-use crate::utils::find_wixer_root;
+use crate::utils::find_configuration_file;
+use crate::dirs;
 use tracing::info;
 
 use std::collections::HashMap;
@@ -52,22 +53,20 @@ impl WixerConfig {
     }
 
     pub fn load() -> Self {
-        // Try current dir first
-        if let Ok(cfg) = Self::load_from_path(Path::new("wixer.yaml")) {
-            info!("Loaded configuration from wixer.yaml");
-            return cfg;
+        // Try to find configuration file by walking up
+        if let Some(path) = find_configuration_file() 
+            && let Ok(cfg) = Self::load_from_path(&path) {
+                info!("Loaded configuration from {}", path.display());
+                return cfg;
         }
-        
-        // Try wixer root
-        if let Ok(root) = find_wixer_root() {
-             // find_wixer_root returns the .wixer folder. The config should be in the project root (parent)
-             if let Some(project_root) = root.parent() {
-                 let path = project_root.join("wixer.yaml");
-                 if let Ok(cfg) = Self::load_from_path(&path) {
-                     info!("Loaded configuration from {}", path.display());
-                     return cfg;
-                 }
-             }
+
+        // Try global config
+        if let Ok(config_dir) = dirs::get_config_dir() {
+            let path = config_dir.join("wixer.yaml");
+            if let Ok(cfg) = Self::load_from_path(&path) {
+                info!("Loaded configuration from {}", path.display());
+                return cfg;
+            }
         }
 
         Self::default()

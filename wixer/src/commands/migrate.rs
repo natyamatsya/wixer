@@ -24,7 +24,7 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     let is_template = input.extension().is_some_and(|e| e == "in");
     
     // Load Project
-    let root_dir = crate::utils::find_wixer_root().map(|p| p.parent().unwrap_or(&p).to_path_buf()).unwrap_or_else(|_| input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf());
+    let root_dir = crate::utils::find_project_root().unwrap_or_else(|_| input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf());
     
     let mut project = WixProject::new();
     project.load_from_directory(&root_dir)?;
