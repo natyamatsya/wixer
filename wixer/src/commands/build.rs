@@ -1,23 +1,23 @@
 use crate::common::AttributeStrategy;
-use crate::utils::find_project_root;
+use crate::utils::{find_project_root, load_known_attributes};
 use crate::dirs;
 use crate::yaml_to_wix;
 use crate::config::WixerConfig;
 use crate::commands::pdb;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use serde_yaml::Value;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::process::Command;
 use tracing::{error, info, warn};
 
 const WIX_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs";
 
 pub fn run(args: Vec<String>) -> Result<()> {
     if args.is_empty() {
-        error!("No arguments provided for build");
-        std::process::exit(1);
+        bail!("No arguments provided for build");
     }
 
     // Load config
@@ -39,15 +39,15 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     // Check if it's actually the 'build' command
     if build_args[0] != "build" {
-        // Pass through other commands to wix
-        let status = std::process::Command::new(&wix_exe)
+        let status = Command::new(&wix_exe)
             .args(build_args)
             .status()
-            .unwrap_or_else(|e| {
-                error!("Failed to execute wix ({}): {}", wix_exe, e);
-                std::process::exit(1);
-            });
-        std::process::exit(status.code().unwrap_or(1));
+            .with_context(|| format!("Failed to execute wix ({wix_exe})"))?;
+        if !status.success() {
+            let code = status.code().unwrap_or(1);
+            bail!("wix exited with code {code}");
+        }
+        return Ok(());
     }
 
     // Apply debug profile settings
@@ -71,36 +71,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     // Load known attributes
-    let mut known_attributes = HashSet::new();
-    // Try global cache first
-    let global_attr_path = dirs::get_cache_dir().ok()
-        .map(|d| d.join("json-schema").join("known_attributes.json"));
-
-    if let Some(path) = global_attr_path.as_ref().filter(|p| p.exists()) 
-        && let Ok(file) = File::open(path) {
-            let reader = BufReader::new(file);
-            if let Ok(attrs) = serde_json::from_reader(reader) {
-                known_attributes = attrs;
-            }
-    } 
-    
-    // Fallback to project legacy cache if empty
-    if known_attributes.is_empty() 
-        && let Ok(root) = find_project_root() {
-            let path = root
-                .join(".wixer")
-                .join("cache")
-                .join("json-schema")
-                .join("known_attributes.json");
-            if path.exists()
-                && let Ok(file) = File::open(&path)
-            {
-                let reader = BufReader::new(file);
-                if let Ok(attrs) = serde_json::from_reader(reader) {
-                    known_attributes = attrs;
-                }
-            }
-    }
+    let mut known_attributes = load_known_attributes(None, true);
 
     let mut new_args = Vec::new();
     new_args.push("build".to_string());
@@ -182,36 +153,28 @@ pub fn run(args: Vec<String>) -> Result<()> {
             let filename = path.file_stem().unwrap().to_string_lossy();
             let output_file_path = intermediates_dir.join(format!("{}.{}", filename, target_extension));
 
-            match yaml_to_wix::convert_file(
+            yaml_to_wix::convert_file(
                 &path,
                 &output_file_path,
                 AttributeStrategy::Inline,
                 &known_attributes,
-            ) {
-                Ok(_) => {
-                    new_args.push(output_file_path.to_string_lossy().to_string());
-                    continue;
-                }
-                Err(e) => {
-                    error!(file = %path.display(), "Failed to convert: {}", e);
-                    std::process::exit(1);
-                }
-            }
+            )
+            .with_context(|| format!("Failed to convert {}", path.display()))?;
+            new_args.push(output_file_path.to_string_lossy().to_string());
+            continue;
         }
         new_args.push(arg.clone());
     }
 
     info!("Running: {} {}", wix_exe, new_args.join(" "));
-    let status = std::process::Command::new(&wix_exe)
+    let status = Command::new(&wix_exe)
         .args(&new_args) // "build" is included in new_args[0]
         .status()
-        .unwrap_or_else(|e| {
-            error!("Failed to execute wix ({}): {}", wix_exe, e);
-            std::process::exit(1);
-        });
+        .with_context(|| format!("Failed to execute wix ({wix_exe})"))?;
 
     if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+        let code = status.code().unwrap_or(1);
+        bail!("wix build failed with exit code {code}");
     }
 
     // Post-build actions
@@ -227,10 +190,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
             // Assuming current directory for output if not specified? 
             // Wix 4 usually outputs to current dir unless -o is specified.
             PathBuf::from(file_stem).with_extension("wixpdb")
-        } else {
-             // Heuristic: same base as first input
-             let input = PathBuf::from(&input_file.as_ref().unwrap());
+        } else if let Some(input) = input_file.as_ref() {
              input.with_extension("wixpdb")
+        } else {
+             PathBuf::from("output.wixpdb")
         };
 
         if pdb_path.exists() {
@@ -245,7 +208,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         }
     }
 
-    std::process::exit(status.code().unwrap_or(0));
+    Ok(())
 }
 
 fn is_wix_file(data: &Value) -> bool {
