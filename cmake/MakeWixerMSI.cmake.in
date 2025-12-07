@@ -1,0 +1,48 @@
+# Wixer MSI Packaging Script
+# Uses wixer to build MSI from YAML source.
+if(NOT WIN32)
+    return()
+endif()
+
+set(WIXER_NAME "@CPACK_PACKAGE_NAME@")
+set(WIXER_VERSION "@CPACK_PACKAGE_VERSION@")
+message(STATUS "Wixer MSI Package: ${WIXER_NAME} ${WIXER_VERSION}")
+
+# Output file names
+set(MSI_FILE_NAME "${WIXER_NAME}-${WIXER_VERSION}.msi")
+set(MSI_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${MSI_FILE_NAME}")
+
+# Find wixer executable (use freshly built one from target/release)
+set(WIXER_EXE "@CMAKE_SOURCE_DIR@/target/release/wixer.exe")
+if(NOT EXISTS "${WIXER_EXE}")
+    message(FATAL_ERROR "wixer.exe not found at ${WIXER_EXE}. Run 'cargo build --release' first.")
+endif()
+
+# WiX YAML source file
+set(WXS_YAML "@CMAKE_SOURCE_DIR@/wixer.wxs.yaml")
+if(NOT EXISTS "${WXS_YAML}")
+    message(FATAL_ERROR "WiX YAML source not found: ${WXS_YAML}")
+endif()
+
+# Remove existing output
+file(REMOVE "${MSI_FULL_PATH}")
+
+# Build MSI using wixer
+message(STATUS "Building MSI with wixer: ${WIXER_EXE} build ${WXS_YAML} -o ${MSI_FULL_PATH}")
+execute_process(
+    COMMAND "${WIXER_EXE}" build "${WXS_YAML}" -o "${MSI_FULL_PATH}"
+    WORKING_DIRECTORY "@CMAKE_SOURCE_DIR@"
+    RESULT_VARIABLE _res_wixer
+)
+if(NOT _res_wixer EQUAL 0)
+    message(FATAL_ERROR "wixer build failed: ${_res_wixer}")
+endif()
+
+if(NOT EXISTS "${MSI_FULL_PATH}")
+    message(FATAL_ERROR "wixer build succeeded but MSI not found: ${MSI_FULL_PATH}")
+endif()
+
+message(STATUS "Created MSI package: ${MSI_FULL_PATH}")
+
+# Set CPack's output variable
+set(CPACK_EXTERNAL_BUILT_PACKAGES "${MSI_FULL_PATH}")
