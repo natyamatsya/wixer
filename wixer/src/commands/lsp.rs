@@ -203,6 +203,27 @@ impl WixerLsp {
     }
 }
 
+fn detect_indent_width(text: &str) -> usize {
+    let mut indent = None;
+
+    for line in text.lines() {
+        let trimmed = line.trim_start_matches([' ', '\t']);
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let leading = line.len() - trimmed.len();
+        if leading > 0 {
+            match indent {
+                Some(current) if leading >= current => {}
+                _ => indent = Some(leading),
+            }
+        }
+    }
+
+    indent.unwrap_or(2).max(1)
+}
+
 fn find_range(text: &str, instance_path: &str) -> Range {
     let segments: Vec<&str> = instance_path.trim_start_matches('/').split('/').collect();
     if segments.is_empty() {
@@ -219,6 +240,7 @@ fn find_range(text: &str, instance_path: &str) -> Range {
             .cloned()
             .collect();
         let expected_depth = non_numeric.len().saturating_sub(1);
+        let indent_width = detect_indent_width(text);
 
         for (line_idx, line) in text.lines().enumerate() {
             let trimmed = line.trim_start();
@@ -227,7 +249,7 @@ fn find_range(text: &str, instance_path: &str) -> Range {
             }
 
             let indent = line.len().saturating_sub(trimmed.len());
-            let indent_depth = indent / 2; // assume 2-space indentation
+            let indent_depth = indent / indent_width;
 
             if indent_depth > expected_depth + 1 {
                 continue;
