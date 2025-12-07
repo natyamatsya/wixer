@@ -1,0 +1,151 @@
+# APPX Packaging Script
+# Exit if not a Windows build.
+if(NOT WIN32)
+ return()
+endif()
+
+# Script invoked by CPack's External generator. Uses pre-staged files.
+# Requires: APPX_NAME, APPX_VERSION.
+
+set(APPX_NAME "Natyamatsya.Wixer")
+message(STATUS "AppX Package Name: ${APPX_NAME}")
+
+set(APPX_VERSION "0.1.0.0")
+message(STATUS "AppX Manifest Version: ${APPX_VERSION}")
+
+# Define output file names.
+set(APPX_PACKAGE_X64_FILE_NAME "${APPX_NAME}-${APPX_VERSION}-x64.msix")
+set(APPX_BUNDLE_FILE_NAME "${APPX_NAME}-${APPX_VERSION}.msixbundle")
+set(APPX_PDB_FILE_NAME "${APPX_NAME}.pdb")
+set(APPX_SYM_FILE_NAME "${APPX_NAME}-${APPX_VERSION}.msixsym")
+set(APPX_UPLOAD_FILE_NAME "${APPX_NAME}-${APPX_VERSION}.msixupload")
+
+# Define full output paths (all in CPACK_TOPLEVEL_DIRECTORY).
+set(APPX_PACKAGE_X64_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${APPX_PACKAGE_X64_FILE_NAME}")
+set(APPX_BUNDLE_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${APPX_BUNDLE_FILE_NAME}")
+set(APPX_SYM_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${APPX_SYM_FILE_NAME}")
+set(APPX_UPLOAD_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${APPX_UPLOAD_FILE_NAME}")
+
+# Source PDB path in CPack temp install directory.
+set(APPX_PDB_SOURCE_PATH "${CPACK_TEMPORARY_DIRECTORY}/${APPX_PDB_FILE_NAME}")
+
+## Prepare Staging Directory
+
+# Flatten all subdirectories in the staging root for MakeAppx.
+file(GLOB staging_items "${CPACK_TEMPORARY_DIRECTORY}/*")
+foreach(item ${staging_items})
+ if(IS_DIRECTORY "${item}")
+     get_filename_component(dir_name "${item}" NAME)
+    string(TOLOWER "${dir_name}" dir_name_lower)
+    if(NOT dir_name_lower STREQUAL "assets")
+         message(STATUS "Flattening directory: ${item}")
+         file(GLOB subdir_contents "${item}/*")
+         foreach(subitem ${subdir_contents})
+             get_filename_component(subitem_name "${subitem}" NAME)
+             file(RENAME "${subitem}" "${CPACK_TEMPORARY_DIRECTORY}/${subitem_name}") # Move and overwrite.
+         endforeach()
+         file(REMOVE_RECURSE "${item}") # Remove empty directory.
+     else()
+         message(STATUS "Skipping flattening of assets directory: ${item}")
+     endif()
+ endif()
+endforeach()
+
+## Locate MakeAppx.exe and Clean Output Files
+
+# Find MakeAppx.exe.
+find_program(MAKEAPPX_EXE MakeAppx.exe
+ HINTS
+ "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin"
+ REQUIRED
+)
+
+# Remove existing output files.
+file(REMOVE "${APPX_PACKAGE_X64_FULL_PATH}")
+file(REMOVE "${APPX_BUNDLE_FULL_PATH}")
+file(REMOVE "${APPX_SYM_FULL_PATH}")
+file(REMOVE "${APPX_UPLOAD_FULL_PATH}")
+
+## Create APPX Package and Bundle
+
+# Create APPX package (x64).
+execute_process(
+ COMMAND "${MAKEAPPX_EXE}" pack /d "${CPACK_TEMPORARY_DIRECTORY}" /p "${APPX_PACKAGE_X64_FULL_PATH}" /o
+ RESULT_VARIABLE _res_pack
+)
+if(NOT _res_pack EQUAL 0)
+ message(FATAL_ERROR "MakeAppx pack failed: ${_res_pack}.")
+endif()
+if(NOT EXISTS "${APPX_PACKAGE_X64_FULL_PATH}")
+ message(FATAL_ERROR "MakeAppx pack succeeded but output not found: ${APPX_PACKAGE_X64_FULL_PATH}")
+endif()
+
+# Create APPX bundle from the .msix package.
+execute_process(
+ COMMAND "${MAKEAPPX_EXE}" bundle /d "${CPACK_TOPLEVEL_DIRECTORY}" /p "${APPX_BUNDLE_FULL_PATH}" /bv "${APPX_VERSION}" /o
+ RESULT_VARIABLE _res_bundle
+)
+if(NOT _res_bundle EQUAL 0)
+ message(FATAL_ERROR "MakeAppx bundle failed: ${_res_bundle}.")
+endif()
+if(NOT EXISTS "${APPX_BUNDLE_FULL_PATH}")
+ message(FATAL_ERROR "MakeAppx bundle succeeded but output not found: ${APPX_BUNDLE_FULL_PATH}.")
+endif()
+
+## Process Symbols and Create Upload Package
+
+# Verify PDB file exists.
+# Optional: If PDB is not present, we might want to skip symbol generation instead of failing.
+if(EXISTS "${APPX_PDB_SOURCE_PATH}")
+    # Convert PDB to .appxsym (zip and rename).
+    execute_process(
+     COMMAND ${CMAKE_COMMAND} -E tar cvf "${APPX_SYM_FULL_PATH}.zip" --format=zip "${APPX_PDB_SOURCE_PATH}"
+     RESULT_VARIABLE _res_cmake_zip_pdb
+    )
+    if(NOT _res_cmake_zip_pdb EQUAL 0)
+     message(FATAL_ERROR "cmake -E tar for PDB failed: ${_res_cmake_zip_pdb}.")
+    endif()
+
+    if(NOT EXISTS "${APPX_SYM_FULL_PATH}.zip")
+     message(FATAL_ERROR "PDB zip not created: ${APPX_SYM_FULL_PATH}.zip")
+    endif()
+
+    execute_process(
+     COMMAND ${CMAKE_COMMAND} -E rename "${APPX_SYM_FULL_PATH}.zip" "${APPX_SYM_FULL_PATH}"
+     RESULT_VARIABLE _res_cmake_rename_sym
+    )
+    if(NOT _res_cmake_rename_sym EQUAL 0)
+     message(FATAL_ERROR "cmake -E rename .appxsym failed: ${_res_cmake_rename_sym}.")
+    endif()
+else()
+    message(STATUS "PDB file not found, skipping symbol generation.")
+endif()
+
+# Create .appxupload package (bundle + symbols if present).
+set(UPLOAD_FILES "${APPX_BUNDLE_FULL_PATH}")
+if(EXISTS "${APPX_SYM_FULL_PATH}")
+    list(APPEND UPLOAD_FILES "${APPX_SYM_FULL_PATH}")
+endif()
+
+execute_process(
+ COMMAND ${CMAKE_COMMAND} -E tar cvf "${APPX_UPLOAD_FULL_PATH}.zip" --format=zip ${UPLOAD_FILES}
+ RESULT_VARIABLE _res_cmake_zip_with_sym
+)
+if(NOT _res_cmake_zip_with_sym EQUAL 0)
+ message(FATAL_ERROR "cmake -E tar for .appxupload failed: ${_res_cmake_zip_with_sym}.")
+endif()
+
+if(NOT EXISTS "${APPX_UPLOAD_FULL_PATH}.zip")
+ message(FATAL_ERROR ".appxupload zip not created: ${APPX_UPLOAD_FULL_PATH}.zip")
+endif()
+
+execute_process(
+ COMMAND ${CMAKE_COMMAND} -E rename "${APPX_UPLOAD_FULL_PATH}.zip" "${APPX_UPLOAD_FULL_PATH}"
+ RESULT_VARIABLE _res_cmake_rename_upload
+)
+if(NOT _res_cmake_rename_upload EQUAL 0)
+ message(FATAL_ERROR "cmake -E rename .appxupload failed: ${_res_cmake_rename_upload}.")
+endif()
+
+# Set CPack's output variable.
+set(CPACK_EXTERNAL_BUILT_PACKAGES "${APPX_UPLOAD_FULL_PATH}")

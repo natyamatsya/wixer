@@ -1,0 +1,76 @@
+# APPX Packaging Script
+# Exit if not a Windows build.
+if(NOT WIN32)
+ return()
+endif()
+
+# Script invoked by CPack's External generator. Uses pre-staged files.
+# Requires: APPX_NAME, APPX_VERSION.
+
+set(APPX_NAME "@APPX_NAME@")
+message(STATUS "AppX Package Name: ${APPX_NAME}")
+
+set(APPX_VERSION "@APPX_VERSION@")
+message(STATUS "AppX Manifest Version: ${APPX_VERSION}")
+
+# Define output file names.
+set(APPX_PACKAGE_FILE_NAME "${APPX_NAME}-${APPX_VERSION}-x64.msix")
+set(APPX_PDB_FILE_NAME "${APPX_NAME}.pdb")
+
+# Define full output paths (all in CPACK_TOPLEVEL_DIRECTORY).
+set(APPX_PACKAGE_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${APPX_PACKAGE_FILE_NAME}")
+
+# Source PDB path in CPack temp install directory.
+set(APPX_PDB_SOURCE_PATH "${CPACK_TEMPORARY_DIRECTORY}/${APPX_PDB_FILE_NAME}")
+
+## Prepare Staging Directory
+
+# Flatten all subdirectories in the staging root for MakeAppx.
+file(GLOB staging_items "${CPACK_TEMPORARY_DIRECTORY}/*")
+foreach(item ${staging_items})
+ if(IS_DIRECTORY "${item}")
+     get_filename_component(dir_name "${item}" NAME)
+    string(TOLOWER "${dir_name}" dir_name_lower)
+    if(NOT dir_name_lower STREQUAL "assets")
+         message(STATUS "Flattening directory: ${item}")
+         file(GLOB subdir_contents "${item}/*")
+         foreach(subitem ${subdir_contents})
+             get_filename_component(subitem_name "${subitem}" NAME)
+             file(RENAME "${subitem}" "${CPACK_TEMPORARY_DIRECTORY}/${subitem_name}") # Move and overwrite.
+         endforeach()
+         file(REMOVE_RECURSE "${item}") # Remove empty directory.
+     else()
+         message(STATUS "Skipping flattening of assets directory: ${item}")
+     endif()
+ endif()
+endforeach()
+
+## Locate MakeAppx.exe
+
+# Find MakeAppx.exe.
+find_program(MAKEAPPX_EXE MakeAppx.exe
+ HINTS
+ "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin"
+ REQUIRED
+)
+
+# Remove existing output file.
+file(REMOVE "${APPX_PACKAGE_FULL_PATH}")
+
+## Create MSIX Package
+
+execute_process(
+ COMMAND "${MAKEAPPX_EXE}" pack /d "${CPACK_TEMPORARY_DIRECTORY}" /p "${APPX_PACKAGE_FULL_PATH}" /o
+ RESULT_VARIABLE _res_pack
+)
+if(NOT _res_pack EQUAL 0)
+ message(FATAL_ERROR "MakeAppx pack failed: ${_res_pack}.")
+endif()
+if(NOT EXISTS "${APPX_PACKAGE_FULL_PATH}")
+ message(FATAL_ERROR "MakeAppx pack succeeded but output not found: ${APPX_PACKAGE_FULL_PATH}")
+endif()
+
+message(STATUS "Created MSIX package: ${APPX_PACKAGE_FULL_PATH}")
+
+# Set CPack's output variable.
+set(CPACK_EXTERNAL_BUILT_PACKAGES "${APPX_PACKAGE_FULL_PATH}")
