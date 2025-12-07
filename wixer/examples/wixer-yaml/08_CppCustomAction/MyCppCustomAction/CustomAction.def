@@ -1,0 +1,6 @@
+LIBRARY "MyCppCustomAction"
+
+EXPORTS
+    MyImmediateCustomAction
+    MyDeferredCustomAction
+    MyRollbackCustomAction

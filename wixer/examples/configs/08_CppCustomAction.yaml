@@ -1,12 +1,9 @@
 name: "08_CppCustomAction"
-description: "Custom action implemented in C++ as a native DLL"
-
-defines:
-  08_MyCppCustomAction.TargetDir: "$(ProjectDir)..\\x64\\Release\\"
+description: "Modern C++23 custom action example using CMake"
 
 buildable: false
-skip_reason: "Requires building the C++ custom action project first"
+skip_reason: "Requires building the C++ project first (cmake --preset default)"
 
 requires:
-  - path: "../x64/Release/08_MyCppCustomAction.dll"
-    description: "C++ custom action DLL (build 08_MyCppCustomAction project)"
+  - path: "MyCppCustomAction/build/MyCppCustomAction.dll"
+    description: "C++23 custom action DLL built with CMake"

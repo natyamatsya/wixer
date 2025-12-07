@@ -1,0 +1,91 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+
+  Package:
+    Name: "08_CppCustomAction"
+    Manufacturer: Wixer Examples
+    Version: 1.0.0.0
+    UpgradeCode: "B2C3D4E5-F6A7-8901-BCDE-F12345678901"
+    Scope: perMachine
+    Compressed: yes
+
+    MajorUpgrade:
+      DowngradeErrorMessage: A newer version is already installed.
+
+    MediaTemplate:
+      EmbedCab: yes
+
+    # Standard directories
+    StandardDirectory:
+      - Id: ProgramFiles64Folder
+        Directory:
+          - Id: INSTALLFOLDER
+            Name: 08_CppCustomAction
+
+    # Components
+    ComponentGroup:
+      Id: ProductComponents
+      Directory: INSTALLFOLDER
+      Component:
+        - Id: ReadmeComponent
+          Guid: "*"
+          File:
+            - Id: ReadmeFile
+              Source: README.md
+              KeyPath: yes
+
+    # Binary containing the custom action DLL
+    Binary:
+      - Id: CustomActionBinary
+        SourceFile: MyCppCustomAction/build/MyCppCustomAction.dll
+
+    # Custom Actions
+    CustomAction:
+      # Immediate action - runs with session access
+      - Id: CA_Immediate
+        BinaryRef: CustomActionBinary
+        DllEntry: MyImmediateCustomAction
+        Execute: immediate
+        Return: check
+      # Deferred action - runs elevated
+      - Id: CA_Deferred
+        BinaryRef: CustomActionBinary
+        DllEntry: MyDeferredCustomAction
+        Execute: deferred
+        Return: check
+        Impersonate: no
+      # Rollback action
+      - Id: CA_Rollback
+        BinaryRef: CustomActionBinary
+        DllEntry: MyRollbackCustomAction
+        Execute: rollback
+        Return: check
+        Impersonate: no
+
+    # Set up data for deferred action
+    SetProperty:
+      - Id: CA_Deferred
+        Before: CA_Deferred
+        Sequence: execute
+        Value: "InstallDir=[INSTALLFOLDER];MyProperty=[MY_PROPERTY]"
+
+    # Schedule custom actions
+    InstallExecuteSequence:
+      Custom:
+        - Action: CA_Immediate
+          Before: CA_Deferred
+          Condition: NOT Installed
+        - Action: CA_Rollback
+          Before: CA_Deferred
+          Condition: NOT Installed
+        - Action: CA_Deferred
+          Before: InstallFinalize
+          Condition: NOT Installed
+
+    # Feature
+    Feature:
+      Id: MainFeature
+      Title: Main Feature
+      Level: 1
+      ComponentGroupRef:
+        - Id: ProductComponents

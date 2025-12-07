@@ -1,88 +1,68 @@
-# 08_CppCustomAction
+# 08 - C++ Custom Action Example
 
-## Creating custom action project
+A modern C++23 custom action example for WiX v4+ installers.
 
-Extensions that [integrate WiX Toolset into Visual Studio](https://marketplace.visualstudio.com/publishers/WixToolset) come with a project template for a C++ Custom Action. This is what is used here to create the C++ Custom Action project. In the [previous example](../07_CSharpCustomAction/), we already wrote some C# custom actions that are executed as immediate and as deferred. We will write equivalent actions in C++.
+This is a modernized replacement for the legacy WiX SDK-based example in the submodule.
 
-## Writing immediate and deferred custom action
+## Key Changes from Legacy
 
-Immediate custom action:
-```C++
-/// <summary>
-/// Immediate custom action accesses properties directly using WcaGetProperty.
-/// </summary>
-UINT __stdcall MyImmediateCustomAction(MSIHANDLE hInstall)
-{
-  HRESULT hr = S_OK;
-  UINT er = ERROR_SUCCESS;
+| Legacy | Modern |
+|--------|--------|
+| Visual Studio .vcxproj | CMake |
+| WiX SDK (wcautil.lib) | Direct MSI API |
+| C++14 | C++23 |
+| Win32 only | x64/x86 via presets |
 
-  hr = WcaInitialize(hInstall, "MyImmediateCustomAction");
-  ExitOnFailure(hr, "Failed to initialize");
+## Building
 
-  WcaLog(LOGMSG_STANDARD, "Initialized.");
+```bash
+cd MyCppCustomAction
 
-  LPWSTR myProperty = NULL;
-  hr = WcaGetProperty(L"MY_PROPERTY", &myProperty);
-  ExitOnFailure(hr, "Failure reading MY_PROPERTY");
+# Configure and build (requires CMake 3.25+ and a C++23 compiler)
+cmake --preset default
+cmake --build --preset default
 
-  WcaLog(LOGMSG_STANDARD, "MY_PROPERTY value in MyImmediateCustomAction = '%ls'", (LPCWSTR)myProperty);
-
-LExit:
-  er = SUCCEEDED(hr) ? ERROR_SUCCESS : ERROR_INSTALL_FAILURE;
-  return WcaFinalize(er);
-}
+# Or for x86:
+cmake --preset x86
+cmake --build --preset x86
 ```
 
-Deferred custom action:
-```C++
-/// <summary>
-/// Deferred custom action accesses properties using CustomActionData.
-/// </summary>
-UINT __stdcall MyDeferredCustomAction(MSIHANDLE hInstall)
-{
-  HRESULT hr = S_OK;
-  UINT er = ERROR_SUCCESS;
+The DLL will be in `MyCppCustomAction/build/MyCppCustomAction.dll`.
 
-  hr = WcaInitialize(hInstall, "MyDeferredCustomAction");
-  ExitOnFailure(hr, "Failed to initialize");
-
-  WcaLog(LOGMSG_STANDARD, "Initialized.");
-
-  LPWSTR customActionData = NULL;
-  hr = WcaGetProperty(L"CustomActionData", &customActionData);
-  ExitOnFailure(hr, "Failure reading CustomActionData");
-
-  WcaLog(LOGMSG_STANDARD, "CustomActionData value in MyDeferredCustomAction = '%ls'", (LPCWSTR)customActionData);
-
-LExit:
-  er = SUCCEEDED(hr) ? ERROR_SUCCESS : ERROR_INSTALL_FAILURE;
-  return WcaFinalize(er);
-}
+Then build the installer:
+```bash
+cd ..
+wixer build Product.wxs.yaml
 ```
 
-## Executing installer which contains custom actions
+## Custom Actions
 
-If we would initiate the installation with the following command line:
-```
-MsiExec /L*V `"installation.log`" /i `"08_InstallerWithMyCppCustomAction.msi`" MY_PROPERTY=`"my value`" MY_INSTALL_LOCATION=`"c:\Example 08`"
-```
-We would see the following text in *installation.log*:
-```
-MyImmediateCustomAction:  Initialized.
-MyImmediateCustomAction:  MY_PROPERTY value in MyImmediateCustomAction = 'my value'
-...
-MyDeferredCustomAction:  Initialized.
-MyDeferredCustomAction:  CustomActionData value in MyDeferredCustomAction = 'MY_PROPERTY=my value;MY_INSTALL_LOCATION=C:\Example 08\'
-```
+| Action | Type | Description |
+|--------|------|-------------|
+| `MyImmediateCustomAction` | Immediate | Reads/writes properties via MSI API |
+| `MyDeferredCustomAction` | Deferred | Runs elevated, uses CustomActionData |
+| `MyRollbackCustomAction` | Rollback | Undoes changes on failure |
 
-## Debugging custom actions
+## Modern C++23 Features Used
 
-See [here](https://stackoverflow.com/a/52880033/15770755) and [here](https://docs.microsoft.com/en-us/windows/win32/msi/debugging-custom-actions) for details on how to debug C++ custom actions.
+- `std::expected` for error handling
+- `std::format` for string formatting
+- `std::wstring_view` for string parameters
+- No WiX SDK dependency (uses MSI API directly)
 
-## How are custom actions scheduled?
+## Debugging
 
-Everything except the binary which is references can stay the same like in the [previous example](../07_CSharpCustomAction/):
-```xml
-    <!-- Reference to 08_MyCppCustomAction.dll -->
-    <Binary Id="CustomActions" SourceFile="$(var.08_MyCppCustomAction.TargetDir)$(var.08_MyCppCustomAction.TargetName).dll" />
-```
+1. Build with Debug preset: `cmake --preset debug && cmake --build --preset debug`
+2. Run installer with logging: `msiexec /i MyInstaller.msi /l*v install.log`
+3. Attach debugger to `msiexec.exe` process
+
+## API Reference
+
+The custom action uses the Windows Installer API directly:
+
+- `MsiGetPropertyW` - Read properties
+- `MsiSetPropertyW` - Set properties  
+- `MsiProcessMessage` - Log messages
+- `MsiCreateRecord` - Create log records
+
+No WiX SDK (wcautil) dependency - just `msi.lib` from the Windows SDK.

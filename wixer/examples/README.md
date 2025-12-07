@@ -156,8 +156,9 @@ Some examples have been modernized from the original submodule:
 | Example | Changes |
 |---------|---------|
 | [07_CSharpCustomAction](wixer-yaml/07_CSharpCustomAction/) | Upgraded to .NET 6/8 (from .NET Framework 4.7.2) |
+| [08_CppCustomAction](wixer-yaml/08_CppCustomAction/) | Upgraded to C++23 with CMake (from WiX SDK + vcxproj) |
 
-These include source code (e.g., C# projects) alongside the WiX YAML files.
+These include source code (C#/C++ projects) alongside the WiX YAML files.
 
 ## Adding New Examples
 
