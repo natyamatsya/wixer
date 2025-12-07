@@ -1,12 +1,13 @@
 use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::BufWriter;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json;
-use tracing::{error, info, warn};
+use tokio::task::spawn_blocking;
+use tracing::{error, info};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, util::SubscriberInitExt};
 
@@ -59,21 +60,27 @@ pub async fn run() -> Result<()> {
             attribute_strategy,
             attributes_file,
         } => {
-            handle_yaml_to_wix(
-                input,
-                output,
-                input_dir,
-                output_dir,
-                attribute_strategy,
-                attributes_file.as_deref(),
-            )?;
+            let task = spawn_blocking(move || {
+                handle_yaml_to_wix(
+                    input,
+                    output,
+                    input_dir,
+                    output_dir,
+                    attribute_strategy,
+                    attributes_file,
+                )
+            })
+            .await?;
+            task?;
         }
         Commands::WixToYaml {
             input,
             output,
             attribute_strategy,
         } => {
-            handle_wix_to_yaml(&input, &output, attribute_strategy)?;
+            let task = spawn_blocking(move || handle_wix_to_yaml(input, output, attribute_strategy))
+                .await?;
+            task?;
         }
         Commands::Validate {
             schema,
@@ -81,55 +88,69 @@ pub async fn run() -> Result<()> {
             schema_dir,
             yaml_dir,
         } => {
-            handle_validate(schema, yaml, schema_dir, yaml_dir)?;
-        }
-        Commands::Init { fresh } => {
-            commands::init::run(fresh).await?;
+            let task = spawn_blocking(move || handle_validate(schema, yaml, schema_dir, yaml_dir))
+                .await?;
+            task?;
         }
         Commands::Import {
             input_dir,
             output_dir,
             attribute_strategy,
         } => {
-            commands::import::run(&input_dir, &output_dir, attribute_strategy)?;
+            let task = spawn_blocking(move || commands::import::run(&input_dir, &output_dir, attribute_strategy))
+                .await?;
+            task?;
         }
         Commands::Export {
             input_dir,
             output_dir,
             attribute_strategy,
         } => {
-            commands::export::run(&input_dir, &output_dir, attribute_strategy)?;
+            let task = spawn_blocking(move || commands::export::run(&input_dir, &output_dir, attribute_strategy))
+                .await?;
+            task?;
         }
         Commands::Describe { term } => {
-            commands::describe::run(term)?;
+            let task = spawn_blocking(move || commands::describe::run(term)).await?;
+            task?;
         }
         Commands::Build(args) => {
-            commands::build::run(args)?;
+            let task = spawn_blocking(move || commands::build::run(args)).await?;
+            task?;
         }
         Commands::Doc { output_dir, format } => {
-            commands::doc::run(&output_dir, &format)?;
-        }
-        Commands::Lsp => {
-            commands::lsp::run().await?;
+            let task = spawn_blocking(move || commands::doc::run(&output_dir, &format)).await?;
+            task?;
         }
         Commands::MapSchemas => {
-            commands::map_schemas::run()?;
+            let task = spawn_blocking(commands::map_schemas::run).await?;
+            task?;
         }
         Commands::Migrate {
             input,
             output_dir,
             target,
         } => {
-            commands::migrate::run(input, output_dir, target)?;
+            let task = spawn_blocking(move || commands::migrate::run(input, output_dir, target)).await?;
+            task?;
         }
         Commands::Upgrade { input, output } => {
-            commands::upgrade::run(input, output)?;
+            let task = spawn_blocking(move || commands::upgrade::run(input, output)).await?;
+            task?;
         }
         Commands::InspectPdb { path, symbol } => {
-            commands::pdb::run(&path, symbol)?;
+            let task = spawn_blocking(move || commands::pdb::run(&path, symbol)).await?;
+            task?;
         }
         Commands::Sequence { path, table } => {
-            commands::sequence::run(&path, table)?;
+            let task = spawn_blocking(move || commands::sequence::run(&path, table)).await?;
+            task?;
+        }
+        Commands::Lsp => {
+            commands::lsp::run().await?;
+        }
+        Commands::Init { fresh } => {
+            commands::init::run(fresh).await?;
         }
     }
 
@@ -274,10 +295,10 @@ fn handle_yaml_to_wix(
     input_dir: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     attribute_strategy: AttributeStrategy,
-    attributes_file: Option<&Path>,
+    attributes_file: Option<PathBuf>,
 ) -> Result<()> {
     let known_attributes = load_known_attributes(
-        attributes_file,
+        attributes_file.as_deref(),
         attribute_strategy == AttributeStrategy::Inline,
     );
 
@@ -297,12 +318,12 @@ fn handle_yaml_to_wix(
 }
 
 fn handle_wix_to_yaml(
-    input: &Path,
-    output: &Path,
+    input: PathBuf,
+    output: PathBuf,
     attribute_strategy: AttributeStrategy,
 ) -> Result<()> {
     let known_attributes = HashSet::new();
-    wix_to_yaml::convert_file(input, output, attribute_strategy, &known_attributes)
+    wix_to_yaml::convert_file(&input, &output, attribute_strategy, &known_attributes)
         .context("Error converting WiX to YAML")?
         .into();
     Ok(())
@@ -315,16 +336,19 @@ fn handle_validate(
     yaml_dir: Option<PathBuf>,
 ) -> Result<()> {
     if let (Some(s_dir), Some(y_dir)) = (schema_dir, yaml_dir) {
-        validate::validate_directory(&s_dir, &y_dir)
-            .context("Error validating directory")?;
-        return Ok(());
+        return validate::validate_directory(&s_dir, &y_dir)
+            .context("Error validating directory");
     }
 
     if let (Some(schema_path), Some(yaml_path)) = (schema, yaml) {
-    command: Commands,
+        return validate::validate_file(&schema_path, &yaml_path)
+            .context("Validation failed");
+    }
+
+    bail!("Either provide schema and yaml files, or use --schema-dir and --yaml-dir");
 }
 
-#[derive(Subcommand)]
+#[derive(Parser)]
 enum Commands {
     /// Convert XSD schemas to JSON Schema
     XsdToJson {
