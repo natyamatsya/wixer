@@ -203,8 +203,9 @@ fn main() -> Result<()> {
         fs::create_dir_all(&msi_dir)?;
         
         for example in &examples {
-            // Find Product.wxs.yaml in the yaml output
+            // Find Product.wxs.yaml in the yaml output, or Product.wxs in v4 output
             let yaml_example_dir = yaml_dir.join(&example.name);
+            let v4_example_dir = v4_dir.join(&example.name);
             let product_yaml = find_product_yaml(&yaml_example_dir);
             
             if let Some(yaml_path) = product_yaml {
@@ -212,10 +213,29 @@ fn main() -> Result<()> {
                 
                 print!("Building {}... ", example.name);
                 
-                // Run from the yaml example directory so Source paths resolve correctly
+                // Check if the "yaml" file is actually XML (copied due to preprocessor directives)
+                let content = fs::read_to_string(&yaml_path).unwrap_or_default();
+                let is_xml = content.trim_start().starts_with("<?xml") || content.trim_start().starts_with("<Wix");
+                
+                let (build_dir, build_file) = if is_xml {
+                    // Build from v4 XML directly using wix.exe
+                    let v4_product = find_product_wxs(&v4_example_dir);
+                    if let Some(wxs_path) = v4_product {
+                        (v4_example_dir.clone(), wxs_path)
+                    } else {
+                        println!("✗ (no v4 wxs found)");
+                        stats.build_errors += 1;
+                        continue;
+                    }
+                } else {
+                    // Build from YAML using wixer
+                    (yaml_example_dir.clone(), yaml_path)
+                };
+                
+                // Run from the example directory so Source paths resolve correctly
                 let result = Command::new(&args.wixer)
-                    .current_dir(&yaml_example_dir)
-                    .args(["build", yaml_path.to_str().unwrap(), "-o", msi_path.to_str().unwrap()])
+                    .current_dir(&build_dir)
+                    .args(["build", build_file.to_str().unwrap(), "-o", msi_path.to_str().unwrap()])
                     .output();
                 
                 match result {
@@ -259,6 +279,19 @@ fn find_product_yaml(dir: &Path) -> Option<PathBuf> {
             e.file_name()
                 .to_str()
                 .map(|s| s == "Product.wxs.yaml")
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().to_path_buf())
+}
+
+fn find_product_wxs(dir: &Path) -> Option<PathBuf> {
+    WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| s == "Product.wxs")
                 .unwrap_or(false)
         })
         .map(|e| e.path().to_path_buf())

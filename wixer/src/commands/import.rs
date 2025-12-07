@@ -87,7 +87,16 @@ pub fn run(
 
                 info!(input = %path.display(), output = %final_output_path.display(), "Importing");
 
-                if let Err(e) = wix_to_yaml::convert_file(
+                // Check for preprocessor directives that can't be converted to YAML
+                let content = fs::read_to_string(path).unwrap_or_default();
+                if content.contains("<?if") || content.contains("<?define") || content.contains("<?include") {
+                    // Copy as-is with .yaml extension - can't convert preprocessor directives
+                    info!(file = %path.display(), "Skipping YAML conversion (preprocessor directives)");
+                    fs::copy(path, &final_output_path).with_context(|| {
+                        format!("Failed to copy {}", path.display())
+                    })?;
+                    count += 1;
+                } else if let Err(e) = wix_to_yaml::convert_file(
                     path,
                     &final_output_path,
                     attribute_strategy,

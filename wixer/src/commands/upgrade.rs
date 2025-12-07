@@ -19,11 +19,51 @@ fn upgrade_text_based(content: &str) -> String {
         "http://wixtoolset.org/schemas/v4/wxs"
     );
     
-    // Product -> Package (but keep the element structure for now)
-    // This is tricky because we need to merge Product and inner Package
-    // For text-based, we'll do simple replacements
+    // Add namespace to Include elements that don't have one
+    if result.contains("<Include>") && !result.contains("xmlns=") {
+        result = result.replace("<Include>", r#"<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">"#);
+    }
     
-    // InstallScope -> Scope
+    // Product -> Package transformation
+    // In v4, Product element becomes Package, and inner Package attributes merge in
+    // Step 1: Extract Product attributes and convert to Package
+    if let Ok(re) = Regex::new(r#"<Product\s+([^>]*)>"#) {
+        result = re.replace(&result, |caps: &regex::Captures| {
+            let attrs = &caps[1];
+            // Rename Id to ProductCode
+            let attrs = attrs.replace("Id=", "ProductCode=");
+            format!("<Package {}>", attrs)
+        }).to_string();
+    }
+    
+    // Step 2: Remove the inner <Package .../> element (its attributes should be on outer Package)
+    // First, try to extract Scope from inner Package
+    let mut scope_attr = String::new();
+    if let Ok(re) = Regex::new(r#"<Package[^>]*InstallScope="([^"]*)"[^>]*/>"#) {
+        if let Some(caps) = re.captures(&result) {
+            scope_attr = format!(" Scope=\"{}\"", &caps[1]);
+        }
+    }
+    if let Ok(re) = Regex::new(r#"<Package[^>]*Scope="([^"]*)"[^>]*/>"#) {
+        if let Some(caps) = re.captures(&result) {
+            scope_attr = format!(" Scope=\"{}\"", &caps[1]);
+        }
+    }
+    
+    // Remove inner Package element
+    if let Ok(re) = Regex::new(r#"\s*<Package[^>]*/>\s*"#) {
+        result = re.replace(&result, "\n").to_string();
+    }
+    
+    // Add Scope to outer Package if we found it
+    if !scope_attr.is_empty() && !result.contains("Scope=") {
+        result = result.replace("<Package ", &format!("<Package{} ", scope_attr));
+    }
+    
+    // Step 3: Convert </Product> to </Package>
+    result = result.replace("</Product>", "</Package>");
+    
+    // InstallScope -> Scope (for any remaining)
     result = result.replace("InstallScope=", "Scope=");
     
     // BinaryKey -> BinaryRef
@@ -32,10 +72,54 @@ fn upgrade_text_based(content: &str) -> String {
     // FileKey -> FileRef  
     result = result.replace("FileKey=", "FileRef=");
     
+    // WixCA -> Wix4UtilCA_X86 for WixQuietExec
+    result = result.replace(r#"BinaryRef="WixCA""#, r#"BinaryRef="Wix4UtilCA_X86""#);
+    
     // Remove InstallerVersion (has better defaults in v4)
-    // Use regex to remove InstallerVersion="..." attribute
     if let Ok(re) = Regex::new(r#"\s*InstallerVersion="[^"]*""#) {
         result = re.replace_all(&result, "").to_string();
+    }
+    
+    // Convert Condition element to Launch element
+    // <Condition Message="...">condition text</Condition> -> <Launch Condition="condition text" Message="..."/>
+    if let Ok(re) = Regex::new(r#"<Condition\s+Message="([^"]*)">\s*(<!\[CDATA\[)?(.*?)(]]>)?\s*</Condition>"#) {
+        result = re.replace_all(&result, |caps: &regex::Captures| {
+            let message = &caps[1];
+            let condition = caps.get(3).map_or("", |m| m.as_str()).trim();
+            // Escape quotes in condition for XML attribute
+            let condition = condition.replace('"', "&quot;");
+            format!(r#"<Launch Condition="{}" Message="{}"/>"#, condition, message)
+        }).to_string();
+    }
+    
+    // Convert Custom element inner text to Condition attribute
+    // <Custom Action='...' ...>condition</Custom> -> <Custom Action='...' ... Condition="condition"/>
+    if let Ok(re) = Regex::new(r#"<Custom\s+([^>]*)>([^<]+)</Custom>"#) {
+        result = re.replace_all(&result, |caps: &regex::Captures| {
+            let attrs = &caps[1];
+            let condition = caps[2].trim();
+            if condition.is_empty() {
+                format!("<Custom {}/>", attrs)
+            } else {
+                format!(r#"<Custom {} Condition="{}"/>"#, attrs, condition)
+            }
+        }).to_string();
+    }
+    
+    // Handle Directory structure transformation for v4
+    // Remove TARGETDIR wrapper and convert standard directories
+    // Pattern: <Directory Id="TARGETDIR"...>\n      <Directory Id="ProgramFilesFolder">
+    // becomes: <StandardDirectory Id="ProgramFilesFolder">
+    if let Ok(re) = Regex::new(r#"<Directory\s+Id="TARGETDIR"[^>]*>\s*\n\s*<Directory\s+Id="(ProgramFilesFolder|ProgramFiles64Folder)">"#) {
+        result = re.replace_all(&result, |caps: &regex::Captures| {
+            format!(r#"<StandardDirectory Id="{}">"#, &caps[1])
+        }).to_string();
+    }
+    
+    // Fix closing tags: </Directory>\n    </Directory> -> </StandardDirectory>
+    // This handles the case where we removed TARGETDIR and ProgramFilesFolder
+    if let Ok(re) = Regex::new(r#"</Directory>\s*\n\s*</Directory>(\s*\n\s*<ComponentGroup)"#) {
+        result = re.replace_all(&result, "</StandardDirectory>$1").to_string();
     }
     
     result
@@ -73,12 +157,14 @@ pub fn run(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
 }
 
 fn convert_include_element(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> {
-    // Include files (.wxi) - just pass through the content
-    // Preprocessor directives are preserved as-is
+    // Include files (.wxi) - add v4 namespace
     let mut elem = BytesStart::new("Include");
+    elem.push_attribute(("xmlns", "http://wixtoolset.org/schemas/v4/wxs"));
     
     for attr in node.attributes() {
-        elem.push_attribute((attr.name(), attr.value()));
+        if attr.name() != "xmlns" {
+            elem.push_attribute((attr.name(), attr.value()));
+        }
     }
     
     let has_children = node.children().any(|c| c.is_element() || (c.is_text() && !c.text().unwrap_or("").trim().is_empty()));
@@ -265,6 +351,27 @@ fn convert_node(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> 
         }
         
         // Convert inner text to Condition attribute
+        let condition_text = node.children()
+            .filter_map(|c| c.text())
+            .collect::<String>();
+        let condition_text = condition_text.trim();
+        
+        if !condition_text.is_empty() {
+            elem.push_attribute(("Condition", condition_text));
+        }
+        
+        writer.write_event(Event::Empty(elem))?;
+        return Ok(());
+    }
+    
+    // Handle SetProperty element - inner text becomes Condition attribute
+    if tag_name == "SetProperty" {
+        let mut elem = BytesStart::new("SetProperty");
+        
+        for attr in node.attributes() {
+            elem.push_attribute((attr.name(), attr.value()));
+        }
+        
         let condition_text = node.children()
             .filter_map(|c| c.text())
             .collect::<String>();
