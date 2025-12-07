@@ -24,8 +24,67 @@ pub fn attribute_renames() -> HashMap<(&'static str, &'static str), &'static str
     map.insert(("Product", "Id"), "ProductCode");
     // Package/@InstallScope -> Package/@Scope
     map.insert(("Package", "InstallScope"), "Scope");
-    // Package/@InstallPrivileges removed (use Scope instead)
+    // CustomAction/@BinaryKey -> CustomAction/@BinaryRef
+    map.insert(("CustomAction", "BinaryKey"), "BinaryRef");
+    // CustomAction/@FileKey -> CustomAction/@FileRef  
+    map.insert(("CustomAction", "FileKey"), "FileRef");
+    // CustomAction/@Property -> CustomAction/@Property (stays same but usage changes)
     map
+}
+
+/// Elements that change structure significantly in v4
+pub fn structural_element_changes() -> HashMap<&'static str, &'static str> {
+    let mut map = HashMap::new();
+    // Condition under Product -> Launch conditions handled differently
+    // Custom inner text -> Custom/@Condition attribute
+    map.insert("Custom", "Condition attribute instead of inner text");
+    map.insert("Condition", "Use Launch element with Condition/Message attributes");
+    map.insert("Publish", "Condition attribute instead of inner text");
+    map
+}
+
+/// WiX extensions and their v4 package names
+pub fn extension_packages() -> HashMap<&'static str, &'static str> {
+    let mut map = HashMap::new();
+    map.insert("WixUtilExtension", "WixToolset.Util.wixext");
+    map.insert("WixUIExtension", "WixToolset.UI.wixext");
+    map.insert("WixNetFxExtension", "WixToolset.Netfx.wixext");
+    map.insert("WixIIsExtension", "WixToolset.Iis.wixext");
+    map.insert("WixFirewallExtension", "WixToolset.Firewall.wixext");
+    map.insert("WixSqlExtension", "WixToolset.Sql.wixext");
+    map.insert("WixVSExtension", "WixToolset.VisualStudio.wixext");
+    map.insert("WixBalExtension", "WixToolset.Bal.wixext");
+    map.insert("WixDependencyExtension", "WixToolset.Dependency.wixext");
+    map
+}
+
+/// Detect which extensions are needed based on element/attribute usage
+pub fn detect_required_extensions(content: &str) -> Vec<&'static str> {
+    let mut extensions = Vec::new();
+    
+    // WixCA binary -> Util extension
+    if content.contains("WixCA") || content.contains("WixQuietExec") {
+        extensions.push("WixToolset.Util.wixext");
+    }
+    
+    // UI references
+    if content.contains("WixUI_") || content.contains("UIRef") {
+        extensions.push("WixToolset.UI.wixext");
+    }
+    
+    // IIS elements
+    if content.contains("iis:") || content.contains("WebSite") || content.contains("WebApplication") {
+        extensions.push("WixToolset.Iis.wixext");
+    }
+    
+    // .NET Framework
+    if content.contains("netfx:") || content.contains("NetFx") {
+        extensions.push("WixToolset.Netfx.wixext");
+    }
+    
+    extensions.sort();
+    extensions.dedup();
+    extensions
 }
 
 /// Attributes to remove during upgrade

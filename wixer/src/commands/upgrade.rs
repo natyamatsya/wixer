@@ -161,6 +161,88 @@ fn convert_node(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> 
         }
     }
     
+    // Handle Condition under Package -> Launch element
+    if tag_name == "Condition" {
+        // Get the condition text and Message attribute
+        let message = node.attribute("Message").unwrap_or("Installation cannot continue.");
+        let condition_text = node.children()
+            .filter_map(|c| c.text())
+            .collect::<String>();
+        let condition_text = condition_text.trim();
+        
+        if !condition_text.is_empty() {
+            let mut elem = BytesStart::new("Launch");
+            // In v4, Launch/@Condition is the condition that must be TRUE to continue
+            // (same as v3 Condition element)
+            elem.push_attribute(("Condition", condition_text));
+            elem.push_attribute(("Message", message));
+            writer.write_event(Event::Empty(elem))?;
+            return Ok(());
+        }
+    }
+    
+    // Handle Custom element - inner text becomes Condition attribute
+    if tag_name == "Custom" {
+        let mut elem = BytesStart::new("Custom");
+        
+        // Copy existing attributes
+        for attr in node.attributes() {
+            elem.push_attribute((attr.name(), attr.value()));
+        }
+        
+        // Convert inner text to Condition attribute
+        let condition_text = node.children()
+            .filter_map(|c| c.text())
+            .collect::<String>();
+        let condition_text = condition_text.trim();
+        
+        if !condition_text.is_empty() {
+            elem.push_attribute(("Condition", condition_text));
+        }
+        
+        writer.write_event(Event::Empty(elem))?;
+        return Ok(());
+    }
+    
+    // Handle Publish element - inner text becomes Condition attribute (same as Custom)
+    if tag_name == "Publish" {
+        let mut elem = BytesStart::new("Publish");
+        
+        for attr in node.attributes() {
+            elem.push_attribute((attr.name(), attr.value()));
+        }
+        
+        let condition_text = node.children()
+            .filter_map(|c| c.text())
+            .collect::<String>();
+        let condition_text = condition_text.trim();
+        
+        if !condition_text.is_empty() {
+            elem.push_attribute(("Condition", condition_text));
+        }
+        
+        writer.write_event(Event::Empty(elem))?;
+        return Ok(());
+    }
+    
+    // Handle CustomAction attribute renames
+    if tag_name == "CustomAction" {
+        let mut elem = BytesStart::new("CustomAction");
+        
+        for attr in node.attributes() {
+            let new_name = match attr.name() {
+                "BinaryKey" => "BinaryRef",
+                "FileKey" => "FileRef",
+                other => other,
+            };
+            elem.push_attribute((new_name, attr.value()));
+        }
+        
+        // CustomAction is typically empty
+        writer.write_event(Event::Empty(elem))?;
+        return Ok(());
+    }
+    
     let mut elem = BytesStart::new(tag_name);
     for attr in node.attributes() {
         elem.push_attribute((attr.name(), attr.value()));
