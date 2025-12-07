@@ -1,0 +1,40 @@
+Wix:
+  Product:
+    Id: '*'
+    Name: 'Wixer'
+    Language: '1033'
+    Version: '1.0.0.0'
+    Manufacturer: 'Natyamatsya'
+    UpgradeCode: 'd0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a'
+    Package:
+      InstallerVersion: '200'
+      Compressed: 'yes'
+      InstallScope: 'perMachine'
+    MajorUpgrade:
+      DowngradeErrorMessage: 'A newer version of [ProductName] is already installed.'
+    MediaTemplate:
+      EmbedCab: 'yes'
+    Feature:
+      Id: 'ProductFeature'
+      Title: 'Wixer'
+      Level: '1'
+      ComponentGroupRef:
+        Id: 'ProductComponents'
+    Directory:
+      Id: 'TARGETDIR'
+      Name: 'SourceDir'
+      Directory:
+        Id: 'ProgramFilesFolder'
+        Directory:
+          Id: 'INSTALLFOLDER'
+          Name: 'Wixer'
+    ComponentGroup:
+      Id: 'ProductComponents'
+      Directory: 'INSTALLFOLDER'
+      Component:
+        Id: 'ProductComponent'
+        Guid: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+        File:
+          Id: 'WixerExe'
+          Source: 'target/release/wixer.exe'
+          KeyPath: 'yes'

@@ -1,0 +1,26 @@
+[config]
+skip_core_tasks = true
+
+[tasks.build-release]
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.wix-installer]
+dependencies = ["build-release"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer", "--", "build", "wixer.wxs.yaml", "-o", "target/wixer.msi"]
+
+[tasks.msix-prepare]
+dependencies = ["wix-installer"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer", "--", "migrate", ".wixer/intermediates/wixer.wxs", "target/msix", "msix"]
+
+[tasks.msix-pack]
+dependencies = ["msix-prepare"]
+script_runner = "@shell"
+script = '''
+MakeAppx pack /d target/msix /p target/wixer.msix /o
+'''
+
+[tasks.default]
+dependencies = ["wix-installer", "msix-pack"]
