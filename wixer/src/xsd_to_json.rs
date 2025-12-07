@@ -134,10 +134,30 @@ pub fn convert_xsd(
 ) -> Result<HashSet<String>> {
     fs::create_dir_all(output_dir)?;
 
-    // TODO: Handle URL input
-    let input_path = Path::new(input);
-    let content = fs::read_to_string(input_path)
-        .with_context(|| format!("Failed to read input file: {}", input))?;
+    let is_url = input.starts_with("http://") || input.starts_with("https://");
+    let (content, inferred_name) = if is_url {
+        let response = reqwest::blocking::get(input)
+            .with_context(|| format!("Failed to download XSD from {}", input))?;
+        let text = response
+            .text()
+            .with_context(|| format!("Failed to read XSD response body from {}", input))?;
+        let name = input
+            .rsplit('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "schema.xsd".to_string());
+        (text, Some(name))
+    } else {
+        let input_path = Path::new(input);
+        let text = fs::read_to_string(input_path)
+            .with_context(|| format!("Failed to read input file: {}", input))?;
+        let name = input_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string());
+        (text, name)
+    };
 
     // Calculate hash
     let mut hasher = Sha256::new();
@@ -147,7 +167,10 @@ pub fn convert_xsd(
     let output_path = if let Some(out) = output {
         PathBuf::from(out)
     } else {
-        let filename = input_path.file_stem().unwrap().to_string_lossy();
+        let filename = inferred_name
+            .as_deref()
+            .and_then(|name| Path::new(name).file_stem().and_then(|s| s.to_str()))
+            .unwrap_or("schema");
         output_dir.join(format!("{}.schema.json", filename))
     };
 
