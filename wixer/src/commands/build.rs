@@ -4,10 +4,12 @@ use crate::constants::{
     EXT_WIXPDB, EXT_WSI, EXT_WSI_YAML, EXT_WXI, EXT_WXI_YAML, EXT_WXL, EXT_WXL_YAML, EXT_WXS,
     EXT_WXS_YAML, INTERMEDIATES_DIR, WIXER_DIR,
 };
+use crate::schema_mapping_v3v4::detect_required_extensions;
 use crate::utils::{find_project_root, load_known_attributes};
 use crate::yaml_to_wix;
 use crate::commands::pdb;
 use anyhow::{bail, Context, Result};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, warn};
@@ -176,6 +178,8 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     let mut output_path: Option<PathBuf> = None;
     let mut input_file: Option<PathBuf> = None;
+    let mut converted_files: Vec<PathBuf> = Vec::new();
+    let mut has_ext_arg = false;
 
     // Process build_args (which may have -v injected) instead of original args
     // build_args[0] is "build", we iterate from 1.
@@ -189,6 +193,11 @@ pub fn run(args: Vec<String>) -> Result<()> {
                  output_path = Some(PathBuf::from(val));
              }
              continue;
+        }
+
+        // Track if user already specified extensions
+        if arg == "-ext" || arg.starts_with("-ext:") || arg.starts_with("--extension") {
+            has_ext_arg = true;
         }
 
         if arg.starts_with("-") {
@@ -232,7 +241,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
                 format!("{}.{}", filename, target_extension)
             };
             
-            let output_file_path = intermediates_dir.join(output_filename);
+            let output_file_path = intermediates_dir.join(&output_filename);
 
             yaml_to_wix::convert_file(
                 &path,
@@ -241,10 +250,38 @@ pub fn run(args: Vec<String>) -> Result<()> {
                 &known_attributes,
             )
             .with_context(|| format!("Failed to convert {}", path.display()))?;
+            
+            converted_files.push(output_file_path.clone());
             new_args.push(output_file_path.to_string_lossy().to_string());
             continue;
         }
+        
+        // Track non-YAML WiX files too for extension detection
+        if path.exists() && (filename.ends_with(EXT_WXS) || filename.ends_with(EXT_WXI)) {
+            converted_files.push(path.clone());
+        }
+        
         new_args.push(arg.clone());
+    }
+    
+    // Auto-detect required extensions if user didn't specify any
+    if !has_ext_arg {
+        let mut required_extensions: HashSet<&str> = HashSet::new();
+        
+        for file_path in &converted_files {
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                for ext in detect_required_extensions(&content) {
+                    required_extensions.insert(ext);
+                }
+            }
+        }
+        
+        // Add detected extensions to args
+        for ext in &required_extensions {
+            info!("Auto-detected extension: {}", ext);
+            new_args.push("-ext".to_string());
+            new_args.push(ext.to_string());
+        }
     }
 
     info!("Running: {} {}", wix_exe, new_args.join(" "));

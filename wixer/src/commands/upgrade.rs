@@ -6,27 +6,101 @@ use roxmltree::{Document, Node};
 use std::fs;
 use std::io::Cursor;
 use std::path::PathBuf;
+use regex::Regex;
 use tracing::info;
+
+/// Text-based upgrade for files with preprocessor directives that can't be parsed as XML
+fn upgrade_text_based(content: &str) -> String {
+    let mut result = content.to_string();
+    
+    // Namespace upgrade
+    result = result.replace(
+        "http://schemas.microsoft.com/wix/2006/wi",
+        "http://wixtoolset.org/schemas/v4/wxs"
+    );
+    
+    // Product -> Package (but keep the element structure for now)
+    // This is tricky because we need to merge Product and inner Package
+    // For text-based, we'll do simple replacements
+    
+    // InstallScope -> Scope
+    result = result.replace("InstallScope=", "Scope=");
+    
+    // BinaryKey -> BinaryRef
+    result = result.replace("BinaryKey=", "BinaryRef=");
+    
+    // FileKey -> FileRef  
+    result = result.replace("FileKey=", "FileRef=");
+    
+    // Remove InstallerVersion (has better defaults in v4)
+    // Use regex to remove InstallerVersion="..." attribute
+    if let Ok(re) = Regex::new(r#"\s*InstallerVersion="[^"]*""#) {
+        result = re.replace_all(&result, "").to_string();
+    }
+    
+    result
+}
 
 pub fn run(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     let content = fs::read_to_string(&input)?;
+    let output_path = output.unwrap_or_else(|| input.clone());
+    
+    // Check if this is a file with preprocessor directives
+    // These can't be parsed as XML, so do text-based transformations
+    if content.contains("<?if") || content.contains("<?define") || content.contains("<?include") {
+        let upgraded = upgrade_text_based(&content);
+        fs::write(&output_path, &upgraded)?;
+        info!("Upgraded (text): {}", output_path.display());
+        return Ok(());
+    }
+    
     let doc = Document::parse(&content)?;
 
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
 
     let root = doc.root_element();
-    if root.tag_name().name() == "Wix" {
-        convert_wix_element(root, &mut writer)?;
-    } else {
-        // Pass through or warn?
-        convert_node(root, &mut writer)?;
+    match root.tag_name().name() {
+        "Wix" => convert_wix_element(root, &mut writer)?,
+        "Include" => convert_include_element(root, &mut writer)?,
+        _ => convert_node(root, &mut writer)?,
     }
 
     let result = writer.into_inner().into_inner();
-    let output_path = output.unwrap_or(input);
     fs::write(&output_path, result)?;
     info!("Upgraded {}", output_path.display());
+    Ok(())
+}
+
+fn convert_include_element(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> {
+    // Include files (.wxi) - just pass through the content
+    // Preprocessor directives are preserved as-is
+    let mut elem = BytesStart::new("Include");
+    
+    for attr in node.attributes() {
+        elem.push_attribute((attr.name(), attr.value()));
+    }
+    
+    let has_children = node.children().any(|c| c.is_element() || (c.is_text() && !c.text().unwrap_or("").trim().is_empty()));
+    
+    if has_children {
+        writer.write_event(Event::Start(elem))?;
+        for child in node.children() {
+            if child.is_element() {
+                convert_node(child, writer)?;
+            } else if child.is_text() {
+                if let Some(text) = child.text() {
+                    if !text.trim().is_empty() {
+                        writer.write_event(Event::Text(BytesText::new(text)))?;
+                    }
+                }
+            }
+        }
+        writer.write_event(Event::End(BytesEnd::new("Include")))?;
+    } else {
+        writer.write_event(Event::Empty(elem))?;
+    }
+    
     Ok(())
 }
 
