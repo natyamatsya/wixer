@@ -21,8 +21,8 @@ if(WIN32)
 
     install(FILES ${CMAKE_BINARY_DIR}/AppxManifest.xml DESTINATION .)
     
-    # TODO: Add assets installation
-    # install(DIRECTORY assets DESTINATION .)
+    # Add assets installation
+    install(DIRECTORY assets DESTINATION .)
 endif()
 
 # CPack Configuration
@@ -40,6 +40,7 @@ set(CPACK_WIX_UPGRADE_GUID "d0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a")
 # MSIX Generation (External)
 if(WIN32)
     set(CPACK_EXTERNAL_ENABLE_PACKAGING ON)
+    set(CPACK_EXTERNAL_ENABLE_STAGING ON)
     set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_BINARY_DIR}/MakeAppX.cmake")
     set(CPACK_GENERATOR "WIX;External")
 else()
