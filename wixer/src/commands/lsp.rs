@@ -1,3 +1,6 @@
+use crate::constants::{
+    EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME,
+};
 use crate::dirs;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -114,7 +117,7 @@ impl WixerLsp {
             return;
         };
 
-        let schema_dir = cache_dir.join("json-schema");
+        let schema_dir = cache_dir.join(SCHEMA_DIR_NAME);
         if !schema_dir.exists() {
             self.client
                 .log_message(MessageType::WARNING, "Schema directory not found")
@@ -312,15 +315,17 @@ impl WixerLsp {
 
         let path = PathBuf::from(uri.path());
         let filename = path
-            .file_stem()
+            .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-        let extension_schema = match ext {
-            "wyl" => "wixloc",
-            _ => "wix",
+        let extension_schema = if filename.ends_with(EXT_WIXLOC_YAML)
+            || filename.ends_with(EXT_WXL_YAML)
+        {
+            EXT_WIXLOC
+        } else {
+            "wix"
         };
 
         let schema = schemas

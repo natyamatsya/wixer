@@ -2,6 +2,7 @@ pub mod analysis;
 pub mod commands;
 pub mod common;
 pub mod config;
+pub mod constants;
 pub mod describe_db;
 pub mod project;
 pub mod schema_mapping;

@@ -1,15 +1,17 @@
 use crate::common::AttributeStrategy;
+use crate::config::WixerConfig;
+use crate::constants::{
+    EXT_WIXPDB, EXT_WSI, EXT_WSI_YAML, EXT_WXI, EXT_WXI_YAML, EXT_WXL, EXT_WXL_YAML, EXT_WXS,
+    EXT_WXS_YAML, INTERMEDIATES_DIR, WIXER_DIR,
+};
 use crate::utils::{find_project_root, load_known_attributes};
 use crate::yaml_to_wix;
-use crate::config::WixerConfig;
 use crate::commands::pdb;
 use anyhow::{bail, Context, Result};
-use serde_yaml::Value;
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::{info, warn};
 
-const WIX_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs";
 
 pub fn run(args: Vec<String>) -> Result<()> {
     if args.is_empty() {
@@ -57,7 +59,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     // It is 'build', let's intercept inputs
     let intermediates_dir = if let Ok(root) = find_project_root() {
-        root.join(".wixer").join("intermediates")
+        root.join(WIXER_DIR).join(INTERMEDIATES_DIR)
     } else {
          std::env::temp_dir().join("wixer_intermediates")
     };
@@ -101,49 +103,27 @@ pub fn run(args: Vec<String>) -> Result<()> {
             input_file = Some(path.clone());
         }
 
-        let ext = path.extension().and_then(|e| e.to_str());
+        let filename = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
 
         // Check for known extensions
-        let (is_valid, target_ext) = match ext {
-            Some("ywxs") => (true, Some("wxs")),
-            Some("ywxi") => (true, Some("wxi")),
-            Some("ywxl") => (true, Some("wxl")),
-            Some("ywsi") => (true, Some("wsi")),
-            Some("yaml") | Some("yml") => (true, None), // Needs content check
-            _ => (false, None),
+        let (is_valid, target_ext) = if filename.ends_with(EXT_WXS_YAML) {
+            (true, Some(EXT_WXS))
+        } else if filename.ends_with(EXT_WXI_YAML) {
+            (true, Some(EXT_WXI))
+        } else if filename.ends_with(EXT_WXL_YAML) {
+            (true, Some(EXT_WXL))
+        } else if filename.ends_with(EXT_WSI_YAML) {
+            (true, Some(EXT_WSI))
+        } else {
+            (false, None)
         };
 
         if is_valid && path.exists() {
-            let target_extension = if let Some(t) = target_ext {
-                t
-            } else {
-                // Fallback for .yaml/.yml: check content
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    if let Ok(yaml_data) = serde_yaml::from_str::<Value>(&content) {
-                        if is_wix_file(&yaml_data) {
-                            if yaml_data.get("Include").is_some() {
-                                "wxi"
-                            } else if yaml_data.get("WixLocalization").is_some() {
-                                "wxl"
-                            } else {
-                                "wxs"
-                            }
-                        } else {
-                            // Not a WiX file, ignore
-                            new_args.push(arg.clone());
-                            continue;
-                        }
-                    } else {
-                        // Not valid YAML, ignore
-                        new_args.push(arg.clone());
-                        continue;
-                    }
-                } else {
-                    // Cannot read, ignore
-                    new_args.push(arg.clone());
-                    continue;
-                }
-            };
+            let target_extension = target_ext.unwrap();
 
             // Convert
             let filename = path.file_stem().unwrap().to_string_lossy();
@@ -178,18 +158,18 @@ pub fn run(args: Vec<String>) -> Result<()> {
         info!("Running post-build PDB inspection...");
         
         let pdb_path = if let Some(out) = output_path {
-            out.with_extension("wixpdb")
+            out.with_extension(EXT_WIXPDB)
         } else if let Some(inp) = input_file {
             // Default output is input filename + .msi? No, wix defaults to input filename basis
             // If input is CloseApp.wxs, output is CloseApp.msi/wixpdb
             let file_stem = inp.file_stem().unwrap_or_default();
             // Assuming current directory for output if not specified? 
             // Wix 4 usually outputs to current dir unless -o is specified.
-            PathBuf::from(file_stem).with_extension("wixpdb")
+            PathBuf::from(file_stem).with_extension(EXT_WIXPDB)
         } else if let Some(input) = input_file.as_ref() {
-             input.with_extension("wixpdb")
+             input.with_extension(EXT_WIXPDB)
         } else {
-             PathBuf::from("output.wixpdb")
+             PathBuf::from(format!("output.{}", EXT_WIXPDB))
         };
 
         if pdb_path.exists() {
@@ -205,44 +185,4 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn is_wix_file(data: &Value) -> bool {
-    // Check for standard Wix root
-    if let Some(wix) = data.get("Wix") {
-        return check_wix_namespace(wix);
-    }
-    // Check for Include root (wxi)
-    if let Some(_include) = data.get("Include") {
-        return true; // Simple check for now, technically namespaces might not be strict on Includes or mapped differently
-    }
-    // Check for WixLocalization root (wxl)
-    if let Some(_wxl) = data.get("WixLocalization") {
-        // WXL namespace is usually http://wixtoolset.org/schemas/v4/wxl
-        // For now, accept it if the root exists
-        return true;
-    }
-    false
-}
-
-fn check_wix_namespace(node: &Value) -> bool {
-    // Check for namespace in various forms
-    if let Some(ns) = node.get("xmlns")
-        && ns.as_str() == Some(WIX_NAMESPACE)
-    {
-        return true;
-    }
-    if let Some(ns) = node.get("@xmlns")
-        && ns.as_str() == Some(WIX_NAMESPACE)
-    {
-        return true;
-    }
-    // Also check separate attribute strategy
-    if let Some(attrs) = node.get("attributes")
-        && let Some(ns) = attrs.get("xmlns")
-        && ns.as_str() == Some(WIX_NAMESPACE)
-    {
-        return true;
-    }
-    false
 }

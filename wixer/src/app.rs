@@ -13,6 +13,7 @@ use tracing_subscriber::{fmt, prelude::*, util::SubscriberInitExt};
 use crate::commands;
 use crate::common::AttributeStrategy;
 use crate::config::WixerConfig;
+use crate::constants::{DOWNLOADED_SCHEMAS_DIR, GENERATED_SCHEMAS_DIR, KNOWN_ATTRIBUTES_FILE};
 use crate::utils::load_known_attributes;
 use crate::{validate, wix_to_yaml, xsd_to_json, yaml_to_wix};
 
@@ -289,7 +290,7 @@ async fn handle_xsd_to_json(args: XsdToJsonArgs) -> Result<()> {
 
     if !all_attributes.is_empty() {
         let sorted_attributes: BTreeSet<_> = all_attributes.into_iter().collect();
-        let attr_file = output_dir.join("known_attributes.json");
+        let attr_file = output_dir.join(KNOWN_ATTRIBUTES_FILE);
         let file = File::create(&attr_file)
             .with_context(|| format!("Failed to create {}", attr_file.display()))?;
         let writer = BufWriter::new(file);
@@ -386,11 +387,11 @@ enum Commands {
         download_wix: bool,
 
         /// Directory for downloaded schemas
-        #[arg(long, default_value = "schemas")]
+        #[arg(long, default_value = DOWNLOADED_SCHEMAS_DIR)]
         schema_dir: PathBuf,
 
         /// Directory for generated JSON schemas
-        #[arg(long, default_value = "json-schemas")]
+        #[arg(long, default_value = GENERATED_SCHEMAS_DIR)]
         output_dir: PathBuf,
 
         /// How to handle XML attributes

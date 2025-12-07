@@ -1,4 +1,8 @@
 use crate::common::AttributeStrategy;
+use crate::constants::{
+    ATTRIBUTES_PROPERTY, COMMENT_PROPERTY, CPACK_VAR_KEY, CPACK_VAR_TOKEN, CPACK_VAR_XML,
+    ELEMENTS_PROPERTY, TEXT_PROPERTIES,
+};
 use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
@@ -9,9 +13,6 @@ use std::io::Cursor;
 use std::path::Path;
 use tracing::info;
 
-const TEXT_PROPERTIES: &[&str] = &["_value", "value", "text"];
-const COMMENT_PROPERTY: &str = "_comment";
-const CPACK_VAR_KEY: &str = "CPACK_WIX_CUSTOM_XMLNS_EXPANDED";
 
 pub fn convert_file(
     input: &Path,
@@ -60,7 +61,7 @@ pub fn convert_file(
 
     // Post-process to restore CPack variables
     // Include the leading space in search to remove it during replacement, restoring original no-space format
-    let s = s.replace(" CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"", "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@");
+    let s = s.replace(CPACK_VAR_XML, CPACK_VAR_TOKEN);
 
     fs::write(output, s)?;
 
@@ -153,7 +154,7 @@ fn convert_element(
                     if let Value::String(s) = v {
                         text_content = Some(s);
                     }
-                } else if strategy == AttributeStrategy::Separate && key == "elements" {
+                } else if strategy == AttributeStrategy::Separate && key == ELEMENTS_PROPERTY {
                     match v {
                         Value::Mapping(child_map) => {
                             for (child_key, child_value) in child_map {
@@ -182,7 +183,7 @@ fn convert_element(
 
             // Separate strategy handling
             if strategy == AttributeStrategy::Separate
-                && let Some(attrs) = map.get("attributes")
+                && let Some(attrs) = map.get(ATTRIBUTES_PROPERTY)
                 && let Value::Mapping(attr_map) = attrs
             {
                 for (k, v) in attr_map {

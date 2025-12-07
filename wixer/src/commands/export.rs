@@ -1,4 +1,5 @@
 use crate::common::AttributeStrategy;
+use crate::constants::{EXT_WSI_YAML, EXT_WXI_YAML, EXT_WXL_YAML, EXT_WXS_YAML};
 use crate::utils::load_known_attributes;
 use crate::yaml_to_wix;
 use anyhow::{Context, Result};
@@ -46,40 +47,40 @@ pub fn run(
             let mut matched_ext = None;
             let mut is_template = false;
 
-            let supported_exts = ["ywxs", "ywxi", "ywxl", "ywsi"];
+            let supported_exts = [
+                (EXT_WXS_YAML, "wxs"),
+                (EXT_WXI_YAML, "wxi"),
+                (EXT_WXL_YAML, "wxl"),
+                (EXT_WSI_YAML, "wsi"),
+            ];
 
-            for ext in supported_exts {
-                if file_name.ends_with(&format!(".{}", ext)) {
-                    matched_ext = Some(ext);
+            for (ext, target) in supported_exts {
+                if file_name.ends_with(ext) {
+                    matched_ext = Some((ext, target));
                     is_template = false;
                     break;
-                } else if file_name.ends_with(&format!(".{}.in", ext)) {
-                    matched_ext = Some(ext);
+                } else if file_name.ends_with(&format!("{}.in", ext)) {
+                    matched_ext = Some((ext, target));
                     is_template = true;
                     break;
                 }
             }
 
-            if let Some(ext) = matched_ext {
+            if let Some((ext, target_ext)) = matched_ext {
                 // Calculate relative path
                 let relative_path = path.strip_prefix(input_dir).unwrap_or(path);
                 let output_path = output_dir.join(relative_path);
 
-                // Determine target extension (remove leading 'y')
-                // ywxs -> wxs
-                let target_ext = &ext[1..];
-
                 let final_output_path = if is_template {
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
                     // Remove .{ext}.in and add .{target_ext}.in
-                    let suffix = format!(".{}.in", ext);
+                    let suffix = format!("{}.in", ext);
                     let stem = file_name.trim_end_matches(&suffix);
                     parent.join(format!("{}.{}.in", stem, target_ext))
                 } else {
                     // Remove .{ext} and add .{target_ext}
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
-                    let suffix = format!(".{}", ext);
-                    let stem = file_name.trim_end_matches(&suffix);
+                    let stem = file_name.trim_end_matches(ext).trim_end_matches('.');
                     parent.join(format!("{}.{}", stem, target_ext))
                 };
 
