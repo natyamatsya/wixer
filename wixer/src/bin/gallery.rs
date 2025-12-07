@@ -1,0 +1,368 @@
+//! Gallery Builder - Builds the wixer example gallery from WiXInstallerExamples
+//!
+//! This tool processes the WiXInstallerExamples submodule and creates:
+//! - v4/     WiX v4 XML files (upgraded from v3)
+//! - yaml/   YAML equivalents of the v4 files
+//!
+//! Usage:
+//!   wixer-gallery [--clean] [--source <path>] [--output <path>]
+
+use anyhow::{Context, Result};
+use clap::Parser;
+use std::fs;
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
+
+use wixer::commands::{import, upgrade};
+use wixer::common::AttributeStrategy;
+
+#[derive(Parser)]
+#[command(name = "wixer-gallery")]
+#[command(about = "Build the wixer example gallery from WiXInstallerExamples")]
+struct Args {
+    /// Source directory containing WiX v3 examples
+    #[arg(short, long, default_value = "examples/WiXInstallerExamples")]
+    source: PathBuf,
+
+    /// Output directory for the gallery
+    #[arg(short, long, default_value = "examples/gallery")]
+    output: PathBuf,
+
+    /// Clean output directories before building
+    #[arg(long)]
+    clean: bool,
+
+    /// Only process specific examples (comma-separated prefixes, e.g., "00,01,02")
+    #[arg(long)]
+    only: Option<String>,
+
+    /// Skip YAML conversion (only upgrade to v4)
+    #[arg(long)]
+    no_yaml: bool,
+
+    /// Verbose output
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+
+    // Initialize logging
+    if args.verbose {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .init();
+    }
+
+    let source = if args.source.is_absolute() {
+        args.source.clone()
+    } else {
+        std::env::current_dir()?.join(&args.source)
+    };
+
+    let output = if args.output.is_absolute() {
+        args.output.clone()
+    } else {
+        std::env::current_dir()?.join(&args.output)
+    };
+
+    if !source.exists() {
+        anyhow::bail!(
+            "Source directory not found: {}\nRun from the wixer root or specify --source",
+            source.display()
+        );
+    }
+
+    let v4_dir = output.join("v4");
+    let yaml_dir = output.join("yaml");
+
+    // Clean if requested
+    if args.clean {
+        if v4_dir.exists() {
+            println!("Cleaning {}", v4_dir.display());
+            fs::remove_dir_all(&v4_dir)?;
+        }
+        if yaml_dir.exists() {
+            println!("Cleaning {}", yaml_dir.display());
+            fs::remove_dir_all(&yaml_dir)?;
+        }
+    }
+
+    fs::create_dir_all(&v4_dir)?;
+    fs::create_dir_all(&yaml_dir)?;
+
+    // Parse filter
+    let filter: Option<Vec<String>> = args.only.map(|s| {
+        s.split(',')
+            .map(|p| p.trim().to_string())
+            .collect()
+    });
+
+    // Find all example directories
+    let examples = find_examples(&source, filter.as_ref())?;
+
+    println!("Found {} examples to process", examples.len());
+    println!();
+
+    let mut stats = Stats::default();
+
+    for example in &examples {
+        println!("Processing: {}", example.name);
+
+        // Create output directories
+        let v4_example_dir = v4_dir.join(&example.name);
+        let yaml_example_dir = yaml_dir.join(&example.name);
+        fs::create_dir_all(&v4_example_dir)?;
+        fs::create_dir_all(&yaml_example_dir)?;
+
+        // Copy non-WiX files (README, scripts, etc.)
+        copy_supporting_files(&example.path, &v4_example_dir)?;
+        copy_supporting_files(&example.path, &yaml_example_dir)?;
+
+        // Process each .wxs file
+        for wxs_file in &example.wxs_files {
+            let relative = wxs_file.strip_prefix(&example.path).unwrap_or(wxs_file);
+            let v4_output = v4_example_dir.join(relative);
+
+            // Create parent dirs
+            if let Some(parent) = v4_output.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            // Upgrade v3 → v4
+            match upgrade::run(wxs_file.clone(), Some(v4_output.clone())) {
+                Ok(()) => {
+                    stats.upgraded += 1;
+                    if args.verbose {
+                        println!("  ✓ Upgraded: {}", relative.display());
+                    }
+                }
+                Err(e) => {
+                    stats.upgrade_errors += 1;
+                    eprintln!("  ✗ Failed to upgrade {}: {}", relative.display(), e);
+                }
+            }
+        }
+
+        // Convert v4 XML → YAML
+        if !args.no_yaml {
+            match import::run(&v4_example_dir, &yaml_example_dir, AttributeStrategy::Inline) {
+                Ok(()) => {
+                    stats.converted += 1;
+                    if args.verbose {
+                        println!("  ✓ Converted to YAML");
+                    }
+                }
+                Err(e) => {
+                    stats.convert_errors += 1;
+                    eprintln!("  ✗ Failed to convert to YAML: {}", e);
+                }
+            }
+        }
+
+        println!();
+    }
+
+    // Print summary
+    println!("=== Gallery Build Complete ===");
+    println!("Examples processed: {}", examples.len());
+    println!("Files upgraded:     {} ({} errors)", stats.upgraded, stats.upgrade_errors);
+    if !args.no_yaml {
+        println!("Examples converted: {} ({} errors)", stats.converted, stats.convert_errors);
+    }
+    println!();
+    println!("Output:");
+    println!("  v4:   {}", v4_dir.display());
+    if !args.no_yaml {
+        println!("  yaml: {}", yaml_dir.display());
+    }
+
+    // Generate index
+    generate_index(&output, &examples)?;
+
+    if stats.upgrade_errors > 0 || stats.convert_errors > 0 {
+        anyhow::bail!("Completed with errors");
+    }
+
+    Ok(())
+}
+
+#[derive(Default)]
+struct Stats {
+    upgraded: usize,
+    upgrade_errors: usize,
+    converted: usize,
+    convert_errors: usize,
+}
+
+struct Example {
+    name: String,
+    path: PathBuf,
+    wxs_files: Vec<PathBuf>,
+}
+
+fn find_examples(source: &Path, filter: Option<&Vec<String>>) -> Result<Vec<Example>> {
+    let mut examples = Vec::new();
+
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Skip non-example directories
+        if name.starts_with('.') || name == "images" || name == ".github" {
+            continue;
+        }
+
+        // Apply filter if specified
+        if let Some(prefixes) = filter {
+            if !prefixes.iter().any(|p| name.starts_with(p)) {
+                continue;
+            }
+        }
+
+        // Find all .wxs files in this example
+        let wxs_files: Vec<PathBuf> = WalkDir::new(&path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path().extension().is_some_and(|ext| ext == "wxs")
+            })
+            .map(|e| e.path().to_path_buf())
+            .collect();
+
+        if !wxs_files.is_empty() {
+            examples.push(Example {
+                name,
+                path,
+                wxs_files,
+            });
+        }
+    }
+
+    // Sort by name
+    examples.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(examples)
+}
+
+fn copy_supporting_files(src: &Path, dst: &Path) -> Result<()> {
+    let supporting_extensions = ["md", "txt", "ps1", "cmd", "bat", "json"];
+
+    for entry in WalkDir::new(src).max_depth(1) {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_file() {
+            continue;
+        }
+
+        let ext = path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+
+        if supporting_extensions.contains(&ext) {
+            let filename = path.file_name().unwrap();
+            let dst_path = dst.join(filename);
+            fs::copy(path, &dst_path)
+                .with_context(|| format!("Failed to copy {}", path.display()))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn generate_index(output: &Path, examples: &[Example]) -> Result<()> {
+    let mut content = String::new();
+
+    content.push_str("# Wixer Example Gallery\n\n");
+    content.push_str("This gallery contains WiX installer examples converted for use with wixer.\n\n");
+    content.push_str("## Structure\n\n");
+    content.push_str("- **v4/** — WiX v4 XML files (upgraded from v3)\n");
+    content.push_str("- **yaml/** — YAML equivalents for use with wixer\n\n");
+    content.push_str("## Examples\n\n");
+    content.push_str("| Example | Description |\n");
+    content.push_str("|---------|-------------|\n");
+
+    for example in examples {
+        // Try to extract description from README
+        let readme_path = example.path.join("README.md");
+        let description = if readme_path.exists() {
+            extract_first_paragraph(&readme_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        content.push_str(&format!(
+            "| [{}](v4/{}) | {} |\n",
+            example.name,
+            example.name,
+            description.chars().take(80).collect::<String>()
+        ));
+    }
+
+    content.push_str("\n## Usage\n\n");
+    content.push_str("```bash\n");
+    content.push_str("# Build an example with wixer\n");
+    content.push_str("wixer build yaml/00_HelloWorldInstaller/Product.wxs.yaml\n\n");
+    content.push_str("# Or use the v4 XML directly with wix.exe\n");
+    content.push_str("wix build v4/00_HelloWorldInstaller/Product.wxs\n");
+    content.push_str("```\n\n");
+    content.push_str("## Rebuilding the Gallery\n\n");
+    content.push_str("```bash\n");
+    content.push_str("# From the wixer directory:\n");
+    content.push_str("cargo run --bin wixer-gallery -- --clean\n");
+    content.push_str("```\n\n");
+    content.push_str("## Source\n\n");
+    content.push_str("Examples are derived from [WiXInstallerExamples](https://github.com/kurtanr/WiXInstallerExamples) by kurtanr.\n");
+
+    fs::write(output.join("README.md"), content)?;
+
+    Ok(())
+}
+
+fn extract_first_paragraph(readme: &Path) -> Result<String> {
+    let content = fs::read_to_string(readme)?;
+
+    // Skip title and find first paragraph
+    let mut in_paragraph = false;
+    let mut paragraph = String::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Skip headers and empty lines until we find content
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            if in_paragraph {
+                break;
+            }
+            continue;
+        }
+
+        // Skip badges
+        if trimmed.starts_with("[![") || trimmed.starts_with("<br") {
+            continue;
+        }
+
+        in_paragraph = true;
+        if !paragraph.is_empty() {
+            paragraph.push(' ');
+        }
+        paragraph.push_str(trimmed);
+    }
+
+    Ok(paragraph)
+}

@@ -23,3 +23,6 @@ build/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 **/.wixer
+
+# Generated gallery (rebuild with wixer-gallery)
+wixer/examples/gallery/

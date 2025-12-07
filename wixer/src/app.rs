@@ -10,12 +10,12 @@ use tracing::{error, info};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, util::SubscriberInitExt};
 
-use crate::commands;
-use crate::common::AttributeStrategy;
-use crate::config::WixerConfig;
-use crate::constants::{DOWNLOADED_SCHEMAS_DIR, GENERATED_SCHEMAS_DIR, KNOWN_ATTRIBUTES_FILE};
-use crate::utils::load_known_attributes;
-use crate::{validate, wix_to_yaml, xsd_to_json, yaml_to_wix};
+use wixer::commands;
+use wixer::common::AttributeStrategy;
+use wixer::config::WixerConfig;
+use wixer::constants::{DOWNLOADED_SCHEMAS_DIR, GENERATED_SCHEMAS_DIR, KNOWN_ATTRIBUTES_FILE};
+use wixer::utils::load_known_attributes;
+use wixer::{validate, wix_to_yaml, xsd_to_json, yaml_to_wix};
 
 #[derive(Parser)]
 struct Cli {

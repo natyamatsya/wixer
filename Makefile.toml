@@ -119,6 +119,22 @@ command = "cmake"
 args = ["--workflow", "--preset", "wixer-rel-pkg"]
 
 # =============================================================================
+# Gallery Tasks
+# =============================================================================
+
+[tasks.gallery]
+description = "Build the example gallery from WiXInstallerExamples"
+dependencies = ["build-release"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--clean"]
+
+[tasks.gallery-quick]
+description = "Rebuild gallery without cleaning"
+dependencies = ["build-release"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery"]
+
+# =============================================================================
 # Convenience Aliases
 # =============================================================================
 

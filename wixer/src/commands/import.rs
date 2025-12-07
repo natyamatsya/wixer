@@ -61,16 +61,17 @@ pub fn run(
                 let relative_path = path.strip_prefix(input_dir).unwrap_or(path);
                 let output_path = output_dir.join(relative_path);
 
-                let target_ext = format!("y{}", ext);
+                // Use new .wxs.yaml format instead of legacy .ywxs
+                let target_ext = format!("{}.yaml", ext);
 
                 let final_output_path = if is_template {
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
-                    // Remove .{ext}.in and add .{target_ext}.in
+                    // Remove .{ext}.in and add .{ext}.yaml.in
                     let suffix = format!(".{}.in", ext);
                     let stem = file_name.trim_end_matches(&suffix);
                     parent.join(format!("{}.{}.in", stem, target_ext))
                 } else {
-                    // Remove .{ext} and add .{target_ext}
+                    // Remove .{ext} and add .{ext}.yaml
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
                     let suffix = format!(".{}", ext);
                     let stem = file_name.trim_end_matches(&suffix);
