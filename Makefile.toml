@@ -134,6 +134,18 @@ dependencies = ["build-release"]
 command = "cargo"
 args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery"]
 
+[tasks.gallery-build]
+description = "Build all gallery examples with wixer"
+dependencies = ["gallery"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--build"]
+
+[tasks.gallery-build-example]
+description = "Build a specific gallery example"
+dependencies = ["build-release"]
+command = "cargo"
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--build", "--only", "${@}"]
+
 # =============================================================================
 # Convenience Aliases
 # =============================================================================

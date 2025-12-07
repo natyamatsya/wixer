@@ -1,3 +1,4 @@
+use crate::schema_mapping_v3v4::is_standard_directory;
 use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
@@ -57,22 +58,47 @@ fn convert_wix_element(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Resu
 }
 
 fn convert_product(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> {
-    // Merge Product and inner Package
+    // Merge Product and inner Package into WiX v4 Package element
     let mut elem = BytesStart::new("Package");
 
-    // Product attributes
+    // Product attributes - handle v3→v4 attribute mapping
     for attr in node.attributes() {
-        if attr.name() == "Id" && attr.value() == "*" {
-            continue; // Skip Id="*"
+        match attr.name() {
+            "Id" => {
+                // In v3, Product/@Id was a GUID (or "*" for auto-generate)
+                // In v4, this becomes Package/@ProductCode (if not "*")
+                if attr.value() != "*" {
+                    elem.push_attribute(("ProductCode", attr.value()));
+                }
+                // Skip - don't add as "Id" since v4 Package/@Id must be an identifier
+            }
+            "Language" => {
+                // Language stays the same but consider adding as InstallerVersion default
+                elem.push_attribute((attr.name(), attr.value()));
+            }
+            _ => {
+                elem.push_attribute((attr.name(), attr.value()));
+            }
         }
-        elem.push_attribute((attr.name(), attr.value()));
     }
 
-    // Find inner Package
+    // Find inner Package and merge its attributes
     let inner_package = node.children().find(|n| n.tag_name().name() == "Package");
     if let Some(pkg) = inner_package {
         for attr in pkg.attributes() {
-            elem.push_attribute((attr.name(), attr.value()));
+            // Map v3 Package attributes to v4
+            match attr.name() {
+                "InstallScope" => {
+                    // InstallScope -> Scope in v4
+                    elem.push_attribute(("Scope", attr.value()));
+                }
+                "Compressed" => {
+                    elem.push_attribute((attr.name(), attr.value()));
+                }
+                _ => {
+                    elem.push_attribute((attr.name(), attr.value()));
+                }
+            }
         }
     }
 
@@ -92,10 +118,50 @@ fn convert_product(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<(
 }
 
 fn convert_node(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> {
-    // Simplistic name handling: Use existing name (usually local name in roxmltree if not namespaced correctly?)
-    // roxmltree::Node::tag_name().name() returns local name.
-    // We assume default namespace is inherited.
-    let mut elem = BytesStart::new(node.tag_name().name());
+    let tag_name = node.tag_name().name();
+    
+    // Handle Directory -> StandardDirectory conversion for well-known directories
+    if tag_name == "Directory" {
+        if let Some(id) = node.attribute("Id") {
+            // TARGETDIR is implicit in v4 - skip it entirely and process children
+            if id == "TARGETDIR" {
+                for child in node.children() {
+                    if child.is_element() {
+                        convert_node(child, writer)?;
+                    }
+                }
+                return Ok(());
+            }
+            
+            // Other standard directories become StandardDirectory
+            if is_standard_directory(id) {
+                let name = node.attribute("Name");
+                let is_standard_ref = name.is_none() || name == Some("SourceDir") || name == Some(id);
+                
+                if is_standard_ref {
+                    let mut elem = BytesStart::new("StandardDirectory");
+                    elem.push_attribute(("Id", id));
+                    
+                    let has_children = node.children().any(|c| c.is_element());
+                    
+                    if has_children {
+                        writer.write_event(Event::Start(elem))?;
+                        for child in node.children() {
+                            if child.is_element() {
+                                convert_node(child, writer)?;
+                            }
+                        }
+                        writer.write_event(Event::End(BytesEnd::new("StandardDirectory")))?;
+                    } else {
+                        writer.write_event(Event::Empty(elem))?;
+                    }
+                    return Ok(());
+                }
+            }
+        }
+    }
+    
+    let mut elem = BytesStart::new(tag_name);
     for attr in node.attributes() {
         elem.push_attribute((attr.name(), attr.value()));
     }

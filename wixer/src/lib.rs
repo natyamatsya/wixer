@@ -33,6 +33,7 @@ pub mod describe_db;
 pub mod dirs;
 pub mod project;
 pub mod schema_mapping;
+pub mod schema_mapping_v3v4;
 pub mod utils;
 pub mod validate;
 pub mod wix_exit_codes;

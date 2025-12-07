@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use walkdir::WalkDir;
 
 use wixer::commands::{import, upgrade};
@@ -39,6 +40,14 @@ struct Args {
     /// Skip YAML conversion (only upgrade to v4)
     #[arg(long)]
     no_yaml: bool,
+
+    /// Build MSI packages from the converted YAML examples
+    #[arg(short, long)]
+    build: bool,
+
+    /// Path to wixer executable (for --build)
+    #[arg(long, default_value = "wixer")]
+    wixer: PathBuf,
 
     /// Verbose output
     #[arg(short, long)]
@@ -78,8 +87,8 @@ fn main() -> Result<()> {
         );
     }
 
-    let v4_dir = output.join("v4");
-    let yaml_dir = output.join("yaml");
+    let v4_dir = output.join("wix-v4");
+    let yaml_dir = output.join("wixer-yaml");
 
     // Clean if requested
     if args.clean {
@@ -185,11 +194,74 @@ fn main() -> Result<()> {
     // Generate index
     generate_index(&output, &examples)?;
 
-    if stats.upgrade_errors > 0 || stats.convert_errors > 0 {
+    // Build MSI packages if requested
+    if args.build && !args.no_yaml {
+        println!();
+        println!("=== Building MSI Packages ===");
+        
+        let msi_dir = output.join("msi");
+        fs::create_dir_all(&msi_dir)?;
+        
+        for example in &examples {
+            // Find Product.wxs.yaml in the yaml output
+            let yaml_example_dir = yaml_dir.join(&example.name);
+            let product_yaml = find_product_yaml(&yaml_example_dir);
+            
+            if let Some(yaml_path) = product_yaml {
+                let msi_path = msi_dir.join(format!("{}.msi", example.name));
+                
+                print!("Building {}... ", example.name);
+                
+                // Run from the yaml example directory so Source paths resolve correctly
+                let result = Command::new(&args.wixer)
+                    .current_dir(&yaml_example_dir)
+                    .args(["build", yaml_path.to_str().unwrap(), "-o", msi_path.to_str().unwrap()])
+                    .output();
+                
+                match result {
+                    Ok(output) if output.status.success() => {
+                        println!("✓");
+                        stats.built += 1;
+                    }
+                    Ok(output) => {
+                        println!("✗");
+                        if args.verbose {
+                            eprintln!("  {}", String::from_utf8_lossy(&output.stderr));
+                        }
+                        stats.build_errors += 1;
+                    }
+                    Err(e) => {
+                        println!("✗ ({})", e);
+                        stats.build_errors += 1;
+                    }
+                }
+            }
+        }
+        
+        println!();
+        println!("MSI packages: {} built, {} failed", stats.built, stats.build_errors);
+        println!("Output: {}", msi_dir.display());
+    }
+
+    let has_errors = stats.upgrade_errors > 0 || stats.convert_errors > 0 || stats.build_errors > 0;
+    if has_errors {
         anyhow::bail!("Completed with errors");
     }
 
     Ok(())
+}
+
+fn find_product_yaml(dir: &Path) -> Option<PathBuf> {
+    WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| s == "Product.wxs.yaml")
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().to_path_buf())
 }
 
 #[derive(Default)]
@@ -198,6 +270,8 @@ struct Stats {
     upgrade_errors: usize,
     converted: usize,
     convert_errors: usize,
+    built: usize,
+    build_errors: usize,
 }
 
 struct Example {
@@ -291,8 +365,8 @@ fn generate_index(output: &Path, examples: &[Example]) -> Result<()> {
     content.push_str("# Wixer Example Gallery\n\n");
     content.push_str("This gallery contains WiX installer examples converted for use with wixer.\n\n");
     content.push_str("## Structure\n\n");
-    content.push_str("- **v4/** — WiX v4 XML files (upgraded from v3)\n");
-    content.push_str("- **yaml/** — YAML equivalents for use with wixer\n\n");
+    content.push_str("- **wix-v4/** — WiX v4 XML files (upgraded from v3)\n");
+    content.push_str("- **wixer-yaml/** — YAML equivalents for use with wixer\n\n");
     content.push_str("## Examples\n\n");
     content.push_str("| Example | Description |\n");
     content.push_str("|---------|-------------|\n");
@@ -307,7 +381,7 @@ fn generate_index(output: &Path, examples: &[Example]) -> Result<()> {
         };
 
         content.push_str(&format!(
-            "| [{}](v4/{}) | {} |\n",
+            "| [{}](wix-v4/{}) | {} |\n",
             example.name,
             example.name,
             description.chars().take(80).collect::<String>()
@@ -317,9 +391,9 @@ fn generate_index(output: &Path, examples: &[Example]) -> Result<()> {
     content.push_str("\n## Usage\n\n");
     content.push_str("```bash\n");
     content.push_str("# Build an example with wixer\n");
-    content.push_str("wixer build yaml/00_HelloWorldInstaller/Product.wxs.yaml\n\n");
+    content.push_str("wixer build wixer-yaml/00_HelloWorldInstaller/Product.wxs.yaml\n\n");
     content.push_str("# Or use the v4 XML directly with wix.exe\n");
-    content.push_str("wix build v4/00_HelloWorldInstaller/Product.wxs\n");
+    content.push_str("wix build wix-v4/00_HelloWorldInstaller/Product.wxs\n");
     content.push_str("```\n\n");
     content.push_str("## Rebuilding the Gallery\n\n");
     content.push_str("```bash\n");
