@@ -299,8 +299,40 @@ fn convert_node(node: Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> Result<()> 
         return Ok(());
     }
     
-    // Handle CustomAction attribute renames
+    // Handle CustomAction - check for WixQuietExec pattern
     if tag_name == "CustomAction" {
+        let binary_key = node.attribute("BinaryKey").or_else(|| node.attribute("BinaryRef"));
+        let dll_entry = node.attribute("DllEntry");
+        
+        // Check if this is a WixQuietExec custom action that needs conversion
+        if binary_key == Some("WixCA") && (dll_entry == Some("WixQuietExec") || dll_entry == Some("WixQuietExec64")) {
+            // In WiX v4+, WixQuietExec is handled differently
+            // The SetProperty that sets the command line should use WixQuietExecCmdLine property
+            // And the CustomAction should reference the util extension
+            // For now, we'll convert to the new syntax
+            let mut elem = BytesStart::new("CustomAction");
+            
+            for attr in node.attributes() {
+                match attr.name() {
+                    "BinaryKey" | "BinaryRef" => {
+                        // Change WixCA to Wix4UtilCA_X86 or Wix4UtilCA_X64
+                        elem.push_attribute(("BinaryRef", "Wix4UtilCA_X86"));
+                    }
+                    "DllEntry" => {
+                        // Keep the DllEntry but it's now in the util extension
+                        elem.push_attribute((attr.name(), attr.value()));
+                    }
+                    other => {
+                        elem.push_attribute((other, attr.value()));
+                    }
+                }
+            }
+            
+            writer.write_event(Event::Empty(elem))?;
+            return Ok(());
+        }
+        
+        // Regular CustomAction - just rename attributes
         let mut elem = BytesStart::new("CustomAction");
         
         for attr in node.attributes() {
