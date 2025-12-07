@@ -1,6 +1,5 @@
 use crate::constants::{
-    EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WSI_YAML, EXT_WXI_YAML, EXT_WXL_YAML, EXT_WXS_YAML,
-    SCHEMA_DIR_NAME,
+    EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME,
 };
 use crate::dirs;
 use serde_json::Value;
@@ -18,7 +17,7 @@ pub struct WixerLsp {
     schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
     docs: Arc<RwLock<HashMap<String, String>>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
-    symbols: Arc<RwLock<HashMap<String, SchemaSymbolInfo>>>,
+    symbols: Arc<RwLock<HashMap<String, HashMap<String, SchemaSymbolInfo>>>>,
     documents: Arc<RwLock<HashMap<Url, String>>>,
 }
 
@@ -148,11 +147,18 @@ impl WixerLsp {
                 continue;
             };
 
-            if !Self::compile_schema(&json, &path, &mut schemas) {
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let name = stem.replace(".schema", "");
+
+            if !Self::compile_schema(&json, &name, &mut schemas) {
                 continue;
             }
 
-            Self::index_schema(&json, &mut docs, &mut completions, &mut symbols);
+            let mut schema_symbols = HashMap::new();
+            Self::index_schema(&json, &mut docs, &mut completions, &mut schema_symbols);
+            symbols.insert(name, schema_symbols);
         }
 
         completions.sort_by(|a, b| a.label.cmp(&b.label));
@@ -192,7 +198,7 @@ impl WixerLsp {
 
     fn compile_schema(
         json: &Value,
-        path: &Path,
+        name: &str,
         schemas: &mut HashMap<String, jsonschema::JSONSchema>,
     ) -> bool {
         let compiled = match jsonschema::JSONSchema::compile(json) {
@@ -200,12 +206,7 @@ impl WixerLsp {
             Err(_) => return false,
         };
 
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-            return false;
-        };
-
-        let name = stem.replace(".schema", "");
-        schemas.insert(name, compiled);
+        schemas.insert(name.to_string(), compiled);
         true
     }
 
@@ -311,6 +312,21 @@ impl WixerLsp {
         });
     }
 
+    fn get_schema_name(&self, uri: &Url) -> &str {
+        let path = PathBuf::from(uri.path());
+        let filename = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        if filename.ends_with(EXT_WIXLOC_YAML) || filename.ends_with(EXT_WXL_YAML) {
+            EXT_WIXLOC
+        } else {
+            "wix"
+        }
+    }
+
     async fn validate_document(&self, uri: Url, version: Option<i32>, text: String) {
         let schemas = self.schemas.read().await;
 
@@ -321,19 +337,7 @@ impl WixerLsp {
             .to_string_lossy()
             .to_string();
 
-        #[allow(clippy::if_same_then_else)]
-        let extension_schema = if filename.ends_with(EXT_WIXLOC_YAML)
-            || filename.ends_with(EXT_WXL_YAML)
-        {
-            EXT_WIXLOC
-        } else if filename.ends_with(EXT_WXS_YAML)
-            || filename.ends_with(EXT_WXI_YAML)
-            || filename.ends_with(EXT_WSI_YAML)
-        {
-            "wix"
-        } else {
-            "wix"
-        };
+        let extension_schema = self.get_schema_name(&uri);
 
         let schema = schemas
             .get(&filename)
@@ -653,6 +657,10 @@ impl LanguageServer for WixerLsp {
         let completions = self.completions.read().await;
         let symbols = self.symbols.read().await;
 
+        let schema_name = self.get_schema_name(&uri);
+        let empty_map = HashMap::new();
+        let symbol_map = symbols.get(schema_name).unwrap_or(&empty_map);
+
         if let Some(text) = documents.get(&uri) {
             let mut data = Vec::new();
             let mut prev_line = 0;
@@ -674,7 +682,7 @@ impl LanguageServer for WixerLsp {
                     let is_known = completions.iter().any(|c| c.label == key);
                     
                     // Determine token type
-                    let (token_type, modifier_bits) = if let Some(info) = symbols.get(key) {
+                    let (token_type, modifier_bits) = if let Some(info) = symbol_map.get(key) {
                         let token_type = match info.kind {
                             SchemaSymbolKind::Element => 0,
                             SchemaSymbolKind::Attribute => 1,
@@ -718,7 +726,7 @@ impl LanguageServer for WixerLsp {
                              let value_segment = extract_value_segment(val_part);
                              if !value_segment.is_empty() {
                                  let val_start_col = colon_idx + 1 + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
-                                 let (value_token_type, value_modifier_bits) = determine_value_token(value_segment, symbols.get(key));
+                                 let (value_token_type, value_modifier_bits) = determine_value_token(value_segment, symbol_map.get(key));
                                  let delta_line_val = 0; // Same line
                                  let delta_start_val = val_start_col as u32 - prev_start;
 

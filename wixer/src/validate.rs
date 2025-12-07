@@ -1,3 +1,4 @@
+use crate::constants::{ALL_SOURCE_EXTENSIONS, EXT_WIXLOC_YAML, EXT_WXL_YAML};
 use anyhow::{Context, Result};
 use jsonschema::JSONSchema;
 use std::fs;
@@ -89,10 +90,16 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.is_file()
-            && let Some(ext) = path.extension().and_then(|e| e.to_str())
-            && ["yaml", "yml", "wys", "wyi", "wyl", "ysi"].contains(&ext)
-        {
+        if path.is_file() {
+            let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            let is_supported = ALL_SOURCE_EXTENSIONS
+                .iter()
+                .any(|ext| filename.ends_with(ext));
+
+            if !is_supported {
+                continue;
+            }
+
             count += 1;
 
             // Determine schema to use
@@ -100,14 +107,14 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
             // 2. Try extension based schema
             // 3. Try default wix.schema.json
 
-            let filename = path.file_stem().unwrap().to_string_lossy();
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-            
             let specific_schema = schema_dir.join(format!("{}.schema.json", filename));
-            
-            let extension_schema_name = match ext {
-                "wyl" => "wixloc.schema.json",
-                _ => "wix.schema.json",
+
+            let extension_schema_name = if filename.ends_with(EXT_WIXLOC_YAML)
+                || filename.ends_with(EXT_WXL_YAML)
+            {
+                "wixloc.schema.json"
+            } else {
+                "wix.schema.json"
             };
             let extension_schema = schema_dir.join(extension_schema_name);
 

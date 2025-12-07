@@ -9,6 +9,14 @@ macro_rules! define_extensions {
             pub const $base: &str = $literal;
             pub const $yaml: &str = concat!($literal, ".yaml");
         )*
+
+        pub const ALL_SOURCE_EXTENSIONS: &[&str] = &[
+            $($yaml),*
+        ];
+
+        pub const ALL_TARGET_EXTENSIONS: &[&str] = &[
+            $($literal),*
+        ];
     };
 }
 
