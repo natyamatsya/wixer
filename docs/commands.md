@@ -1,0 +1,249 @@
+# Wixer Commands
+
+## build
+
+Build an MSI installer from YAML sources. This command intercepts the WiX toolset and transparently converts YAML to XML.
+
+```bash
+wixer build <file.wxs.yaml> [options]
+```
+
+**Options:**
+- `-o, --output <path>` — Output MSI file path
+- `--profile <name>` — Use a named profile from wixer.yaml
+
+**Example:**
+```bash
+wixer build myproject.wxs.yaml -o dist/myproject.msi
+```
+
+When running as `wix.exe` (impersonation mode), wixer automatically intercepts build commands and converts any `.wxs.yaml` inputs to XML before passing to the real WiX toolset.
+
+---
+
+## export
+
+Recursively convert YAML WiX sources to XML.
+
+```bash
+wixer export <input_dir> <output_dir> [options]
+```
+
+**Options:**
+- `--attribute-strategy <strategy>` — How to handle attributes: `inline` (default), `prefix`, or `separate`
+
+**Example:**
+```bash
+wixer export ./src ./build/wix
+```
+
+Converts all `.wxs.yaml`, `.wxi.yaml`, and `.wxl.yaml` files in the input directory to their XML equivalents.
+
+---
+
+## import
+
+Recursively convert WiX XML files to YAML.
+
+```bash
+wixer import <input_dir> <output_dir>
+```
+
+**Example:**
+```bash
+wixer import ./legacy-wix ./src
+```
+
+Useful for migrating existing WiX projects to YAML format.
+
+---
+
+## migrate
+
+Migrate a WiX project to another format (currently supports MSIX).
+
+```bash
+wixer migrate --target <target> <input> <output_dir>
+```
+
+**Targets:**
+- `msix` — Generate AppxManifest.xml for MSIX packaging
+
+**Example:**
+```bash
+wixer migrate --target msix ./myproject.wxs.yaml ./msix
+```
+
+The migrate command extracts product information (Name, Version, Manufacturer, Executable) from WiX sources and generates a valid AppxManifest.xml. It supports both `.wxs` XML and `.wxs.yaml` YAML inputs.
+
+---
+
+## validate
+
+Validate YAML files against WiX JSON schemas.
+
+```bash
+wixer validate <file.wxs.yaml>
+```
+
+**Example:**
+```bash
+wixer validate myproject.wxs.yaml
+```
+
+Requires schemas to be initialized with `wixer init`.
+
+---
+
+## describe
+
+Look up WiX properties, variables, and concepts.
+
+```bash
+wixer describe <term>
+```
+
+**Example:**
+```bash
+wixer describe INSTALLFOLDER
+wixer describe MajorUpgrade
+```
+
+Searches the WiX knowledge base for documentation on the given term.
+
+---
+
+## upgrade
+
+Upgrade WiX v3 files to v4/v6 syntax.
+
+```bash
+wixer upgrade <file>
+```
+
+**Example:**
+```bash
+wixer upgrade legacy/Product.wxs
+```
+
+Applies transformations to update deprecated elements and attributes to modern WiX syntax.
+
+---
+
+## init
+
+Initialize wixer by downloading WiX XSD schemas to the local cache.
+
+```bash
+wixer init [options]
+```
+
+**Options:**
+- `--fresh` — Clear existing cache and re-download
+
+**Example:**
+```bash
+wixer init --fresh
+```
+
+Downloads schemas from the WiX GitHub repository and generates JSON schemas for validation.
+
+---
+
+## lsp
+
+Start the WiX Language Server Protocol server.
+
+```bash
+wixer lsp
+```
+
+Provides IDE integration features like completion, hover documentation, and diagnostics for `.wxs.yaml` files.
+
+---
+
+## inspect-pdb
+
+Inspect a WiX PDB file to examine installer contents.
+
+```bash
+wixer inspect-pdb <file.wixpdb> [symbol]
+```
+
+**Example:**
+```bash
+wixer inspect-pdb myproject.wixpdb
+wixer inspect-pdb myproject.wixpdb INSTALLFOLDER
+```
+
+---
+
+## sequence
+
+Visualize the execution sequence of installer actions.
+
+```bash
+wixer sequence <file>
+```
+
+Generates a visualization of the InstallExecuteSequence and InstallUISequence.
+
+---
+
+## yaml-to-wix
+
+Convert a single YAML file to WiX XML.
+
+```bash
+wixer yaml-to-wix <input.wxs.yaml> <output.wxs>
+```
+
+Lower-level command for single-file conversion. Prefer `export` for batch operations.
+
+---
+
+## wix-to-yaml
+
+Convert a single WiX XML file to YAML.
+
+```bash
+wixer wix-to-yaml <input.wxs> <output.wxs.yaml>
+```
+
+Lower-level command for single-file conversion. Prefer `import` for batch operations.
+
+---
+
+## xsd-to-json
+
+Convert WiX XSD schemas to JSON Schema format.
+
+```bash
+wixer xsd-to-json <input.xsd> <output.json>
+```
+
+Used internally by `wixer init` to generate validation schemas.
+
+---
+
+## doc
+
+Generate documentation from WiX XSD schemas.
+
+```bash
+wixer doc <schema.xsd> <output_dir>
+```
+
+Generates HTML or Markdown documentation from schema definitions.
+
+---
+
+## map-schemas
+
+Map WiX schemas to MSIX schemas for migration analysis.
+
+```bash
+wixer map-schemas
+```
+
+Analyzes schema compatibility between WiX and MSIX formats.
