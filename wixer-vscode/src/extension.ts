@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { workspace, ExtensionContext } from 'vscode';
 import {
   LanguageClient,
@@ -10,28 +9,37 @@ import {
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
-  // Use the absolute path to the debug build we just made
-  // Note: In a real extension, this would be bundled or configured via settings
-  const serverPath = context.asAbsolutePath(path.join('..', 'target', 'debug', 'wixer.exe'));
+  // Get wixer executable path from settings, default to 'wixer' (searches PATH)
+  const config = workspace.getConfiguration('wixer');
+  const executablePath = config.get<string>('executablePath', 'wixer');
   
-  // If the extension is launched in debug mode then the debug server options are used
-  // Otherwise the run options are used
   const serverOptions: ServerOptions = {
-    run: { command: serverPath, args: ["lsp"], transport: TransportKind.stdio },
-    debug: { command: serverPath, args: ["lsp"], transport: TransportKind.stdio }
-  };
-
-  // Options to control the language client
-  const clientOptions: LanguageClientOptions = {
-    // Register the server for plain text documents
-    documentSelector: [{ scheme: 'file', language: 'yaml' }],
-    synchronize: {
-      // Notify the server about file changes to '.clientrc files contained in the workspace
-      fileEvents: workspace.createFileSystemWatcher('**/.clientrc')
+    run: { 
+      command: executablePath, 
+      args: ['lsp'], 
+      transport: TransportKind.stdio 
+    },
+    debug: { 
+      command: executablePath, 
+      args: ['lsp'], 
+      transport: TransportKind.stdio 
     }
   };
 
-  // Create the language client and start the client.
+  const clientOptions: LanguageClientOptions = {
+    // Register for WiX YAML files
+    documentSelector: [
+      { scheme: 'file', language: 'wix-yaml' },
+      { scheme: 'file', pattern: '**/*.wxs.yaml' },
+      { scheme: 'file', pattern: '**/*.wxi.yaml' },
+      { scheme: 'file', pattern: '**/*.wxl.yaml' }
+    ],
+    synchronize: {
+      // Watch for wixer.yaml config changes
+      fileEvents: workspace.createFileSystemWatcher('**/wixer.yaml')
+    }
+  };
+
   client = new LanguageClient(
     'wixer',
     'Wixer Language Server',
@@ -39,7 +47,6 @@ export function activate(context: ExtensionContext) {
     clientOptions
   );
 
-  // Start the client. This will also launch the server
   client.start();
 }
 

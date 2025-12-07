@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "WiX YAML",
+  "scopeName": "source.wix.yaml",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#wix-elements" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#constants" },
+    { "include": "#keys" }
+  ],
+  "repository": {
+    "comments": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.yaml"
+    },
+    "wix-elements": {
+      "match": "^\\s*(Wix|Package|Product|Feature|Component|ComponentGroup|Directory|StandardDirectory|File|Shortcut|RegistryKey|RegistryValue|Property|CustomAction|InstallExecuteSequence|MajorUpgrade|MediaTemplate|Fragment|Include):",
+      "captures": {
+        "1": { "name": "entity.name.tag.wix.yaml" }
+      }
+    },
+    "keys": {
+      "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*):",
+      "captures": {
+        "1": { "name": "entity.name.tag.yaml" }
+      }
+    },
+    "strings": {
+      "patterns": [
+        {
+          "match": "'[^']*'",
+          "name": "string.quoted.single.yaml"
+        },
+        {
+          "match": "\"[^\"]*\"",
+          "name": "string.quoted.double.yaml"
+        }
+      ]
+    },
+    "numbers": {
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.yaml"
+    },
+    "constants": {
+      "match": "\\b(true|false|yes|no|null)\\b",
+      "name": "constant.language.yaml"
+    }
+  }
+}

@@ -1,25 +1,37 @@
 {
   "name": "wixer-vscode",
   "displayName": "Wixer Language Support",
-  "description": "Language support for WiX YAML files using wixer",
-  "version": "0.0.1",
+  "description": "Language support for WiX YAML files (.wxs.yaml) using wixer LSP",
+  "version": "0.1.0",
   "publisher": "natyamatsya",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/natyamatsya/wixer"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Linters"
   ],
-  "activationEvents": [
-    "onLanguage:yaml"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "yaml",
-        "extensions": [".ywxs", ".ywxs.in", ".ywxi", ".ywxi.in", ".ywxl", ".ywxl.in", ".ywsi", ".ywsi.in"],
-        "aliases": ["YAML", "WiX YAML"]
+        "id": "wix-yaml",
+        "extensions": [".wxs.yaml", ".wxi.yaml", ".wxl.yaml", ".wsi.yaml"],
+        "aliases": ["WiX YAML", "wixer"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "wix-yaml",
+        "scopeName": "source.wix.yaml",
+        "path": "./syntaxes/wix-yaml.tmLanguage.json"
       }
     ],
     "configuration": {
@@ -29,19 +41,25 @@
         "wixer.executablePath": {
           "type": "string",
           "default": "wixer",
-          "description": "Path to the wixer executable"
+          "description": "Path to the wixer executable. If not absolute, searches PATH."
+        },
+        "wixer.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the wixer language server."
         }
       }
     },
     "semanticTokenScopes": [
-        {
-            "language": "yaml",
-            "scopes": {
-                "class": ["entity.name.type.class"],
-                "property": ["variable.other.property"],
-                "string": ["string.quoted.double"]
-            }
+      {
+        "language": "wix-yaml",
+        "scopes": {
+          "class": ["entity.name.type.class"],
+          "property": ["variable.other.property"],
+          "string": ["string.quoted.double"]
         }
+      }
     ]
   },
   "scripts": {
