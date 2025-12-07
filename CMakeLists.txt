@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(wixer VERSION 0.1.0 LANGUAGES CXX)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 # Build wixer using cargo
 add_custom_target(build_wixer ALL
     COMMAND cargo build --release
@@ -20,9 +22,15 @@ if(WIN32)
     configure_file(cmake/MakeAppX.cmake.in ${CMAKE_BINARY_DIR}/MakeAppX.cmake @ONLY)
 
     install(FILES ${CMAKE_BINARY_DIR}/AppxManifest.xml DESTINATION .)
-    
-    # Add assets installation
     install(DIRECTORY assets DESTINATION .)
+
+    # Set up wixer impersonation for transparent YAML support
+    include(WixerImpersonate)
+    wixer_impersonate(
+        WIXER_EXE "${CMAKE_SOURCE_DIR}/target/release/wixer.exe"
+        VERBOSE
+        INSPECT_PDB
+    )
 endif()
 
 # CPack Configuration

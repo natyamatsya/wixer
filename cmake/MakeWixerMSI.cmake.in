@@ -1,15 +1,14 @@
 # Wixer MSI Packaging Script
-# Uses wixer to build MSI from YAML source.
+# Uses wixer (impersonating wix.exe) to build MSI from YAML source.
 if(NOT WIN32)
     return()
 endif()
 
-set(WIXER_NAME "@CPACK_PACKAGE_NAME@")
-set(WIXER_VERSION "@CPACK_PACKAGE_VERSION@")
-message(STATUS "Wixer MSI Package: ${WIXER_NAME} ${WIXER_VERSION}")
+# Use CPack variables directly (available at CPack runtime)
+message(STATUS "Wixer MSI Package: ${CPACK_PACKAGE_NAME} ${CPACK_PACKAGE_VERSION}")
 
 # Output file names
-set(MSI_FILE_NAME "${WIXER_NAME}-${WIXER_VERSION}.msi")
+set(MSI_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}.msi")
 set(MSI_FULL_PATH "${CPACK_TOPLEVEL_DIRECTORY}/${MSI_FILE_NAME}")
 
 # Find wixer executable (use freshly built one from target/release)
@@ -17,6 +16,40 @@ set(WIXER_EXE "@CMAKE_SOURCE_DIR@/target/release/wixer.exe")
 if(NOT EXISTS "${WIXER_EXE}")
     message(FATAL_ERROR "wixer.exe not found at ${WIXER_EXE}. Run 'cargo build --release' first.")
 endif()
+
+# Find real wix.exe
+find_program(REAL_WIX_EXE wix PATHS "C:/Program Files/WiX Toolset v6.0/bin" ENV WIX)
+if(NOT REAL_WIX_EXE)
+    message(FATAL_ERROR "wix.exe not found. Install WiX Toolset or set WIX environment variable.")
+endif()
+message(STATUS "Real WiX executable: ${REAL_WIX_EXE}")
+
+# Set up impersonation directory
+set(IMPERSONATE_DIR "${CPACK_TOPLEVEL_DIRECTORY}/_wixer_impersonate")
+file(REMOVE_RECURSE "${IMPERSONATE_DIR}")
+file(MAKE_DIRECTORY "${IMPERSONATE_DIR}")
+
+# Create symbolic link to wixer.exe as wix.exe for impersonation (falls back to copy)
+set(IMPERSONATE_WIX_EXE "${IMPERSONATE_DIR}/wix.exe")
+file(CREATE_LINK "${WIXER_EXE}" "${IMPERSONATE_WIX_EXE}" SYMBOLIC COPY_ON_ERROR)
+
+# Create wixer.yaml config in source directory (wixer looks for config walking up from cwd)
+set(SOURCE_DIR "@CMAKE_SOURCE_DIR@")
+set(WIXER_CONFIG "${SOURCE_DIR}/wixer.yaml")
+set(WIXER_CONFIG_BACKUP "${CPACK_TOPLEVEL_DIRECTORY}/wixer.yaml.backup")
+
+# Backup existing wixer.yaml if present
+if(EXISTS "${WIXER_CONFIG}")
+    file(COPY "${WIXER_CONFIG}" DESTINATION "${CPACK_TOPLEVEL_DIRECTORY}")
+    file(RENAME "${CPACK_TOPLEVEL_DIRECTORY}/wixer.yaml" "${WIXER_CONFIG_BACKUP}")
+endif()
+
+# Write temporary wixer.yaml with real_wix_path
+file(WRITE "${WIXER_CONFIG}" "# Auto-generated wixer configuration for impersonation
+build:
+  real_wix_path: \"${REAL_WIX_EXE}\"
+")
+message(STATUS "Created wixer.yaml with real_wix_path: ${REAL_WIX_EXE}")
 
 # WiX YAML source file
 set(WXS_YAML "@CMAKE_SOURCE_DIR@/wixer.wxs.yaml")
@@ -27,11 +60,12 @@ endif()
 # Remove existing output
 file(REMOVE "${MSI_FULL_PATH}")
 
-# Build MSI using wixer
-message(STATUS "Building MSI with wixer: ${WIXER_EXE} build ${WXS_YAML} -o ${MSI_FULL_PATH}")
+# Build MSI using impersonated wix.exe (which is actually wixer)
+# Working directory must be source dir for relative paths in wixer.wxs.yaml to resolve
+message(STATUS "Building MSI with wixer (impersonating wix.exe): ${IMPERSONATE_WIX_EXE} build ${WXS_YAML} -o ${MSI_FULL_PATH}")
 execute_process(
-    COMMAND "${WIXER_EXE}" build "${WXS_YAML}" -o "${MSI_FULL_PATH}"
-    WORKING_DIRECTORY "@CMAKE_SOURCE_DIR@"
+    COMMAND "${IMPERSONATE_WIX_EXE}" build "${WXS_YAML}" -o "${MSI_FULL_PATH}"
+    WORKING_DIRECTORY "${SOURCE_DIR}"
     RESULT_VARIABLE _res_wixer
 )
 if(NOT _res_wixer EQUAL 0)
@@ -43,6 +77,14 @@ if(NOT EXISTS "${MSI_FULL_PATH}")
 endif()
 
 message(STATUS "Created MSI package: ${MSI_FULL_PATH}")
+
+# Restore original wixer.yaml if it was backed up
+if(EXISTS "${WIXER_CONFIG_BACKUP}")
+    file(RENAME "${WIXER_CONFIG_BACKUP}" "${WIXER_CONFIG}")
+    message(STATUS "Restored original wixer.yaml")
+else()
+    file(REMOVE "${WIXER_CONFIG}")
+endif()
 
 # Set CPack's output variable
 set(CPACK_EXTERNAL_BUILT_PACKAGES "${MSI_FULL_PATH}")
