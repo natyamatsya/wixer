@@ -1,7 +1,7 @@
 use crate::common::AttributeStrategy;
+use crate::utils::load_known_attributes;
 use crate::wix_to_yaml;
 use anyhow::{Context, Result};
-use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use tracing::{error, info};
@@ -20,7 +20,7 @@ pub fn run(
 
     fs::create_dir_all(output_dir)?;
 
-    let known_attributes = HashSet::new(); // Placeholder for now
+    let known_attributes = load_known_attributes(None, attribute_strategy == AttributeStrategy::Inline);
 
     let mut count = 0;
     let mut errors = 0;

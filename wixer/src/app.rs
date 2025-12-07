@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -13,7 +13,7 @@ use tracing_subscriber::{fmt, prelude::*, util::SubscriberInitExt};
 use crate::commands;
 use crate::common::AttributeStrategy;
 use crate::config::WixerConfig;
-use crate::utils::{find_project_root, known_attributes_candidates};
+use crate::utils::{find_project_root, load_known_attributes};
 use crate::{validate, wix_to_yaml, xsd_to_json, yaml_to_wix};
 
 pub async fn run() -> Result<()> {
@@ -276,7 +276,10 @@ fn handle_yaml_to_wix(
     attribute_strategy: AttributeStrategy,
     attributes_file: Option<&Path>,
 ) -> Result<()> {
-    let known_attributes = load_known_attributes(attributes_file, attribute_strategy)?;
+    let known_attributes = load_known_attributes(
+        attributes_file,
+        attribute_strategy == AttributeStrategy::Inline,
+    );
 
     if let (Some(in_dir), Some(out_dir)) = (input_dir, output_dir) {
         yaml_to_wix::convert_directory(&in_dir, &out_dir, attribute_strategy, &known_attributes)?;
@@ -318,47 +321,6 @@ fn handle_validate(
     }
 
     if let (Some(schema_path), Some(yaml_path)) = (schema, yaml) {
-        validate::validate_file(&schema_path, &yaml_path)
-            .context("Validation failed")?;
-        return Ok(());
-    }
-
-    bail!("Either provide schema and yaml files, or use --schema-dir and --yaml-dir");
-}
-
-fn load_known_attributes(
-    explicit: Option<&Path>,
-    strategy: AttributeStrategy,
-) -> Result<HashSet<String>> {
-    for candidate in known_attributes_candidates(explicit) {
-        if candidate.exists() {
-            match File::open(&candidate) {
-                Ok(file) => {
-                    let reader = BufReader::new(file);
-                    match serde_json::from_reader(reader) {
-                        Ok(attrs) => return Ok(attrs),
-                        Err(e) => warn!(file = %candidate.display(), "Failed to parse attributes file: {}", e),
-                    }
-                }
-                Err(e) => warn!(file = %candidate.display(), "Failed to open attributes file: {}", e),
-            }
-        }
-    }
-
-    if strategy == AttributeStrategy::Inline {
-        warn!(
-            "No known_attributes.json found and strategy is Inline. Attribute detection may fail."
-        );
-    }
-
-    Ok(HashSet::new())
-}
-
-#[derive(Parser)]
-#[command(name = "wixer")]
-#[command(about = "WiX Installer Toolkit", long_about = None)]
-struct Cli {
-    #[command(subcommand)]
     command: Commands,
 }
 
