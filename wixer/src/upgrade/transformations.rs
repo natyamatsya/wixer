@@ -209,8 +209,13 @@ impl Transformation for ConditionToLaunch {
     }
 
     fn applies_to(&self, node: &Node) -> bool {
+        // In v3, Condition is under Product; in v4 it would be under Package
+        // We check for both since we're transforming v3 to v4
         node.tag_name().name() == "Condition"
-            && node.parent().map(|p| p.tag_name().name()) == Some("Package")
+            && node.parent().map(|p| {
+                let name = p.tag_name().name();
+                name == "Package" || name == "Product"
+            }).unwrap_or(false)
     }
 
     fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
