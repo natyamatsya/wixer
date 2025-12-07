@@ -4,7 +4,9 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 use tracing::{error, info, warn};
-use tracing_subscriber::fmt;
+use tracing_subscriber::{fmt, prelude::*, Layer};
+use crate::config::WixerConfig;
+use tracing_subscriber::util::SubscriberInitExt;
 
 pub mod analysis;
 pub mod commands;
@@ -234,8 +236,34 @@ enum Commands {
 
 #[tokio::main]
 async fn main() {
-    fmt::fmt()
+    // Load config early for logging setup
+    let config = WixerConfig::load();
+    
+    let mut layers = Vec::new();
+
+    // Stderr layer (default)
+    let stderr_layer = fmt::layer()
         .with_writer(std::io::stderr)
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
+        .boxed();
+    layers.push(stderr_layer);
+
+    // File layer (if configured)
+    if let Some(log_file) = &config.logging.file {
+        if let Ok(file) = std::fs::File::create(log_file) {
+            let file_layer = fmt::layer()
+                .with_writer(file)
+                .with_ansi(false)
+                .with_filter(tracing_subscriber::filter::LevelFilter::DEBUG)
+                .boxed();
+            layers.push(file_layer);
+        } else {
+            eprintln!("Failed to create log file: {}", log_file);
+        }
+    }
+
+    tracing_subscriber::registry()
+        .with(layers)
         .init();
 
     // Impersonation Check

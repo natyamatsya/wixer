@@ -19,22 +19,43 @@ pub fn run(args: Vec<String>) -> Result<()> {
         std::process::exit(1);
     }
 
+    // Load config
     let config = WixerConfig::load();
+    let mut build_args = args.clone();
+    
+    // Check for --profile arg manually since this is a raw vec
+    let mut profile = None;
+    if let Some(pos) = build_args.iter().position(|a| a == "--profile")
+        && pos + 1 < build_args.len() {
+            profile = Some(build_args[pos + 1].clone());
+            // Remove from args passed to real wix
+            build_args.remove(pos + 1);
+            build_args.remove(pos);
+        }
 
-    // Determine the executable to run (real wix)
-    let wix_exe = config.build.real_wix_path.unwrap_or_else(|| "wix".to_string());
+    let build_config = config.get_build_config(profile.as_deref());
+    let wix_exe = build_config.real_wix_path.unwrap_or_else(|| "wix".to_string());
 
     // Check if it's actually the 'build' command
-    if args[0] != "build" {
+    if build_args[0] != "build" {
         // Pass through other commands to wix
         let status = std::process::Command::new(&wix_exe)
-            .args(args)
+            .args(build_args)
             .status()
             .unwrap_or_else(|e| {
                 error!("Failed to execute wix ({}): {}", wix_exe, e);
                 std::process::exit(1);
             });
         std::process::exit(status.code().unwrap_or(1));
+    }
+
+    // Apply debug profile settings
+    if build_config.verbose {
+        info!("Debug profile active: Enabling verbose output");
+        // Inject -v if not present
+        if !build_args.iter().any(|a| a == "-v" || a == "-verbose") {
+            build_args.push("-v".to_string());
+        }
     }
 
     // It is 'build', let's intercept inputs
@@ -191,30 +212,24 @@ pub fn run(args: Vec<String>) -> Result<()> {
             // Wix 4 usually outputs to current dir unless -o is specified.
             PathBuf::from(file_stem).with_extension("wixpdb")
         } else {
-            warn!("Could not determine PDB path for inspection.");
-            PathBuf::new()
+             // Heuristic: same base as first input
+             let input = PathBuf::from(&input_file.as_ref().unwrap());
+             input.with_extension("wixpdb")
         };
 
         if pdb_path.exists() {
-             if config.build.inspect_symbols.is_empty() {
-                 info!("No symbols configured to inspect. Running general report.");
-                 if let Err(e) = pdb::run(&pdb_path, None) {
-                     error!("PDB inspection failed: {}", e);
-                 }
-             } else {
-                 for sym in &config.build.inspect_symbols {
-                     info!("Inspecting symbol: {}", sym);
-                     if let Err(e) = pdb::run(&pdb_path, Some(sym.clone())) {
-                         error!("PDB inspection failed for {}: {}", sym, e);
-                     }
+             for symbol in &build_config.inspect_symbols {
+                 info!("Inspecting symbol: {}", symbol);
+                 if let Err(e) = pdb::run(&pdb_path, Some(symbol.clone())) {
+                     warn!("Failed to inspect PDB: {}", e);
                  }
              }
         } else {
-            warn!("PDB file not found: {}", pdb_path.display());
+             warn!("PDB file not found at expected location: {}", pdb_path.display());
         }
     }
 
-    std::process::exit(0);
+    std::process::exit(status.code().unwrap_or(0));
 }
 
 fn is_wix_file(data: &Value) -> bool {
