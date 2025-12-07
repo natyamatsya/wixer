@@ -353,3 +353,77 @@ function(wixer_add_yaml_sources TARGET_NAME YAML_SOURCE_DIR OUTPUT_DIR)
     message(STATUS "  Output dir: ${OUTPUT_DIR}")
     message(STATUS "  Sources: ${_YAML_SOURCES}")
 endfunction()
+
+# wixer_msix_package(<yaml_source> [options])
+#
+# Configures CPack External generator to create MSIX packages using wixer migrate.
+# This generates AppxManifest.xml from WiX YAML sources automatically.
+#
+# Arguments:
+#   yaml_source    - Path to the main .wxs.yaml file
+#
+# Options:
+#   APPX_NAME      - Package identity name (default: extracted from YAML)
+#   APPX_VERSION   - Package version (default: ${PROJECT_VERSION}.0)
+#   ASSETS_DIR     - Directory containing logo assets (default: ${CMAKE_SOURCE_DIR}/assets)
+#
+# Example:
+#   wixer_msix_package("${CMAKE_SOURCE_DIR}/wixer.wxs.yaml"
+#       APPX_NAME "Natyamatsya.Wixer"
+#       APPX_VERSION "1.0.0.0"
+#   )
+#
+function(wixer_msix_package YAML_SOURCE)
+    cmake_parse_arguments(ARG
+        ""
+        "APPX_NAME;APPX_VERSION;ASSETS_DIR"
+        ""
+        ${ARGN}
+    )
+
+    # Find wixer executable
+    if(DEFINED WIXER_EXECUTABLE)
+        set(_WIXER_EXE "${WIXER_EXECUTABLE}")
+    else()
+        find_program(_WIXER_EXE wixer)
+        if(NOT _WIXER_EXE)
+            message(FATAL_ERROR "wixer executable not found. Set WIXER_EXECUTABLE.")
+        endif()
+    endif()
+
+    # Set defaults
+    if(NOT ARG_APPX_VERSION)
+        set(ARG_APPX_VERSION "${PROJECT_VERSION}.0")
+    endif()
+    if(NOT ARG_ASSETS_DIR)
+        set(ARG_ASSETS_DIR "${CMAKE_SOURCE_DIR}/assets")
+    endif()
+    if(NOT ARG_APPX_NAME)
+        # Will be extracted by wixer migrate
+        set(ARG_APPX_NAME "${PROJECT_NAME}")
+    endif()
+
+    # Store for template substitution
+    set(WIXER_EXECUTABLE "${_WIXER_EXE}")
+    set(WIX_YAML_SOURCE "${YAML_SOURCE}")
+    set(APPX_NAME "${ARG_APPX_NAME}")
+    set(APPX_VERSION "${ARG_APPX_VERSION}")
+    set(ASSETS_DIR "${ARG_ASSETS_DIR}")
+
+    # Configure the packaging script
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/cmake/MakeWixerMSIX.cmake.in"
+        "${CMAKE_BINARY_DIR}/MakeWixerMSIX.cmake"
+        @ONLY
+    )
+
+    # Export for use in CMakeLists.txt
+    set(WIXER_MSIX_PACKAGE_SCRIPT "${CMAKE_BINARY_DIR}/MakeWixerMSIX.cmake" PARENT_SCOPE)
+
+    message(STATUS "Wixer MSIX packaging configured:")
+    message(STATUS "  YAML source: ${YAML_SOURCE}")
+    message(STATUS "  APPX name: ${APPX_NAME}")
+    message(STATUS "  APPX version: ${APPX_VERSION}")
+    message(STATUS "  Assets: ${ASSETS_DIR}")
+    message(STATUS "  Script: ${CMAKE_BINARY_DIR}/MakeWixerMSIX.cmake")
+endfunction()

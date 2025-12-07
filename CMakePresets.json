@@ -19,11 +19,23 @@
     {
       "name": "wixer-rel",
       "displayName": "Wixer Release",
-      "description": "Release build with wixer impersonation",
+      "description": "Release build with wixer impersonation (legacy MSIX)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "WIXER_MSIX_STRATEGY": "legacy"
+      }
+    },
+    {
+      "name": "wixer-rel-auto",
+      "displayName": "Wixer Release (Auto MSIX)",
+      "description": "Release build with auto-generated AppxManifest from YAML",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-auto",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "WIXER_MSIX_STRATEGY": "wixer"
       }
     }
   ],
@@ -58,9 +70,16 @@
     },
     {
       "name": "wixer-rel-msix",
-      "displayName": "Wixer MSIX Package",
-      "description": "Build MSIX package using MakeAppX",
+      "displayName": "Wixer MSIX Package (Legacy)",
+      "description": "Build MSIX package using pre-configured AppxManifest",
       "configurePreset": "wixer-rel",
+      "generators": ["External"]
+    },
+    {
+      "name": "wixer-auto-msix",
+      "displayName": "Wixer MSIX Package (Auto)",
+      "description": "Build MSIX package with auto-generated AppxManifest from YAML",
+      "configurePreset": "wixer-rel-auto",
       "generators": ["External"]
     }
   ],
@@ -81,6 +100,21 @@
         {
           "type": "package",
           "name": "wixer-rel-pkg"
+        }
+      ]
+    },
+    {
+      "name": "wixer-auto-msix",
+      "displayName": "Build & Package MSIX (Auto)",
+      "description": "Configure and build MSIX with auto-generated AppxManifest from YAML",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "wixer-rel-auto"
+        },
+        {
+          "type": "package",
+          "name": "wixer-auto-msix"
         }
       ]
     }

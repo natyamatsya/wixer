@@ -38,6 +38,12 @@ if(WIN32)
         "${CMAKE_SOURCE_DIR}"
         "${CMAKE_BINARY_DIR}/wix"
     )
+
+    # Configure wixer-based MSIX packaging (auto-generates AppxManifest from YAML)
+    wixer_msix_package("${CMAKE_SOURCE_DIR}/wixer.wxs.yaml"
+        APPX_NAME "Natyamatsya.Wixer"
+        APPX_VERSION "${PROJECT_VERSION}.0"
+    )
 endif()
 
 # CPack Configuration
@@ -56,7 +62,22 @@ set(CPACK_WIX_UPGRADE_GUID "d0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a")
 if(WIN32)
     set(CPACK_EXTERNAL_ENABLE_PACKAGING ON)
     set(CPACK_EXTERNAL_ENABLE_STAGING ON)
-    set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_BINARY_DIR}/MakeAppX.cmake")
+    
+    # Select MSIX packaging strategy:
+    # - "legacy": Use pre-configured AppxManifest.xml.in (MakeAppX.cmake)
+    # - "wixer": Auto-generate AppxManifest from WiX YAML (MakeWixerMSIX.cmake)
+    if(NOT DEFINED WIXER_MSIX_STRATEGY)
+        set(WIXER_MSIX_STRATEGY "legacy" CACHE STRING "MSIX packaging strategy (legacy or wixer)")
+    endif()
+    
+    if(WIXER_MSIX_STRATEGY STREQUAL "wixer")
+        set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_BINARY_DIR}/MakeWixerMSIX.cmake")
+        message(STATUS "MSIX strategy: wixer (auto-generate AppxManifest from YAML)")
+    else()
+        set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_BINARY_DIR}/MakeAppX.cmake")
+        message(STATUS "MSIX strategy: legacy (use AppxManifest.xml.in)")
+    endif()
+    
     set(CPACK_GENERATOR "WIX;External")
 else()
     set(CPACK_GENERATOR "TGZ")
