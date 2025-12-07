@@ -75,7 +75,29 @@ impl WixerConfig {
         merged
     }
 
+    /// Load config from explicit path, or search for it.
+    pub fn load_from(explicit_path: Option<&Path>) -> Self {
+        // If explicit path provided, use it
+        if let Some(path) = explicit_path {
+            if let Ok(cfg) = Self::load_from_path(path) {
+                info!("Loaded configuration from {}", path.display());
+                return cfg;
+            }
+        }
+
+        Self::load()
+    }
+
     pub fn load() -> Self {
+        // Check WIXER_CONFIG environment variable first
+        if let Ok(config_path) = std::env::var("WIXER_CONFIG") {
+            let path = Path::new(&config_path);
+            if let Ok(cfg) = Self::load_from_path(path) {
+                info!("Loaded configuration from {} (WIXER_CONFIG)", path.display());
+                return cfg;
+            }
+        }
+
         // Try to find configuration file by walking up
         if let Some(path) = find_configuration_file() 
             && let Ok(cfg) = Self::load_from_path(&path) {
@@ -95,7 +117,7 @@ impl WixerConfig {
         Self::default()
     }
 
-    fn load_from_path(path: &Path) -> anyhow::Result<Self> {
+    pub fn load_from_path(path: &Path) -> anyhow::Result<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let config: WixerConfig = serde_yaml::from_reader(reader)?;

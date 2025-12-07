@@ -149,15 +149,22 @@ pub async fn run() -> Result<()> {
 }
 
 fn setup_logging(config: &WixerConfig) -> Result<()> {
+    use std::sync::Mutex;
+    
     let stderr_layer = fmt::layer()
         .with_writer(std::io::stderr)
         .with_filter(LevelFilter::INFO);
 
     if let Some(log_file) = &config.logging.file {
-        match std::fs::File::create(log_file) {
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_file)
+        {
             Ok(file) => {
+                let file = Mutex::new(file);
                 let file_layer = fmt::layer()
-                    .with_writer(file)
+                    .with_writer(move || file.lock().unwrap().try_clone().unwrap())
                     .with_ansi(false)
                     .with_filter(LevelFilter::DEBUG);
 
@@ -191,31 +198,11 @@ async fn handle_impersonation() -> Result<bool> {
         && let Some(name) = exe.file_stem()
         && name.to_string_lossy().eq_ignore_ascii_case("wix")
     {
+        // When running as wix.exe (impersonation mode), pass all commands through
+        // to the real WiX toolset via commands::build::run()
         let args: Vec<String> = std::env::args().skip(1).collect();
-        if !args.is_empty() {
-            let cmd = &args[0];
-            let wixer_cmds = [
-                "xsd-to-json",
-                "yaml-to-wix",
-                "wix-to-yaml",
-                "validate",
-                "init",
-                "import",
-                "export",
-                "describe",
-                "doc",
-                "lsp",
-                "map-schemas",
-                "migrate",
-                "upgrade",
-                "build",
-            ];
-
-            if !wixer_cmds.contains(&cmd.as_str()) {
-                run_blocking(move || commands::build::run(args)).await?;
-                return Ok(true);
-            }
-        }
+        run_blocking(move || commands::build::run(args)).await?;
+        return Ok(true);
     }
 
     Ok(false)

@@ -8,9 +8,71 @@ use crate::utils::{find_project_root, load_known_attributes};
 use crate::yaml_to_wix;
 use crate::commands::pdb;
 use anyhow::{bail, Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, warn};
+
+/// Check if two executables are the same by comparing file size.
+/// This detects infinite recursion when wixer is configured to call itself.
+fn is_same_executable(path1: &Path, path2: &Path) -> bool {
+    // First try canonical paths
+    if let (Ok(c1), Ok(c2)) = (path1.canonicalize(), path2.canonicalize()) {
+        if c1 == c2 {
+            return true;
+        }
+    }
+    
+    // Compare file sizes (fast check)
+    let meta1 = match std::fs::metadata(path1) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    let meta2 = match std::fs::metadata(path2) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    
+    if meta1.len() != meta2.len() {
+        return false;
+    }
+    
+    // If sizes match, compare file contents
+    let content1 = match std::fs::read(path1) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let content2 = match std::fs::read(path2) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    
+    content1 == content2
+}
+
+/// Resolve the wix executable path, checking WIX env var first (like Windows does)
+fn resolve_wix_path(wix_exe: &str) -> PathBuf {
+    let wix_path = PathBuf::from(wix_exe);
+    
+    // If absolute path, use it directly
+    if wix_path.is_absolute() {
+        return wix_path;
+    }
+    
+    // Check WIX environment variable first (this is what CMake/CPack uses)
+    if let Ok(wix_dir) = std::env::var("WIX") {
+        let candidate = PathBuf::from(&wix_dir).join(format!("{}.exe", wix_exe));
+        if candidate.exists() {
+            return candidate;
+        }
+        let candidate = PathBuf::from(&wix_dir).join(wix_exe);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    
+    // Fall back to PATH lookup
+    which::which(wix_exe).unwrap_or(wix_path)
+}
 
 
 pub fn run(args: Vec<String>) -> Result<()> {
@@ -34,6 +96,21 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     let build_config = config.get_build_config(profile.as_deref());
     let wix_exe = build_config.real_wix_path.unwrap_or_else(|| "wix".to_string());
+
+    // Detect infinite recursion: check if real_wix_path points to ourselves
+    if let Ok(our_exe) = std::env::current_exe() {
+        let resolved_wix = resolve_wix_path(&wix_exe);
+        
+        if is_same_executable(&our_exe, &resolved_wix) {
+            bail!(
+                "Infinite recursion detected: '{}' (resolved to '{}') points to wixer itself. \
+                Please set real_wix_path in wixer.yaml to the actual WiX toolset executable, \
+                or set the WIXER_CONFIG environment variable to point to a valid config file.",
+                wix_exe,
+                resolved_wix.display()
+            );
+        }
+    }
 
     // Check if it's actually the 'build' command
     if build_args[0] != "build" {
