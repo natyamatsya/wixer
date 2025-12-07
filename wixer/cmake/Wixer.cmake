@@ -47,12 +47,12 @@ function(wixer_add_sources)
     # Glob sources to track dependencies
     # Note: CONFIGURE_DEPENDS requires CMake 3.12+
     file(GLOB_RECURSE WIXER_SOURCES CONFIGURE_DEPENDS
-        "${ARG_INPUT_DIR}/*.wys"
-        "${ARG_INPUT_DIR}/*.wyi"
-        "${ARG_INPUT_DIR}/*.wyl"
-        "${ARG_INPUT_DIR}/*.wys.in"
-        "${ARG_INPUT_DIR}/*.wyi.in"
-        "${ARG_INPUT_DIR}/*.wyl.in"
+        "${ARG_INPUT_DIR}/*.wxs.yaml"
+        "${ARG_INPUT_DIR}/*.wxi.yaml"
+        "${ARG_INPUT_DIR}/*.wxl.yaml"
+        "${ARG_INPUT_DIR}/*.wxs.yaml.in"
+        "${ARG_INPUT_DIR}/*.wxi.yaml.in"
+        "${ARG_INPUT_DIR}/*.wxl.yaml.in"
     )
 
     add_custom_command(
@@ -74,22 +74,22 @@ function(wixer_add_sources)
         file(RELATIVE_PATH REL_PATH "${ARG_INPUT_DIR}" "${SRC}")
         
         # Determine output path by replacing extensions
-        # Note: string(REPLACE) replaces all occurrences. 
-        # We want to be specific about extensions.
+        # .wxs.yaml -> .wxs, .wxi.yaml -> .wxi, .wxl.yaml -> .wxl
+        # .wxs.yaml.in -> .wxs.in, .wxi.yaml.in -> .wxi.in, .wxl.yaml.in -> .wxl.in
         
         set(OUT_PATH "${REL_PATH}")
-        if(OUT_PATH MATCHES "\\.wys$")
-            string(REPLACE ".wys" ".wxs" OUT_PATH "${OUT_PATH}")
-        elseif(OUT_PATH MATCHES "\\.wyi$")
-            string(REPLACE ".wyi" ".wxi" OUT_PATH "${OUT_PATH}")
-        elseif(OUT_PATH MATCHES "\\.wyl$")
-            string(REPLACE ".wyl" ".wxl" OUT_PATH "${OUT_PATH}")
-        elseif(OUT_PATH MATCHES "\\.wys\\.in$")
-            string(REPLACE ".wys.in" ".wxs.in" OUT_PATH "${OUT_PATH}")
-        elseif(OUT_PATH MATCHES "\\.wyi\\.in$")
-            string(REPLACE ".wyi.in" ".wxi.in" OUT_PATH "${OUT_PATH}")
-        elseif(OUT_PATH MATCHES "\\.wyl\\.in$")
-            string(REPLACE ".wyl.in" ".wxl.in" OUT_PATH "${OUT_PATH}")
+        if(OUT_PATH MATCHES "\\.wxs\\.yaml\\.in$")
+            string(REGEX REPLACE "\\.wxs\\.yaml\\.in$" ".wxs.in" OUT_PATH "${OUT_PATH}")
+        elseif(OUT_PATH MATCHES "\\.wxi\\.yaml\\.in$")
+            string(REGEX REPLACE "\\.wxi\\.yaml\\.in$" ".wxi.in" OUT_PATH "${OUT_PATH}")
+        elseif(OUT_PATH MATCHES "\\.wxl\\.yaml\\.in$")
+            string(REGEX REPLACE "\\.wxl\\.yaml\\.in$" ".wxl.in" OUT_PATH "${OUT_PATH}")
+        elseif(OUT_PATH MATCHES "\\.wxs\\.yaml$")
+            string(REGEX REPLACE "\\.wxs\\.yaml$" ".wxs" OUT_PATH "${OUT_PATH}")
+        elseif(OUT_PATH MATCHES "\\.wxi\\.yaml$")
+            string(REGEX REPLACE "\\.wxi\\.yaml$" ".wxi" OUT_PATH "${OUT_PATH}")
+        elseif(OUT_PATH MATCHES "\\.wxl\\.yaml$")
+            string(REGEX REPLACE "\\.wxl\\.yaml$" ".wxl" OUT_PATH "${OUT_PATH}")
         endif()
         
         set(ABS_OUT_PATH "${ARG_OUTPUT_DIR}/${OUT_PATH}")
