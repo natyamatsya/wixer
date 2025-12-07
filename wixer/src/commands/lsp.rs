@@ -1,5 +1,6 @@
 use crate::constants::{
-    EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME,
+    EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WSI_YAML, EXT_WXI_YAML, EXT_WXL_YAML, EXT_WXS_YAML,
+    SCHEMA_DIR_NAME,
 };
 use crate::dirs;
 use serde_json::Value;
@@ -320,10 +321,16 @@ impl WixerLsp {
             .to_string_lossy()
             .to_string();
 
+        #[allow(clippy::if_same_then_else)]
         let extension_schema = if filename.ends_with(EXT_WIXLOC_YAML)
             || filename.ends_with(EXT_WXL_YAML)
         {
             EXT_WIXLOC
+        } else if filename.ends_with(EXT_WXS_YAML)
+            || filename.ends_with(EXT_WXI_YAML)
+            || filename.ends_with(EXT_WSI_YAML)
+        {
+            "wix"
         } else {
             "wix"
         };
