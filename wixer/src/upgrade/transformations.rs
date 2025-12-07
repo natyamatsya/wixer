@@ -326,8 +326,8 @@ pub fn standard_transformations() -> Vec<Box<dyn Transformation>> {
         Box::new(ConditionToLaunch),
         Box::new(InnerTextToCondition),
         Box::new(CustomActionTransform),
-        Box::new(DirectoryTransform),
-        Box::new(IncludeNamespace),
+        // DirectoryTransform is handled inline in pipeline (needs special closing tag handling)
+        // IncludeNamespace is handled specially in pipeline
         // ProductToPackage is handled specially in the pipeline
     ]
 }
