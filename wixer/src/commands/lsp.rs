@@ -31,13 +31,10 @@ impl WixerLsp {
     }
 
     async fn load_schemas(&self) {
-        let cache_dir = match dirs::get_cache_dir() {
-            Ok(d) => d,
-            Err(_) => {
-                 self.client.log_message(MessageType::WARNING, "Could not determine cache directory").await;
-                 return;
-            }
+        let Some(cache_dir) = self.resolve_cache_dir().await else {
+            return;
         };
+
         let schema_dir = cache_dir.join("json-schema");
         if !schema_dir.exists() {
             self.client
@@ -46,91 +43,181 @@ impl WixerLsp {
             return;
         }
 
+        let Ok(entries) = fs::read_dir(&schema_dir) else {
+            self.client
+                .log_message(MessageType::WARNING, "Failed to read schema directory")
+                .await;
+            return;
+        };
+
         let mut schemas = self.schemas.write().await;
         let mut docs = self.docs.write().await;
         let mut completions = self.completions.write().await;
         let mut symbols = self.symbols.write().await;
-        
-        if let Ok(entries) = fs::read_dir(schema_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "json")
-                    && let Ok(content) = fs::read_to_string(&path)
-                    && let Ok(json) = serde_json::from_str::<Value>(&content)
-                {
-                    // Compile schema
-                    if let Ok(compiled) = jsonschema::JSONSchema::compile(&json) {
-                        let name = path
-                            .file_stem()
-                            .unwrap()
-                            .to_string_lossy()
-                            .replace(".schema", "");
-                        schemas.insert(name, compiled);
-                    }
 
-                    // Extract documentation and completions
-                    if let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) {
-                        for (def_name, def_schema) in definitions {
-                            // Element description
-                            let desc = def_schema.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
-                            if let Some(d) = &desc {
-                                docs.insert(def_name.clone(), d.clone());
-                            }
+        for path in entries.flatten().map(|entry| entry.path()) {
+            if path.extension().is_none_or(|ext| ext != "json") {
+                continue;
+            }
 
-                            // Add element completion
-                            symbols
-                                .entry(def_name.clone())
-                                .and_modify(|info| info.update_from_schema(SchemaSymbolKind::Element, def_name, def_schema))
-                                .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Element, def_name, def_schema));
-                            completions.push(CompletionItem {
-                                label: def_name.clone(),
-                                kind: Some(CompletionItemKind::CLASS),
-                                documentation: desc.map(|d| Documentation::MarkupContent(MarkupContent {
-                                    kind: MarkupKind::Markdown,
-                                    value: d,
-                                })),
-                                ..Default::default()
-                            });
+            let Some(json) = Self::read_schema_json(&path) else {
+                continue;
+            };
 
-                            // Attribute descriptions and completions
-                            if let Some(props) = def_schema.get("properties").and_then(|p| p.as_object()) {
-                                for (prop_name, prop_schema) in props {
-                                    let prop_desc = prop_schema.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
-                                    
-                                    if let Some(d) = &prop_desc {
-                                        docs.entry(prop_name.clone()).or_insert_with(|| d.clone());
-                                    }
-
-                                    symbols
-                                        .entry(prop_name.clone())
-                                        .and_modify(|info| info.update_from_schema(SchemaSymbolKind::Attribute, prop_name, prop_schema))
-                                        .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Attribute, prop_name, prop_schema));
-                                    completions.push(CompletionItem {
-                                        label: prop_name.clone(),
-                                        kind: Some(CompletionItemKind::PROPERTY),
-                                        documentation: prop_desc.map(|d| Documentation::MarkupContent(MarkupContent {
-                                            kind: MarkupKind::Markdown,
-                                            value: d,
-                                        })),
-                                        ..Default::default()
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
+            if let Some(name) = Self::compile_schema(&json, &path, &mut schemas) {
+                Self::index_schema(&json, &mut docs, &mut completions, &mut symbols, &name);
             }
         }
-        // Dedup completions
+
         completions.sort_by(|a, b| a.label.cmp(&b.label));
         completions.dedup_by(|a, b| a.label == b.label);
 
         self.client
             .log_message(
                 MessageType::INFO,
-                format!("Loaded {} schemas and {} completions", schemas.len(), completions.len()),
+                format!(
+                    "Loaded {} schemas and {} completions",
+                    schemas.len(),
+                    completions.len()
+                ),
             )
             .await;
+    }
+
+    async fn resolve_cache_dir(&self) -> Option<PathBuf> {
+        match dirs::get_cache_dir() {
+            Ok(dir) => Some(dir),
+            Err(_) => {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        "Could not determine cache directory",
+                    )
+                    .await;
+                None
+            }
+        }
+    }
+
+    fn read_schema_json(path: &PathBuf) -> Option<Value> {
+        let content = fs::read_to_string(path).ok()?;
+        serde_json::from_str(&content).ok()
+    }
+
+    fn compile_schema(
+        json: &Value,
+        path: &PathBuf,
+        schemas: &mut HashMap<String, jsonschema::JSONSchema>,
+    ) -> Option<String> {
+        let compiled = jsonschema::JSONSchema::compile(json).ok()?;
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .replace(".schema", "");
+        schemas.insert(name.clone(), compiled);
+        Some(name)
+    }
+
+    fn index_schema(
+        json: &Value,
+        docs: &mut HashMap<String, String>,
+        completions: &mut Vec<CompletionItem>,
+        symbols: &mut HashMap<String, SchemaSymbolInfo>,
+        schema_name: &str,
+    ) {
+        let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) else {
+            return;
+        };
+
+        for (def_name, def_schema) in definitions {
+            Self::record_symbol(
+                def_name,
+                def_schema,
+                SchemaSymbolKind::Element,
+                docs,
+                completions,
+                symbols,
+            );
+
+            let Some(props) = def_schema.get("properties").and_then(|p| p.as_object()) else {
+                continue;
+            };
+
+            for (prop_name, prop_schema) in props {
+                Self::record_symbol(
+                    prop_name,
+                    prop_schema,
+                    SchemaSymbolKind::Attribute,
+                    docs,
+                    completions,
+                    symbols,
+                );
+            }
+        }
+
+        if let Some(all_of) = json
+            .get("allOf")
+            .and_then(|arr| arr.as_array())
+        {
+            for entry in all_of {
+                if let Some(ref_obj) = entry
+                    .get("$ref")
+                    .and_then(|r| r.as_str())
+                    .and_then(|r| r.strip_prefix("#/definitions/"))
+                    .and_then(|name| definitions.get(name))
+                {
+                    if let Some(props) = ref_obj.get("properties").and_then(|p| p.as_object()) {
+                        for (prop_name, prop_schema) in props {
+                            Self::record_symbol(
+                                prop_name,
+                                prop_schema,
+                                SchemaSymbolKind::Attribute,
+                                docs,
+                                completions,
+                                symbols,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn record_symbol(
+        name: &str,
+        schema: &Value,
+        kind: SchemaSymbolKind,
+        docs: &mut HashMap<String, String>,
+        completions: &mut Vec<CompletionItem>,
+        symbols: &mut HashMap<String, SchemaSymbolInfo>,
+    ) {
+        if let Some(desc) = schema.get("description").and_then(|d| d.as_str()) {
+            docs.entry(name.to_string()).or_insert_with(|| desc.to_string());
+        }
+
+        symbols
+            .entry(name.to_string())
+            .and_modify(|info| info.update_from_schema(kind, name, schema))
+            .or_insert_with(|| SchemaSymbolInfo::from_schema(kind, name, schema));
+
+        let completion_kind = match kind {
+            SchemaSymbolKind::Element => CompletionItemKind::CLASS,
+            SchemaSymbolKind::Attribute | SchemaSymbolKind::EnumValue => CompletionItemKind::PROPERTY,
+        };
+
+        completions.push(CompletionItem {
+            label: name.to_string(),
+            kind: Some(completion_kind),
+            documentation: schema
+                .get("description")
+                .and_then(|d| d.as_str())
+                .map(|d| Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: d.to_string(),
+                })),
+            ..Default::default()
+        });
     }
 
     async fn validate_document(&self, uri: Url, version: Option<i32>, text: String) {
