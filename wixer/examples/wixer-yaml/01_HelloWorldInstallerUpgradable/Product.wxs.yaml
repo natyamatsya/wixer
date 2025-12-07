@@ -1,0 +1,29 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    ProductCode: '*'
+    Language: '1033'
+    Manufacturer: Acme Corporation
+    Name: 01_HelloWorldInstallerUpgradable
+    UpgradeCode: B28B3FA8-9310-4AA7-B0CA-CBCCA5FD00B2
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MajorUpgrade:
+      DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: 01_HelloWorldInstallerUpgradable
+        Component:
+          Id: ProductComponent
+          File:
+            KeyPath: yes
+            Source: FileToInstall.txt
+    Feature:
+      Id: HelloWorldFeature
+      ComponentRef:
+        Id: ProductComponent

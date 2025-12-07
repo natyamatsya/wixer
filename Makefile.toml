@@ -122,55 +122,48 @@ args = ["--workflow", "--preset", "wixer-rel-pkg"]
 # Gallery Tasks
 # =============================================================================
 #
-# The gallery uses wixer.example.yaml config files in each example directory
-# to define build settings (defines, extensions, requirements).
+# Gallery structure:
+#   wixer/examples/WiXInstallerExamples/  - Git submodule (read-only source)
+#   wixer/examples/configs/               - Build configs for each example
+#   wixer/examples/wixer-yaml/            - Curated YAML gallery (tracked in git)
+#   wixer/examples/gallery/wix-v4/        - Generated v4 XML (gitignored)
+#   wixer/examples/gallery/msi/           - Built MSI packages (gitignored)
 #
-# Config schema:
-#   name: string           - Display name
-#   description: string    - What the example demonstrates
-#   defines: map           - Preprocessor variables (-d flags)
-#   extensions: list       - WiX extensions (-ext flags)
-#   sources: list          - Source files (auto-detected if not specified)
-#   requires: list         - External dependencies (path, description)
-#   buildable: bool        - Whether the example can be built standalone
-#   skip_reason: string    - Why the example is not buildable
+# Workflow:
+#   cargo make gallery          - Regenerate wix-v4/ from submodule
+#   cargo make gallery-build    - Build MSI from curated wixer-yaml/
+#   cargo make gallery-refresh  - Update wixer-yaml/ from wix-v4/ (manual review)
 #
 
 [tasks.gallery]
-description = "Upgrade and convert example gallery (no build)"
+description = "Regenerate wix-v4/ from submodule (does not modify curated yaml)"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--clean"]
-
-[tasks.gallery-quick]
-description = "Rebuild gallery without cleaning"
-dependencies = ["build-release"]
-command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs"]
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--clean"]
 
 [tasks.gallery-build]
-description = "Build all gallery examples (uses config files from configs/)"
+description = "Build MSI packages from curated wixer-yaml/ gallery"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--build", "--clean"]
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--build", "--clean"]
 
-[tasks.gallery-build-quick]
-description = "Build gallery examples without re-upgrading"
+[tasks.gallery-refresh]
+description = "Refresh curated wixer-yaml/ from upgraded v4 files (review changes!)"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--build"]
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--refresh", "--clean"]
 
 [tasks.gallery-build-example]
-description = "Build a specific gallery example (e.g., cargo make gallery-build-example 00)"
+description = "Build a specific example (e.g., cargo make gallery-build-example 00)"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--build", "--only", "${@}"]
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--build", "--only", "${@}"]
 
 [tasks.gallery-verbose]
 description = "Build gallery with verbose output"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--build", "--clean", "--verbose"]
+args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--build", "--clean", "--verbose"]
 
 # =============================================================================
 # Convenience Aliases

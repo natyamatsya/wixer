@@ -24,5 +24,9 @@ build/
 #.idea/
 **/.wixer
 
-# Generated gallery (rebuild with wixer-gallery)
-wixer/examples/gallery/
+# Generated gallery outputs (rebuild with cargo make gallery)
+wixer/examples/gallery/wix-v4/
+wixer/examples/gallery/msi/
+
+# wixer-yaml/ is the curated gallery - tracked in git
+# !wixer/examples/wixer-yaml/

@@ -1,0 +1,26 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    ProductCode: DD475EBC-D960-4AF4-BB8A-BE91FA942756
+    Language: '1033'
+    Manufacturer: Acme Corporation
+    Name: Hello World
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: Hello World Installation Folder
+        Component:
+          Id: ProductComponent
+          File:
+            KeyPath: yes
+            Source: FileToInstall.txt
+    Feature:
+      Id: HelloWorldFeature
+      ComponentRef:
+        Id: ProductComponent

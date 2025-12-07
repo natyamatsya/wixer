@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net6.0-windows</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    
+    <!-- Self-contained deployment - target machine may not have .NET runtime -->
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
+    <PublishSingleFile>false</PublishSingleFile>
+    
+    <!-- Trim unused code to reduce size -->
+    <PublishTrimmed>false</PublishTrimmed>
+    
+    <!-- Assembly info -->
+    <AssemblyName>MyCSharpCustomAction</AssemblyName>
+    <RootNamespace>MyCSharpCustomAction</RootNamespace>
+    <Description>Modern C# Custom Action for WiX installers</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WiX DTF - netstandard2.0 compatible with both .NET 6 and .NET 8 -->
+    <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>

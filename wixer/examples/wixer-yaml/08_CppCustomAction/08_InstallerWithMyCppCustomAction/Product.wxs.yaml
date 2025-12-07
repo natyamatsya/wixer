@@ -1,0 +1,71 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    ProductCode: '*'
+    Language: '1033'
+    Manufacturer: Acme Corporation
+    Name: 08_InstallerWithMyCppCustomAction
+    UpgradeCode: '{8A5DA406-D100-4BBA-94B6-3E1616233314}'
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MajorUpgrade:
+      DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
+    MediaTemplate:
+      EmbedCab: yes
+    Property:
+      Id: MY_PROPERTY
+      Value: default value
+    Binary:
+      Id: CustomActions
+      SourceFile: $(var.08_MyCppCustomAction.TargetDir)$(var.08_MyCppCustomAction.TargetName).dll
+    CustomAction:
+    - Id: MyCustomActionForReadingPropertyImmediate
+      BinaryRef: CustomActions
+      Execute: immediate
+      DllEntry: MyImmediateCustomAction
+    - Id: MyCustomActionForReadingPropertyDeferred
+      BinaryRef: CustomActions
+      Execute: deferred
+      DllEntry: MyDeferredCustomAction
+    - Id: My_Type_51_CA_For_Setting_CustomActionData
+      Return: check
+      Property: MyCustomActionForReadingPropertyDeferred
+      Value: MY_PROPERTY=[MY_PROPERTY];MY_INSTALL_LOCATION=[MY_INSTALL_LOCATION]
+    InstallExecuteSequence:
+      Custom:
+      - Action: My_Type_51_CA_For_Setting_CustomActionData
+        Before: InstallInitialize
+      - Action: MyCustomActionForReadingPropertyImmediate
+        Before: InstallFinalize
+        Condition: NOT Installed AND NOT WIX_UPGRADE_DETECTED
+      - Action: MyCustomActionForReadingPropertyDeferred
+        Before: InstallFinalize
+        Condition: NOT Installed AND NOT WIX_UPGRADE_DETECTED
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: MY_INSTALL_LOCATION
+        Name: 08_InstallerWithMyCppCustomAction
+    ComponentGroup:
+      Directory: MY_INSTALL_LOCATION
+      Id: ProductComponentGroup
+      Component:
+      - Id: ProductComponent
+        File:
+          KeyPath: yes
+          Source: FileToInstall.txt
+      - Id: cmp_RegistryEntry
+        Guid: '*'
+        RegistryKey:
+          Root: HKLM
+          Key: Software\[Manufacturer]\[ProductName]
+          RegistryValue:
+            KeyPath: yes
+            Type: string
+            Name: My property
+            Value: '[MY_PROPERTY]'
+    Feature:
+      Id: HelloWorldFeature
+      ComponentGroupRef:
+        Id: ProductComponentGroup

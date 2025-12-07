@@ -1,12 +1,9 @@
 name: "07_CSharpCustomAction"
-description: "Custom action implemented in C# using WiX DTF (Deployment Tools Foundation)"
-
-defines:
-  07_MyCSharpCustomAction.TargetDir: "$(ProjectDir)..\\07_MyCSharpCustomAction\\bin\\Release\\net472\\"
+description: "Modern C# custom action example targeting .NET 6 and .NET 8"
 
 buildable: false
-skip_reason: "Requires building the C# custom action project first"
+skip_reason: "Requires building the C# project first (dotnet publish)"
 
 requires:
-  - path: "../07_MyCSharpCustomAction/bin/Release/net472/07_MyCSharpCustomAction.CA.dll"
-    description: "C# custom action DLL (build 07_MyCSharpCustomAction project)"
+  - path: "MyCSharpCustomAction/bin/x64/Release/net6.0-windows/win-x64/publish/MyCSharpCustomAction.dll"
+    description: "Published C# custom action DLL"

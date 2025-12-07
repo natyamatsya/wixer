@@ -6,35 +6,43 @@ This directory contains the WiX example gallery, demonstrating WiX v3 to v4 upgr
 
 ```
 examples/
-├── WiXInstallerExamples/    # Git submodule with original WiX v3 examples
+├── WiXInstallerExamples/    # Git submodule with original WiX v3 examples (read-only)
 ├── configs/                  # Build configuration for each example
 │   ├── 00_HelloWorldInstaller.yaml
 │   ├── 01_HelloWorldInstallerUpgradable.yaml
 │   └── ...
+├── wixer-yaml/              # ★ CURATED YAML GALLERY (tracked in git)
+│   ├── 00_HelloWorldInstaller/
+│   ├── ...
+│   └── 07_CSharpCustomAction/  # Modernized with .NET 6/8
 └── gallery/                  # Generated output (gitignored)
-    ├── wix-v4/              # Upgraded WiX v4 XML files
-    ├── wixer-yaml/          # Converted YAML files
+    ├── wix-v4/              # Upgraded WiX v4 XML (regenerated from submodule)
     └── msi/                 # Built MSI packages
 ```
+
+- **`wixer-yaml/`** is the curated gallery (tracked in git) - edit examples here
+- **`gallery/wix-v4/`** is regenerated from submodule (gitignored) - use `--refresh` to update `wixer-yaml/`
 
 ## Quick Start
 
 ```bash
-# Build the gallery (upgrade, convert, and build MSI packages)
+# Build MSI packages from the curated YAML gallery
 cargo make gallery-build
 
-# Or step by step:
-cargo make gallery          # Upgrade and convert only
-cargo make gallery-build    # Full build with MSI output
+# Just regenerate wix-v4/ from submodule (no build)
+cargo make gallery
+
+# Refresh wixer-yaml/ from upgraded v4 files (for maintainers)
+cargo make gallery-refresh
 ```
 
 ## Gallery Commands
 
 | Command | Description |
 |---------|-------------|
-| `cargo make gallery` | Upgrade v3→v4 and convert to YAML (no build) |
-| `cargo make gallery-build` | Full build: upgrade, convert, and build MSI |
-| `cargo make gallery-build-quick` | Build without re-upgrading |
+| `cargo make gallery` | Regenerate `wix-v4/` from submodule |
+| `cargo make gallery-build` | Build MSI from curated `wixer-yaml/` |
+| `cargo make gallery-refresh` | Update `wixer-yaml/` from `wix-v4/` (review changes!) |
 | `cargo make gallery-build-example 00` | Build a specific example |
 | `cargo make gallery-verbose` | Build with verbose output |
 
@@ -140,6 +148,16 @@ Contains built MSI packages for examples that completed successfully.
 | 10_ASP.NET_Core6_WeatherForecastInstaller | ⊘ | Requires ASP.NET app |
 
 **Legend:** ✓ = builds, ⊘ = skipped (external dependency)
+
+## Modernized Examples
+
+Some examples have been modernized from the original submodule:
+
+| Example | Changes |
+|---------|---------|
+| [07_CSharpCustomAction](wixer-yaml/07_CSharpCustomAction/) | Upgraded to .NET 6/8 (from .NET Framework 4.7.2) |
+
+These include source code (e.g., C# projects) alongside the WiX YAML files.
 
 ## Adding New Examples
 

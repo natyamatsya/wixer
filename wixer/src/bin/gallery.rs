@@ -22,17 +22,21 @@ use wixer::example_config::ExampleConfig;
 #[command(name = "wixer-gallery")]
 #[command(about = "Build the wixer example gallery from WiXInstallerExamples")]
 struct Args {
-    /// Source directory containing WiX v3 examples
+    /// Source directory containing WiX v3 examples (submodule)
     #[arg(short, long, default_value = "examples/WiXInstallerExamples")]
     source: PathBuf,
 
-    /// Output directory for the gallery
+    /// Output directory for generated files (wix-v4/, msi/)
     #[arg(short, long, default_value = "examples/gallery")]
     output: PathBuf,
 
     /// Directory containing example config files (*.yaml)
     #[arg(short, long, default_value = "examples/configs")]
     configs: PathBuf,
+
+    /// Curated YAML gallery directory (tracked in git)
+    #[arg(long, default_value = "examples/wixer-yaml")]
+    yaml_gallery: PathBuf,
 
     /// Clean output directories before building
     #[arg(long)]
@@ -46,9 +50,13 @@ struct Args {
     #[arg(long)]
     no_yaml: bool,
 
-    /// Build MSI packages from the converted YAML examples
+    /// Build MSI packages from the curated YAML gallery
     #[arg(short, long)]
     build: bool,
+
+    /// Refresh curated YAML gallery from upgraded v4 files
+    #[arg(long)]
+    refresh: bool,
 
     /// Path to wixer executable (for --build)
     #[arg(long, default_value = "wixer")]
@@ -85,6 +93,12 @@ fn main() -> Result<()> {
         std::env::current_dir()?.join(&args.output)
     };
 
+    let yaml_gallery = if args.yaml_gallery.is_absolute() {
+        args.yaml_gallery.clone()
+    } else {
+        std::env::current_dir()?.join(&args.yaml_gallery)
+    };
+
     if !source.exists() {
         anyhow::bail!(
             "Source directory not found: {}\nRun from the wixer root or specify --source",
@@ -92,23 +106,20 @@ fn main() -> Result<()> {
         );
     }
 
+    // wix-v4/ is always regenerated from submodule (ephemeral)
     let v4_dir = output.join("wix-v4");
-    let yaml_dir = output.join("wixer-yaml");
+    // wixer-yaml/ is the curated gallery (tracked in git)
+    // We only write to it with --refresh
 
-    // Clean if requested
+    // Clean v4 output if requested (never clean curated yaml gallery automatically)
     if args.clean {
         if v4_dir.exists() {
             println!("Cleaning {}", v4_dir.display());
             fs::remove_dir_all(&v4_dir)?;
         }
-        if yaml_dir.exists() {
-            println!("Cleaning {}", yaml_dir.display());
-            fs::remove_dir_all(&yaml_dir)?;
-        }
     }
 
     fs::create_dir_all(&v4_dir)?;
-    fs::create_dir_all(&yaml_dir)?;
 
     // Parse filter
     let filter: Option<Vec<String>> = args.only.map(|s| {
@@ -128,17 +139,14 @@ fn main() -> Result<()> {
     for example in &examples {
         println!("Processing: {}", example.name);
 
-        // Create output directories
+        // Create v4 output directory
         let v4_example_dir = v4_dir.join(&example.name);
-        let yaml_example_dir = yaml_dir.join(&example.name);
         fs::create_dir_all(&v4_example_dir)?;
-        fs::create_dir_all(&yaml_example_dir)?;
 
-        // Copy non-WiX files (README, scripts, etc.)
+        // Copy non-WiX files (README, scripts, etc.) to v4 dir
         copy_supporting_files(&example.path, &v4_example_dir)?;
-        copy_supporting_files(&example.path, &yaml_example_dir)?;
 
-        // Process each .wxs file
+        // Process each .wxs file - upgrade v3 → v4
         for wxs_file in &example.wxs_files {
             let relative = wxs_file.strip_prefix(&example.path).unwrap_or(wxs_file);
             let v4_output = v4_example_dir.join(relative);
@@ -163,13 +171,17 @@ fn main() -> Result<()> {
             }
         }
 
-        // Convert v4 XML → YAML
-        if !args.no_yaml {
+        // Refresh curated YAML gallery if requested
+        if args.refresh {
+            let yaml_example_dir = yaml_gallery.join(&example.name);
+            fs::create_dir_all(&yaml_example_dir)?;
+            copy_supporting_files(&example.path, &yaml_example_dir)?;
+            
             match import::run(&v4_example_dir, &yaml_example_dir, AttributeStrategy::Inline) {
                 Ok(()) => {
                     stats.converted += 1;
                     if args.verbose {
-                        println!("  ✓ Converted to YAML");
+                        println!("  ✓ Refreshed YAML gallery");
                     }
                 }
                 Err(e) => {
@@ -183,26 +195,26 @@ fn main() -> Result<()> {
     }
 
     // Print summary
-    println!("=== Gallery Build Complete ===");
+    println!("=== Gallery Upgrade Complete ===");
     println!("Examples processed: {}", examples.len());
     println!("Files upgraded:     {} ({} errors)", stats.upgraded, stats.upgrade_errors);
-    if !args.no_yaml {
-        println!("Examples converted: {} ({} errors)", stats.converted, stats.convert_errors);
+    if args.refresh {
+        println!("YAML refreshed:     {} ({} errors)", stats.converted, stats.convert_errors);
     }
     println!();
     println!("Output:");
     println!("  v4:   {}", v4_dir.display());
-    if !args.no_yaml {
-        println!("  yaml: {}", yaml_dir.display());
+    if args.refresh {
+        println!("  yaml: {}", yaml_gallery.display());
     }
 
     // Generate index
     generate_index(&output, &examples)?;
 
-    // Build MSI packages if requested
-    if args.build && !args.no_yaml {
+    // Build MSI packages if requested (from curated YAML gallery)
+    if args.build {
         println!();
-        println!("=== Building MSI Packages ===");
+        println!("=== Building MSI Packages (from curated gallery) ===");
         
         let msi_dir = output.join("msi");
         fs::create_dir_all(&msi_dir)?;
@@ -228,8 +240,8 @@ fn main() -> Result<()> {
                 }
             }
             
-            // Find Product.wxs.yaml in the yaml output, or Product.wxs in v4 output
-            let yaml_example_dir = yaml_dir.join(&example.name);
+            // Build from curated wixer-yaml/ gallery
+            let yaml_example_dir = yaml_gallery.join(&example.name);
             let v4_example_dir = v4_dir.join(&example.name);
             let product_yaml = find_product_yaml(&yaml_example_dir);
             
