@@ -213,15 +213,51 @@ fn find_range(text: &str, instance_path: &str) -> Range {
     let target_key = segments.iter().rev().find(|s| s.parse::<usize>().is_err());
 
     if let Some(key) = target_key {
-        // Simple heuristic: find the first occurrence of "Key:"
-        // TODO: Improve this by parsing indentation or path tracking
-        let pattern = format!("{}:", key);
-        if let Some((line_idx, line)) = text.lines().enumerate().find(|(_, l)| l.contains(&pattern)) {
-            let col_idx = line.find(&pattern).unwrap_or(0);
-            return Range {
-                start: Position::new(line_idx as u32, col_idx as u32),
-                end: Position::new(line_idx as u32, (col_idx + pattern.len()) as u32),
-            };
+        let non_numeric: Vec<&str> = segments
+            .iter()
+            .filter(|s| s.parse::<usize>().is_err())
+            .cloned()
+            .collect();
+        let expected_depth = non_numeric.len().saturating_sub(1);
+
+        for (line_idx, line) in text.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            let indent = line.len().saturating_sub(trimmed.len());
+            let indent_depth = indent / 2; // assume 2-space indentation
+
+            if indent_depth > expected_depth + 1 {
+                continue;
+            }
+
+            if trimmed.starts_with('-') {
+                let after_dash = trimmed.trim_start_matches('-').trim_start();
+                if after_dash.starts_with(*key) {
+                    let remainder = &after_dash[key.len()..];
+                    if remainder.starts_with(':') || remainder.starts_with(' ') {
+                        if let Some(col_idx) = line.find(*key) {
+                            return Range {
+                                start: Position::new(line_idx as u32, col_idx as u32),
+                                end: Position::new(line_idx as u32, (col_idx + key.len()) as u32),
+                            };
+                        }
+                    }
+                }
+            } else if trimmed.starts_with(*key) {
+                let remainder = &trimmed[key.len()..];
+                if remainder.starts_with(':') || remainder.starts_with(' ') {
+                    if indent_depth >= expected_depth.saturating_sub(1) {
+                        let col_idx = line.find(*key).unwrap_or(0);
+                        return Range {
+                            start: Position::new(line_idx as u32, col_idx as u32),
+                            end: Position::new(line_idx as u32, (col_idx + key.len()) as u32),
+                        };
+                    }
+                }
+            }
         }
     }
 
