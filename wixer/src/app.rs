@@ -21,7 +21,7 @@ pub async fn run() -> Result<()> {
     let config = WixerConfig::load();
     setup_logging(&config)?;
 
-    if handle_impersonation()? {
+    if handle_impersonation().await? {
         return Ok(());
     }
 
@@ -171,7 +171,7 @@ fn setup_logging(config: &WixerConfig) -> Result<()> {
     Ok(())
 }
 
-fn handle_impersonation() -> Result<bool> {
+async fn handle_impersonation() -> Result<bool> {
     if let Ok(exe) = std::env::current_exe()
         && let Some(name) = exe.file_stem()
         && name.to_string_lossy().eq_ignore_ascii_case("wix")
@@ -197,7 +197,7 @@ fn handle_impersonation() -> Result<bool> {
             ];
 
             if !wixer_cmds.contains(&cmd.as_str()) {
-                commands::build::run(args)?;
+                run_blocking(move || commands::build::run(args)).await?;
                 return Ok(true);
             }
         }
