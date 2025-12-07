@@ -58,25 +58,8 @@ pub fn known_attributes_candidates(explicit: Option<&Path>) -> Vec<PathBuf> {
         candidates.push(path.to_path_buf());
     }
 
-    candidates.push(PathBuf::from("json-schema/known_attributes.json"));
-    candidates.push(PathBuf::from("json-schemas/known_attributes.json"));
-
     if let Ok(cache_dir) = dirs::get_cache_dir() {
-        candidates.push(
-            cache_dir
-                .join("json-schema")
-                .join("known_attributes.json"),
-        );
-    }
-
-    if let Ok(root) = find_project_root() {
-        candidates.push(
-            root
-                .join(".wixer")
-                .join("cache")
-                .join("json-schema")
-                .join("known_attributes.json"),
-        );
+        candidates.push(cache_dir.join("known_attributes.json"));
     }
 
     candidates

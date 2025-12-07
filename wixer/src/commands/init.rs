@@ -55,7 +55,7 @@ pub async fn run(fresh: bool) -> Result<()> {
     // Save known attributes
     if !all_attributes.is_empty() {
         let sorted_attributes: BTreeSet<_> = all_attributes.into_iter().collect();
-        let attr_file = json_schema_dir.join("known_attributes.json");
+        let attr_file = cache_base.join("known_attributes.json");
         let file = File::create(&attr_file)
             .with_context(|| format!("Failed to create {}", attr_file.display()))?;
         let writer = BufWriter::new(file);
