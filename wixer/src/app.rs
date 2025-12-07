@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use clap::{Parser, Subcommand};
-use serde_json;
 use tokio::task::spawn_blocking;
 use tracing::{error, info};
 use tracing_subscriber::filter::LevelFilter;
@@ -14,8 +13,14 @@ use tracing_subscriber::{fmt, prelude::*, util::SubscriberInitExt};
 use crate::commands;
 use crate::common::AttributeStrategy;
 use crate::config::WixerConfig;
-use crate::utils::{find_project_root, load_known_attributes};
+use crate::utils::load_known_attributes;
 use crate::{validate, wix_to_yaml, xsd_to_json, yaml_to_wix};
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
 
 pub async fn run() -> Result<()> {
     let config = WixerConfig::load();
@@ -39,7 +44,7 @@ pub async fn run() -> Result<()> {
             strict,
             root_element,
         } => {
-            handle_xsd_to_json(
+            handle_xsd_to_json(XsdToJsonArgs {
                 input,
                 output,
                 download_wix,
@@ -49,7 +54,7 @@ pub async fn run() -> Result<()> {
                 no_descriptions,
                 strict,
                 root_element,
-            )
+            })
             .await?;
         }
         Commands::YamlToWix {
@@ -147,8 +152,6 @@ fn setup_logging(config: &WixerConfig) -> Result<()> {
         .with_writer(std::io::stderr)
         .with_filter(LevelFilter::INFO);
 
-    let mut subscriber = tracing_subscriber::registry().with(stderr_layer);
-
     if let Some(log_file) = &config.logging.file {
         match std::fs::File::create(log_file) {
             Ok(file) => {
@@ -156,17 +159,28 @@ fn setup_logging(config: &WixerConfig) -> Result<()> {
                     .with_writer(file)
                     .with_ansi(false)
                     .with_filter(LevelFilter::DEBUG);
-                subscriber = subscriber.with(file_layer);
+
+                tracing_subscriber::registry()
+                    .with(stderr_layer)
+                    .with(file_layer)
+                    .try_init()
+                    .map_err(|e| anyhow!("Failed to initialize logging: {e}"))?;
             }
             Err(err) => {
                 eprintln!("Failed to create log file {}: {}", log_file, err);
+
+                tracing_subscriber::registry()
+                    .with(fmt::layer().with_writer(std::io::stderr).with_filter(LevelFilter::INFO))
+                    .try_init()
+                    .map_err(|e| anyhow!("Failed to initialize logging: {e}"))?;
             }
         }
+    } else {
+        tracing_subscriber::registry()
+            .with(stderr_layer)
+            .try_init()
+            .map_err(|e| anyhow!("Failed to initialize logging: {e}"))?;
     }
-
-    subscriber
-        .try_init()
-        .map_err(|e| anyhow!("Failed to initialize logging: {e}"))?;
 
     Ok(())
 }
@@ -206,7 +220,7 @@ async fn handle_impersonation() -> Result<bool> {
     Ok(false)
 }
 
-async fn handle_xsd_to_json(
+struct XsdToJsonArgs {
     input: Option<String>,
     output: Option<String>,
     download_wix: bool,
@@ -216,7 +230,20 @@ async fn handle_xsd_to_json(
     no_descriptions: bool,
     strict: bool,
     root_element: Option<String>,
-) -> Result<()> {
+}
+
+async fn handle_xsd_to_json(args: XsdToJsonArgs) -> Result<()> {
+    let XsdToJsonArgs {
+        input,
+        output,
+        download_wix,
+        schema_dir,
+        output_dir,
+        attribute_strategy,
+        no_descriptions,
+        strict,
+        root_element,
+    } = args;
     ensure!(
         download_wix || input.is_some(),
         "Either --input or --download-wix is required"
@@ -309,8 +336,7 @@ fn handle_wix_to_yaml(
 ) -> Result<()> {
     let known_attributes = HashSet::new();
     wix_to_yaml::convert_file(&input, &output, attribute_strategy, &known_attributes)
-        .context("Error converting WiX to YAML")?
-        .into();
+        .context("Error converting WiX to YAML")?;
     Ok(())
 }
 
@@ -338,12 +364,12 @@ where
     F: FnOnce() -> Result<T> + Send + 'static,
     T: Send + 'static,
 {
-    spawn_blocking(move || f())
+    spawn_blocking(f)
         .await
         .map_err(|e| anyhow!("Blocking task failed: {e}"))?
 }
 
-#[derive(Parser)]
+#[derive(Subcommand)]
 enum Commands {
     /// Convert XSD schemas to JSON Schema
     XsdToJson {

@@ -2,11 +2,9 @@ use crate::common::AttributeStrategy;
 use crate::utils::load_known_attributes;
 use crate::yaml_to_wix;
 use anyhow::{Context, Result};
-use std::collections::HashSet;
-use std::fs::{self, File};
-use std::io::BufReader;
+use std::fs;
 use std::path::Path;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use walkdir::WalkDir;
 
 pub fn run(
@@ -23,8 +21,8 @@ pub fn run(
     fs::create_dir_all(output_dir)?;
 
     // Load known attributes
-    let mut known_attributes = load_known_attributes(None, attribute_strategy == AttributeStrategy::Inline)
-        .unwrap_or_else(|_| HashSet::new());
+    let known_attributes =
+        load_known_attributes(None, attribute_strategy == AttributeStrategy::Inline);
 
     let mut count = 0;
     let mut errors = 0;

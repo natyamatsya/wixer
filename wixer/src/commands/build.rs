@@ -1,17 +1,13 @@
 use crate::common::AttributeStrategy;
 use crate::utils::{find_project_root, load_known_attributes};
-use crate::dirs;
 use crate::yaml_to_wix;
 use crate::config::WixerConfig;
 use crate::commands::pdb;
 use anyhow::{bail, Context, Result};
 use serde_yaml::Value;
-use std::collections::HashSet;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::PathBuf;
 use std::process::Command;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 const WIX_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs";
 
@@ -71,7 +67,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     // Load known attributes
-    let mut known_attributes = load_known_attributes(None, true);
+    let known_attributes = load_known_attributes(None, true);
 
     let mut new_args = Vec::new();
     new_args.push("build".to_string());

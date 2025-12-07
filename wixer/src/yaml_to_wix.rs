@@ -181,19 +181,18 @@ fn convert_element(
             }
 
             // Separate strategy handling
-            if strategy == AttributeStrategy::Separate {
-                if let Some(attrs) = map.get("attributes")
-                    && let Value::Mapping(attr_map) = attrs
-                {
-                    for (k, v) in attr_map {
-                        let key = k.as_str().unwrap_or_default();
-                        if let Value::String(s) = v {
-                            elem.push_attribute((key, s.as_str()));
-                        } else if let Value::Number(n) = v {
-                            elem.push_attribute((key, n.to_string().as_str()));
-                        } else if let Value::Bool(b) = v {
-                            elem.push_attribute((key, if *b { "yes" } else { "no" }));
-                        }
+            if strategy == AttributeStrategy::Separate
+                && let Some(attrs) = map.get("attributes")
+                && let Value::Mapping(attr_map) = attrs
+            {
+                for (k, v) in attr_map {
+                    let key = k.as_str().unwrap_or_default();
+                    if let Value::String(s) = v {
+                        elem.push_attribute((key, s.as_str()));
+                    } else if let Value::Number(n) = v {
+                        elem.push_attribute((key, n.to_string().as_str()));
+                    } else if let Value::Bool(b) = v {
+                        elem.push_attribute((key, if *b { "yes" } else { "no" }));
                     }
                 }
             }

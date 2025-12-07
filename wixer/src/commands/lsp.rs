@@ -2,7 +2,7 @@ use crate::dirs;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
@@ -16,6 +16,85 @@ pub struct WixerLsp {
     completions: Arc<RwLock<Vec<CompletionItem>>>,
     symbols: Arc<RwLock<HashMap<String, SchemaSymbolInfo>>>,
     documents: Arc<RwLock<HashMap<Url, String>>>,
+}
+
+#[derive(Clone, Copy)]
+enum SchemaSymbolKind {
+    Element,
+    Attribute,
+    #[allow(dead_code)]
+    EnumValue,
+}
+
+#[derive(Clone)]
+struct SchemaSymbolInfo {
+    kind: SchemaSymbolKind,
+    value_kind: Option<SchemaValueType>,
+    enum_values: Option<HashSet<String>>,
+    deprecated: bool,
+    is_id: bool,
+}
+
+#[derive(Clone, Copy)]
+enum SchemaValueType {
+    Boolean,
+    Number,
+    Integer,
+}
+
+impl SchemaSymbolInfo {
+    fn from_schema(kind: SchemaSymbolKind, name: &str, schema: &Value) -> Self {
+        let mut info = SchemaSymbolInfo {
+            kind,
+            value_kind: None,
+            enum_values: None,
+            deprecated: false,
+            is_id: false,
+        };
+        info.update_from_schema(kind, name, schema);
+        info
+    }
+
+    fn update_from_schema(&mut self, kind: SchemaSymbolKind, name: &str, schema: &Value) {
+        self.kind = kind;
+
+        if let Some(enum_values) = schema.get("enum").and_then(|e| e.as_array()) {
+            let mut set = self.enum_values.take().unwrap_or_default();
+            for value in enum_values {
+                match value {
+                    Value::String(s) => {
+                        set.insert(s.clone());
+                    }
+                    Value::Number(n) => {
+                        set.insert(n.to_string());
+                    }
+                    Value::Bool(b) => {
+                        set.insert(b.to_string());
+                    }
+                    _ => {}
+                }
+            }
+            if !set.is_empty() {
+                self.enum_values = Some(set);
+            }
+        }
+
+        if let Some(value_type) = determine_value_type(schema) {
+            self.value_kind = Some(value_type);
+        }
+
+        if schema
+            .get("deprecated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            self.deprecated = true;
+        }
+
+        if schema_indicates_id(name, schema) {
+            self.is_id = true;
+        }
+    }
 }
 
 impl WixerLsp {
@@ -55,8 +134,9 @@ impl WixerLsp {
         let mut completions = self.completions.write().await;
         let mut symbols = self.symbols.write().await;
 
-        for path in entries.flatten().map(|entry| entry.path()) {
-            if path.extension().is_none_or(|ext| ext != "json") {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
                 continue;
             }
 
@@ -64,9 +144,11 @@ impl WixerLsp {
                 continue;
             };
 
-            if let Some(name) = Self::compile_schema(&json, &path, &mut schemas) {
-                Self::index_schema(&json, &mut docs, &mut completions, &mut symbols, &name);
+            if !Self::compile_schema(&json, &path, &mut schemas) {
+                continue;
             }
+
+            Self::index_schema(&json, &mut docs, &mut completions, &mut symbols);
         }
 
         completions.sort_by(|a, b| a.label.cmp(&b.label));
@@ -99,24 +181,28 @@ impl WixerLsp {
         }
     }
 
-    fn read_schema_json(path: &PathBuf) -> Option<Value> {
+    fn read_schema_json(path: &Path) -> Option<Value> {
         let content = fs::read_to_string(path).ok()?;
         serde_json::from_str(&content).ok()
     }
 
     fn compile_schema(
         json: &Value,
-        path: &PathBuf,
+        path: &Path,
         schemas: &mut HashMap<String, jsonschema::JSONSchema>,
-    ) -> Option<String> {
-        let compiled = jsonschema::JSONSchema::compile(json).ok()?;
-        let name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default()
-            .replace(".schema", "");
-        schemas.insert(name.clone(), compiled);
-        Some(name)
+    ) -> bool {
+        let compiled = match jsonschema::JSONSchema::compile(json) {
+            Ok(compiled) => compiled,
+            Err(_) => return false,
+        };
+
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            return false;
+        };
+
+        let name = stem.replace(".schema", "");
+        schemas.insert(name, compiled);
+        true
     }
 
     fn index_schema(
@@ -124,7 +210,6 @@ impl WixerLsp {
         docs: &mut HashMap<String, String>,
         completions: &mut Vec<CompletionItem>,
         symbols: &mut HashMap<String, SchemaSymbolInfo>,
-        schema_name: &str,
     ) {
         let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) else {
             return;
@@ -156,28 +241,30 @@ impl WixerLsp {
             }
         }
 
-        if let Some(all_of) = json
-            .get("allOf")
-            .and_then(|arr| arr.as_array())
-        {
+        if let Some(all_of) = json.get("allOf").and_then(|arr| arr.as_array()) {
             for entry in all_of {
-                if let Some(ref_obj) = entry
+                let Some(ref_name) = entry
                     .get("$ref")
                     .and_then(|r| r.as_str())
                     .and_then(|r| r.strip_prefix("#/definitions/"))
-                    .and_then(|name| definitions.get(name))
-                {
-                    if let Some(props) = ref_obj.get("properties").and_then(|p| p.as_object()) {
-                        for (prop_name, prop_schema) in props {
-                            Self::record_symbol(
-                                prop_name,
-                                prop_schema,
-                                SchemaSymbolKind::Attribute,
-                                docs,
-                                completions,
-                                symbols,
-                            );
-                        }
+                else {
+                    continue;
+                };
+
+                let Some(ref_schema) = definitions.get(ref_name) else {
+                    continue;
+                };
+
+                if let Some(props) = ref_schema.get("properties").and_then(|p| p.as_object()) {
+                    for (prop_name, prop_schema) in props {
+                        Self::record_symbol(
+                            prop_name,
+                            prop_schema,
+                            SchemaSymbolKind::Attribute,
+                            docs,
+                            completions,
+                            symbols,
+                        );
                     }
                 }
             }
@@ -222,82 +309,110 @@ impl WixerLsp {
 
     async fn validate_document(&self, uri: Url, version: Option<i32>, text: String) {
         let schemas = self.schemas.read().await;
-        
-        let path = PathBuf::from(uri.path());
-        let filename = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-        // Schema selection strategy:
-        // 1. Exact match by filename
-        // 2. Match by extension
-        // 3. Default to "wix"
+        let path = PathBuf::from(uri.path());
+        let filename = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         let extension_schema = match ext {
             "wyl" => "wixloc",
             _ => "wix",
         };
 
-        let schema = schemas.get(&filename)
+        let schema = schemas
+            .get(&filename)
             .or_else(|| schemas.get(extension_schema))
             .or_else(|| schemas.get("wix"));
 
-        if let Some(schema) = schema {
-            let diagnostics = match serde_yaml::from_str::<serde_yaml::Value>(&text) {
-                Ok(yaml_val) => {
-                    if let Ok(mut json_val) = serde_json::to_value(yaml_val) {
-                        // Strip xmlns
-                        remove_xmlns(&mut json_val);
+        let Some(schema) = schema else {
+            return;
+        };
 
-                        match schema.validate(&json_val) {
-                            Ok(_) => vec![],
-                            Err(errors) => errors
-                                .map(|e| {
-                                    let range = find_range(&text, &e.instance_path.to_string());
-                                    Diagnostic {
-                                        range,
-                                        severity: Some(DiagnosticSeverity::ERROR),
-                                        code: None,
-                                        code_description: None,
-                                        source: Some("wixer".to_string()),
-                                        message: e.to_string(),
-                                        related_information: None,
-                                        tags: None,
-                                        data: None,
-                                    }
-                                })
-                                .collect(),
-                        }
-                    } else {
-                        vec![] // JSON conversion error
+        let diagnostics = match serde_yaml::from_str::<serde_yaml::Value>(&text) {
+            Ok(yaml_val) => {
+                if let Ok(mut json_val) = serde_json::to_value(yaml_val) {
+                    remove_xmlns(&mut json_val);
+
+                    match schema.validate(&json_val) {
+                        Ok(()) => vec![],
+                        Err(errors) => errors
+                            .map(|error| {
+                                let range = find_range(&text, &error.instance_path.to_string());
+                                Diagnostic {
+                                    range,
+                                    severity: Some(DiagnosticSeverity::ERROR),
+                                    code: None,
+                                    code_description: None,
+                                    source: Some("wixer".to_string()),
+                                    message: error.to_string(),
+                                    related_information: None,
+                                    tags: None,
+                                    data: None,
+                                }
+                            })
+                            .collect(),
                     }
+                } else {
+                    vec![]
                 }
-                Err(e) => {
-                    let range = if let Some(loc) = e.location() {
-                        Range {
-                            start: Position::new(loc.line() as u32 - 1, loc.column() as u32 - 1),
-                            end: Position::new(loc.line() as u32 - 1, loc.column() as u32),
-                        }
-                    } else {
-                        Range::default()
-                    };
-                    vec![Diagnostic {
-                        range,
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        code: None,
-                        code_description: None,
-                        source: Some("wixer".to_string()),
-                        message: e.to_string(),
-                        related_information: None,
-                        tags: None,
-                        data: None,
-                    }]
-                }
-            };
+            }
+            Err(e) => {
+                let range = if let Some(loc) = e.location() {
+                    Range {
+                        start: Position::new(loc.line() as u32 - 1, loc.column() as u32 - 1),
+                        end: Position::new(loc.line() as u32 - 1, loc.column() as u32),
+                    }
+                } else {
+                    Range::default()
+                };
 
-            self.client
-                .publish_diagnostics(uri, diagnostics, version)
-                .await;
+                vec![Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: None,
+                    code_description: None,
+                    source: Some("wixer".to_string()),
+                    message: e.to_string(),
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                }]
+            }
+        };
+
+        self.client
+            .publish_diagnostics(uri, diagnostics, version)
+            .await;
+    }
+}
+
+fn determine_value_type(schema: &Value) -> Option<SchemaValueType> {
+    let type_node = schema.get("type")?;
+    if let Some(type_str) = type_node.as_str() {
+        return map_type_str(type_str);
+    }
+    if let Some(arr) = type_node.as_array() {
+        for entry in arr {
+            if let Some(type_str) = entry.as_str()
+                && let Some(mapped) = map_type_str(type_str)
+            {
+                return Some(mapped);
+            }
         }
+    }
+    None
+}
+
+fn map_type_str(type_str: &str) -> Option<SchemaValueType> {
+    match type_str {
+        "boolean" => Some(SchemaValueType::Boolean),
+        "number" => Some(SchemaValueType::Number),
+        "integer" => Some(SchemaValueType::Integer),
+        _ => None,
     }
 }
 
@@ -353,29 +468,16 @@ fn find_range(text: &str, instance_path: &str) -> Range {
                 continue;
             }
 
-            if trimmed.starts_with('-') {
-                let after_dash = trimmed.trim_start_matches('-').trim_start();
-                if after_dash.starts_with(*key) {
-                    let remainder = &after_dash[key.len()..];
-                    if remainder.starts_with(':') || remainder.starts_with(' ') {
-                        if let Some(col_idx) = line.find(*key) {
-                            return Range {
-                                start: Position::new(line_idx as u32, col_idx as u32),
-                                end: Position::new(line_idx as u32, (col_idx + key.len()) as u32),
-                            };
-                        }
-                    }
-                }
-            } else if trimmed.starts_with(*key) {
-                let remainder = &trimmed[key.len()..];
-                if remainder.starts_with(':') || remainder.starts_with(' ') {
-                    if indent_depth >= expected_depth.saturating_sub(1) {
-                        let col_idx = line.find(*key).unwrap_or(0);
-                        return Range {
-                            start: Position::new(line_idx as u32, col_idx as u32),
-                            end: Position::new(line_idx as u32, (col_idx + key.len()) as u32),
-                        };
-                    }
+            if let Some(col_idx) = line.find(*key) {
+                let after_key = &line[col_idx + key.len()..];
+                if (trimmed.starts_with('-') && after_key.starts_with(':') || after_key.starts_with(' '))
+                    || (trimmed.starts_with(*key) && (after_key.starts_with(':') || after_key.starts_with(' ')) && indent_depth >= expected_depth.saturating_sub(1))
+                {
+                    let col_idx = line.find(*key).unwrap_or(0);
+                    return Range {
+                        start: Position::new(line_idx as u32, col_idx as u32),
+                        end: Position::new(line_idx as u32, (col_idx + key.len()) as u32),
+                    };
                 }
             }
         }
@@ -411,10 +513,8 @@ fn determine_value_token(value: &str, symbol: Option<&SchemaSymbolInfo>) -> (u32
     let stripped = strip_quotes(value);
 
     if let Some(info) = symbol {
-        if let Some(enum_values) = &info.enum_values {
-            if enum_values.contains(stripped) {
-                return (3, if info.deprecated { 1 } else { 0 });
-            }
+        if let Some(enum_values) = &info.enum_values && enum_values.contains(stripped) {
+            return (3, if info.deprecated { 1 } else { 0 });
         }
 
         if let Some(kind) = info.value_kind {
@@ -516,7 +616,7 @@ impl LanguageServer for WixerLsp {
                                 SemanticTokenType::STRING,   // 2: Strings
                                 SemanticTokenType::ENUM_MEMBER, // 3: Enum values
                                 SemanticTokenType::NUMBER,   // 4: Numbers
-                                SemanticTokenType::BOOLEAN,  // 5: Booleans
+                                SemanticTokenType::KEYWORD,  // 5: Booleans
                                 SemanticTokenType::VARIABLE, // 6: Identifiers/IDs
                             ],
                             token_modifiers: vec![SemanticTokenModifier::DEPRECATED],
