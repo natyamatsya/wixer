@@ -114,12 +114,30 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     // Check if it's actually the 'build' command
     if build_args[0] != "build" {
-        let status = Command::new(&wix_exe)
-            .args(build_args)
-            .status()
+        info!("Passthrough: {} {}", wix_exe, build_args.join(" "));
+        let output = Command::new(&wix_exe)
+            .args(&build_args)
+            .output()
             .with_context(|| format!("Failed to execute wix ({wix_exe})"))?;
-        if !status.success() {
-            let code = status.code().unwrap_or(1);
+        
+        // Log and print output
+        if !output.stdout.is_empty() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            print!("{}", stdout);
+            for line in stdout.lines() {
+                info!("[wix stdout] {}", line);
+            }
+        }
+        if !output.stderr.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprint!("{}", stderr);
+            for line in stderr.lines() {
+                info!("[wix stderr] {}", line);
+            }
+        }
+        
+        if !output.status.success() {
+            let code = output.status.code().unwrap_or(1);
             if code > 0 {
                 let error_name = crate::wix_exit_codes::get_error_name(code).unwrap_or("UnknownError");
                 bail!("wix exited with error WIX{:04}: {} (exit code {})", code, error_name, code);
@@ -159,11 +177,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
     let mut output_path: Option<PathBuf> = None;
     let mut input_file: Option<PathBuf> = None;
 
-    // Skip the first arg "build" when iterating for processing, but we need it in new_args?
-    // args[0] is "build".
-    // We iterate from 1.
+    // Process build_args (which may have -v injected) instead of original args
+    // build_args[0] is "build", we iterate from 1.
 
-    let mut iter = args[1..].iter();
+    let mut iter = build_args[1..].iter();
     while let Some(arg) = iter.next() {
         if arg == "-o" || arg == "--output" {
              new_args.push(arg.clone());
@@ -231,13 +248,32 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     info!("Running: {} {}", wix_exe, new_args.join(" "));
-    let status = Command::new(&wix_exe)
+    let output = Command::new(&wix_exe)
         .args(&new_args) // "build" is included in new_args[0]
-        .status()
+        .output()
         .with_context(|| format!("Failed to execute wix ({wix_exe})"))?;
 
-    if !status.success() {
-        let code = status.code().unwrap_or(1);
+    // Log stdout and stderr from wix.exe
+    if !output.stdout.is_empty() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            info!("[wix stdout] {}", line);
+        }
+    }
+    if !output.stderr.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        for line in stderr.lines() {
+            // WiX writes warnings and errors to stderr
+            if line.contains("error") {
+                warn!("[wix stderr] {}", line);
+            } else {
+                info!("[wix stderr] {}", line);
+            }
+        }
+    }
+
+    if !output.status.success() {
+        let code = output.status.code().unwrap_or(1);
         if code > 0 {
             let error_name = crate::wix_exit_codes::get_error_name(code).unwrap_or("UnknownError");
             bail!("wix build failed with error WIX{:04}: {} (exit code {})", code, error_name, code);

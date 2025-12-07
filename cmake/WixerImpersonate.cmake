@@ -178,7 +178,96 @@ echo   WIX = %WIX%
 echo   PATH prepended with wixer bin dir
 ")
 
-    message(STATUS "  Helper scripts: wixer_env.ps1, wixer_env.sh, wixer_env.cmd")
+    # Generate wixer_pack script that runs cpack and shows the log
+    file(WRITE "${CMAKE_BINARY_DIR}/wixer_pack.ps1" "# Wixer CPack wrapper with log output
+# Usage: ./wixer_pack.ps1 [-Generator WIX]
+param(
+    [string]\$Generator = \"WIX\"
+)
+
+# Set up environment
+\$env:WIXER_CONFIG = \"${_WIXER_CONFIG}\"
+\$env:WIX = \"${ARG_IMPERSONATE_DIR}\"
+\$env:PATH = \"${ARG_IMPERSONATE_DIR}/bin;\$env:PATH\"
+
+# Clear previous log
+\$logFile = \"${_LOG_FILE}\"
+if (Test-Path \$logFile) { Remove-Item \$logFile }
+
+Write-Host \"========================================\" -ForegroundColor Cyan
+Write-Host \"Wixer CPack Build\" -ForegroundColor Cyan
+Write-Host \"========================================\" -ForegroundColor Cyan
+Write-Host \"\"
+
+# Run CPack
+\$result = cpack -G \$Generator
+\$exitCode = \$LASTEXITCODE
+
+Write-Host \"\"
+Write-Host \"========================================\" -ForegroundColor Cyan
+Write-Host \"Wixer Build Log\" -ForegroundColor Cyan
+Write-Host \"========================================\" -ForegroundColor Cyan
+
+if (Test-Path \$logFile) {
+    Get-Content \$logFile | ForEach-Object {
+        if (\$_ -match \"ERROR|WARN\") {
+            Write-Host \$_ -ForegroundColor Yellow
+        } elseif (\$_ -match \"Running:\") {
+            Write-Host \$_ -ForegroundColor Green
+        } else {
+            Write-Host \$_
+        }
+    }
+} else {
+    Write-Host \"No log file found at \$logFile\" -ForegroundColor Yellow
+}
+
+Write-Host \"\"
+Write-Host \"========================================\" -ForegroundColor Cyan
+exit \$exitCode
+")
+
+    file(WRITE "${CMAKE_BINARY_DIR}/wixer_pack.sh" "#!/bin/bash
+# Wixer CPack wrapper with log output
+# Usage: ./wixer_pack.sh [generator]
+
+GENERATOR=\"\${1:-WIX}\"
+
+# Set up environment
+export WIXER_CONFIG=\"${_WIXER_CONFIG}\"
+export WIX=\"${ARG_IMPERSONATE_DIR}\"
+export PATH=\"${ARG_IMPERSONATE_DIR}/bin:\$PATH\"
+
+# Clear previous log
+LOG_FILE=\"${_LOG_FILE}\"
+rm -f \"\$LOG_FILE\"
+
+echo \"========================================\"
+echo \"Wixer CPack Build\"
+echo \"========================================\"
+echo \"\"
+
+# Run CPack
+cpack -G \"\$GENERATOR\"
+EXIT_CODE=\$?
+
+echo \"\"
+echo \"========================================\"
+echo \"Wixer Build Log\"
+echo \"========================================\"
+
+if [ -f \"\$LOG_FILE\" ]; then
+    cat \"\$LOG_FILE\"
+else
+    echo \"No log file found at \$LOG_FILE\"
+fi
+
+echo \"\"
+echo \"========================================\"
+exit \$EXIT_CODE
+")
+
+    message(STATUS "  Helper scripts: wixer_env.ps1, wixer_pack.ps1")
 endfunction()
 
 # wixer_add_yaml_sources(<target> <yaml_source_dir> <output_dir>)
