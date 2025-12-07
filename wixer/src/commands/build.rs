@@ -43,7 +43,12 @@ pub fn run(args: Vec<String>) -> Result<()> {
             .with_context(|| format!("Failed to execute wix ({wix_exe})"))?;
         if !status.success() {
             let code = status.code().unwrap_or(1);
-            bail!("wix exited with code {code}");
+            if code > 0 {
+                let error_name = crate::wix_exit_codes::get_error_name(code).unwrap_or("UnknownError");
+                bail!("wix exited with error WIX{:04}: {} (exit code {})", code, error_name, code);
+            } else {
+                bail!("wix exited with code {}", code);
+            }
         }
         return Ok(());
     }
@@ -156,7 +161,12 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     if !status.success() {
         let code = status.code().unwrap_or(1);
-        bail!("wix build failed with exit code {code}");
+        if code > 0 {
+            let error_name = crate::wix_exit_codes::get_error_name(code).unwrap_or("UnknownError");
+            bail!("wix build failed with error WIX{:04}: {} (exit code {})", code, error_name, code);
+        } else {
+            bail!("wix build failed with exit code {}", code);
+        }
     }
 
     // Post-build actions

@@ -12,6 +12,7 @@ mod validate;
 mod wix_to_yaml;
 mod xsd_to_json;
 mod yaml_to_wix;
+mod wix_exit_codes;
 pub mod wixpdb;
 mod app;
 
