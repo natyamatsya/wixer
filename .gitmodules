@@ -1,0 +1,3 @@
+[submodule "wixer/examples/WiXInstallerExamples"]
+	path = wixer/examples/WiXInstallerExamples
+	url = https://github.com/kurtanr/WiXInstallerExamples
