@@ -1,0 +1,3 @@
+name: "03_PassingInstallLocationParameterToInstaller"
+description: "Demonstrates passing custom install location via command line parameters"
+buildable: true

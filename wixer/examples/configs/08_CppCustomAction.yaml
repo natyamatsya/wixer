@@ -1,0 +1,12 @@
+name: "08_CppCustomAction"
+description: "Custom action implemented in C++ as a native DLL"
+
+defines:
+  08_MyCppCustomAction.TargetDir: "$(ProjectDir)..\\x64\\Release\\"
+
+buildable: false
+skip_reason: "Requires building the C++ custom action project first"
+
+requires:
+  - path: "../x64/Release/08_MyCppCustomAction.dll"
+    description: "C++ custom action DLL (build 08_MyCppCustomAction project)"

@@ -31,6 +31,7 @@ pub mod config;
 pub mod constants;
 pub mod describe_db;
 pub mod dirs;
+pub mod example_config;
 pub mod project;
 pub mod schema_mapping;
 pub mod schema_mapping_v3v4;

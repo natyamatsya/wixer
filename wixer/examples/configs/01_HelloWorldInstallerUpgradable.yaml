@@ -1,0 +1,3 @@
+name: "01_HelloWorldInstallerUpgradable"
+description: "Hello World installer with MajorUpgrade support for clean upgrades"
+buildable: true

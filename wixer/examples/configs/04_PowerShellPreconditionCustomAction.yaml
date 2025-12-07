@@ -1,0 +1,7 @@
+name: "04_PowerShellPreconditionCustomAction"
+description: "Uses PowerShell to check installation preconditions via WixQuietExec"
+
+extensions:
+  - WixToolset.Util.wixext
+
+buildable: true

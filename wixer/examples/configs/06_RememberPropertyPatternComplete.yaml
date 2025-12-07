@@ -1,0 +1,7 @@
+name: "06_RememberPropertyPatternComplete"
+description: "Complete implementation of Remember Property pattern with all edge cases"
+
+extensions:
+  - WixToolset.Util.wixext
+
+buildable: true

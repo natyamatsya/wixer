@@ -1,0 +1,14 @@
+name: "09_InstallerWithUserInterface"
+description: "Installer with custom WixUI dialogs and user interface"
+
+extensions:
+  - WixToolset.UI.wixext
+  - WixToolset.Util.wixext
+
+sources:
+  - Product.wxs
+  - MyCustomPropertiesDlg.wxs
+  - InstallationStages.wxi
+
+buildable: false
+skip_reason: "WixUI v3 to v4 migration requires manual dialog updates"

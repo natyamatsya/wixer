@@ -16,6 +16,7 @@ use walkdir::WalkDir;
 
 use wixer::commands::{import, upgrade};
 use wixer::common::AttributeStrategy;
+use wixer::example_config::ExampleConfig;
 
 #[derive(Parser)]
 #[command(name = "wixer-gallery")]
@@ -28,6 +29,10 @@ struct Args {
     /// Output directory for the gallery
     #[arg(short, long, default_value = "examples/gallery")]
     output: PathBuf,
+
+    /// Directory containing example config files (*.yaml)
+    #[arg(short, long, default_value = "examples/configs")]
+    configs: PathBuf,
 
     /// Clean output directories before building
     #[arg(long)]
@@ -202,7 +207,27 @@ fn main() -> Result<()> {
         let msi_dir = output.join("msi");
         fs::create_dir_all(&msi_dir)?;
         
+        // Resolve configs directory (relative paths are relative to CWD)
+        let configs_dir = &args.configs;
+        
         for example in &examples {
+            // Load example configuration from configs directory
+            let config_path = configs_dir.join(format!("{}.yaml", example.name));
+            let example_config = if config_path.exists() {
+                ExampleConfig::load(&config_path).ok()
+            } else {
+                None
+            };
+            
+            // Check if example is marked as not buildable
+            if let Some(ref config) = example_config {
+                if !config.buildable {
+                    print!("Building {}... ", example.name);
+                    println!("⊘ (skipped: {})", config.skip_reason.as_deref().unwrap_or("not buildable"));
+                    continue;
+                }
+            }
+            
             // Find Product.wxs.yaml in the yaml output, or Product.wxs in v4 output
             let yaml_example_dir = yaml_dir.join(&example.name);
             let v4_example_dir = v4_dir.join(&example.name);
@@ -237,14 +262,31 @@ fn main() -> Result<()> {
                     for wxs in &all_wxs {
                         cmd.arg(wxs.to_str().unwrap());
                     }
+                    
+                    // Add defines from config
+                    if let Some(ref config) = example_config {
+                        for (key, value) in &config.defines {
+                            cmd.args(["-d", &format!("{}={}", key, value)]);
+                        }
+                    }
+                    
                     cmd.args(["-o", msi_path.to_str().unwrap()]);
                     cmd.output()
                 } else {
                     // Build from YAML using wixer (single file)
-                    Command::new(&args.wixer)
-                        .current_dir(&yaml_example_dir)
-                        .args(["build", yaml_path.to_str().unwrap(), "-o", msi_path.to_str().unwrap()])
-                        .output()
+                    let mut cmd = Command::new(&args.wixer);
+                    cmd.current_dir(&yaml_example_dir);
+                    cmd.args(["build", yaml_path.to_str().unwrap()]);
+                    
+                    // Add defines from config
+                    if let Some(ref config) = example_config {
+                        for (key, value) in &config.defines {
+                            cmd.args(["-d", &format!("{}={}", key, value)]);
+                        }
+                    }
+                    
+                    cmd.args(["-o", msi_path.to_str().unwrap()]);
+                    cmd.output()
                 };
                 
                 match result {

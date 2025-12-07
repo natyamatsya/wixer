@@ -44,6 +44,10 @@ pub fn upgrade_content(content: &str) -> Result<String> {
         content.to_string()
     };
 
+    // Step 1b: Extract prolog content (between <?xml?> and root element)
+    // This preserves comments that would otherwise be lost during parsing
+    let prolog_content = extract_prolog(&clean_content);
+
     // Step 2: Parse XML
     let doc = Document::parse(&clean_content)
         .with_context(|| "Failed to parse XML")?;
@@ -64,12 +68,51 @@ pub fn upgrade_content(content: &str) -> Result<String> {
     let mut output = String::from_utf8(result)
         .with_context(|| "Invalid UTF-8 in output")?;
 
+    // Step 4b: Re-insert prolog content after XML declaration
+    if !prolog_content.is_empty() {
+        // Find end of XML declaration
+        if let Some(decl_end) = output.find("?>") {
+            let insert_pos = decl_end + 2;
+            output.insert_str(insert_pos, &format!("\n{}", prolog_content));
+        }
+    }
+
     // Step 5: Restore preprocessor directives
     if preprocessor.directive_count() > 0 {
         output = preprocessor.restore(&output);
     }
 
     Ok(output)
+}
+
+/// Extract content between XML declaration and root element
+fn extract_prolog(content: &str) -> String {
+    // Find end of XML declaration (<?xml ... ?>)
+    // We need to find the XML declaration specifically, not just any ?>
+    let decl_end = if content.trim_start().starts_with("<?xml") {
+        content.find("?>").map(|i| i + 2).unwrap_or(0)
+    } else {
+        0
+    };
+    
+    // Find start of root element (<Wix or <Include)
+    // Must be a tag start, not inside another tag
+    let remaining = &content[decl_end..];
+    let root_start = remaining
+        .find("<Wix")
+        .or_else(|| remaining.find("<Include"))
+        .map(|i| decl_end + i)
+        .unwrap_or(content.len());
+    
+    // Extract and trim the prolog content
+    let prolog = content[decl_end..root_start].trim();
+    
+    // Don't return anything that looks like an XML element (but allow comments)
+    if prolog.starts_with('<') && !prolog.starts_with("<!--") {
+        return String::new();
+    }
+    
+    prolog.to_string()
 }
 
 /// Process the root element (Wix or Include)
