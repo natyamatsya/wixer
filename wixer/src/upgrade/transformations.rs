@@ -3,15 +3,13 @@
 //! Each transformation implements a single v3→v4 change.
 //! Transformations are composable and testable in isolation.
 
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Writer;
 use roxmltree::Node;
 use std::io::Cursor;
 
-use crate::schema_mapping_v3v4::is_standard_directory;
-
-/// Result type for transformations
-pub type TransformResult = anyhow::Result<()>;
+/// WiX v4 namespace constant
+pub const V4_NAMESPACE: &'static str = "http://wixtoolset.org/schemas/v4/wxs";
 
 /// Trait for XML node transformations
 pub trait Transformation {
@@ -24,130 +22,6 @@ pub trait Transformation {
     /// Apply the transformation, writing output to the writer
     /// Returns true if the node was handled, false to continue with default handling
     fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool>;
-}
-
-// ============================================================================
-// Namespace Transformation
-// ============================================================================
-
-/// Updates the WiX namespace from v3 to v4
-pub struct NamespaceUpgrade;
-
-impl NamespaceUpgrade {
-    pub const V3_NAMESPACE: &'static str = "http://schemas.microsoft.com/wix/2006/wi";
-    pub const V4_NAMESPACE: &'static str = "http://wixtoolset.org/schemas/v4/wxs";
-}
-
-// ============================================================================
-// Product to Package Transformation
-// ============================================================================
-
-/// Converts Product element to Package element
-/// - Renames Product to Package
-/// - Moves Id attribute to ProductCode
-/// - Merges inner Package element attributes
-pub struct ProductToPackage;
-
-impl Transformation for ProductToPackage {
-    fn name(&self) -> &'static str {
-        "ProductToPackage"
-    }
-
-    fn applies_to(&self, node: &Node) -> bool {
-        node.tag_name().name() == "Product"
-    }
-
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
-        let mut elem = BytesStart::new("Package");
-
-        // Find inner Package element to merge its attributes
-        let inner_package = node.children().find(|c| c.tag_name().name() == "Package");
-
-        // Copy Product attributes, renaming Id to ProductCode
-        for attr in node.attributes() {
-            let (name, value) = match attr.name() {
-                "Id" => ("ProductCode", attr.value()),
-                other => (other, attr.value()),
-            };
-            elem.push_attribute((name, value));
-        }
-
-        // Merge inner Package attributes (Scope from InstallScope, etc.)
-        if let Some(inner) = inner_package {
-            for attr in inner.attributes() {
-                let (name, value) = match attr.name() {
-                    "InstallScope" => ("Scope", attr.value()),
-                    "InstallerVersion" => continue, // Skip, v4 has better defaults
-                    "Compressed" => ("Compressed", attr.value()),
-                    other => (other, attr.value()),
-                };
-                // Don't duplicate attributes
-                if !node.attributes().any(|a| a.name() == name) {
-                    elem.push_attribute((name, value));
-                }
-            }
-        }
-
-        writer.write_event(Event::Start(elem))?;
-
-        // Process children, skipping the inner Package element
-        for child in node.children() {
-            if child.is_element() && child.tag_name().name() != "Package" {
-                // Children will be processed by the pipeline
-                // We return false to indicate partial handling
-            }
-        }
-
-        // Note: We don't close the element here - the pipeline handles that
-        Ok(false) // Return false to let pipeline process children
-    }
-}
-
-// ============================================================================
-// Directory Transformations
-// ============================================================================
-
-/// Flattens TARGETDIR and converts standard directories to StandardDirectory
-pub struct DirectoryTransform;
-
-impl Transformation for DirectoryTransform {
-    fn name(&self) -> &'static str {
-        "DirectoryTransform"
-    }
-
-    fn applies_to(&self, node: &Node) -> bool {
-        node.tag_name().name() == "Directory"
-    }
-
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
-        let id = node.attribute("Id").unwrap_or("");
-
-        // Skip TARGETDIR entirely - it's implicit in v4
-        if id == "TARGETDIR" {
-            // Just process children, don't write this element
-            return Ok(false);
-        }
-
-        // Convert standard directories
-        if is_standard_directory(id) {
-            let mut elem = BytesStart::new("StandardDirectory");
-            elem.push_attribute(("Id", id));
-            // StandardDirectory doesn't need Name attribute
-            
-            let has_children = node.children().any(|c| c.is_element());
-            if has_children {
-                writer.write_event(Event::Start(elem))?;
-                // Children processed by pipeline
-                Ok(false)
-            } else {
-                writer.write_event(Event::Empty(elem))?;
-                Ok(true)
-            }
-        } else {
-            // Regular directory - pass through with all attributes
-            Ok(false)
-        }
-    }
 }
 
 // ============================================================================
@@ -285,43 +159,6 @@ impl Transformation for CustomActionTransform {
 }
 
 // ============================================================================
-// Include Element Transformation
-// ============================================================================
-
-/// Adds v4 namespace to Include elements
-pub struct IncludeNamespace;
-
-impl Transformation for IncludeNamespace {
-    fn name(&self) -> &'static str {
-        "IncludeNamespace"
-    }
-
-    fn applies_to(&self, node: &Node) -> bool {
-        node.tag_name().name() == "Include"
-    }
-
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
-        let mut elem = BytesStart::new("Include");
-        elem.push_attribute(("xmlns", NamespaceUpgrade::V4_NAMESPACE));
-
-        for attr in node.attributes() {
-            if attr.name() != "xmlns" {
-                elem.push_attribute((attr.name(), attr.value()));
-            }
-        }
-
-        let has_children = node.children().any(|c| c.is_element());
-        if has_children {
-            writer.write_event(Event::Start(elem))?;
-            Ok(false) // Let pipeline process children
-        } else {
-            writer.write_event(Event::Empty(elem))?;
-            Ok(true)
-        }
-    }
-}
-
-// ============================================================================
 // Factory function
 // ============================================================================
 
@@ -331,8 +168,5 @@ pub fn standard_transformations() -> Vec<Box<dyn Transformation>> {
         Box::new(ConditionToLaunch),
         Box::new(InnerTextToCondition),
         Box::new(CustomActionTransform),
-        // DirectoryTransform is handled inline in pipeline (needs special closing tag handling)
-        // IncludeNamespace is handled specially in pipeline
-        // ProductToPackage is handled specially in the pipeline
     ]
 }

@@ -17,9 +17,7 @@ use std::path::Path;
 use tracing::info;
 
 use super::preprocessor::PreprocessorPreserver;
-use super::transformations::{
-    standard_transformations, NamespaceUpgrade, Transformation,
-};
+use super::transformations::{standard_transformations, Transformation, V4_NAMESPACE};
 use crate::schema_mapping_v3v4::is_standard_directory;
 
 /// Upgrade a WiX v3 file to v4
@@ -94,7 +92,7 @@ fn process_wix_element(
     transformations: &[Box<dyn Transformation>],
 ) -> Result<()> {
     let mut elem = BytesStart::new("Wix");
-    elem.push_attribute(("xmlns", NamespaceUpgrade::V4_NAMESPACE));
+    elem.push_attribute(("xmlns", V4_NAMESPACE));
 
     // Copy other namespace declarations
     for attr in node.attributes() {
@@ -128,7 +126,7 @@ fn process_include_element(
     transformations: &[Box<dyn Transformation>],
 ) -> Result<()> {
     let mut elem = BytesStart::new("Include");
-    elem.push_attribute(("xmlns", NamespaceUpgrade::V4_NAMESPACE));
+    elem.push_attribute(("xmlns", V4_NAMESPACE));
 
     for attr in node.attributes() {
         if attr.name() != "xmlns" {

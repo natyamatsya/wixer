@@ -41,7 +41,11 @@ impl PreprocessorPreserver {
 
         // Match preprocessor instructions: <?name ...?>
         // We need to handle multi-line directives too
-        let re = Regex::new(r#"<\?(if|else|elseif|endif|define|undef|include|foreach|endforeach|error|warning|pragma)\b[^?]*\?>"#).unwrap();
+        // Use non-greedy match .*? to handle content with ? in it
+        let re = Regex::new(r#"<\?(if|else|elseif|endif|define|undef|include|foreach|endforeach|error|warning|pragma)\b.*?\?>"#).unwrap();
+
+        // Find the position of the root element (first < that isn't <? or <!)
+        let root_start = content.find("<Wix").or_else(|| content.find("<Include")).unwrap_or(0);
 
         // Find all matches and replace with placeholders
         let matches: Vec<_> = re.find_iter(content).collect();
@@ -53,9 +57,16 @@ impl PreprocessorPreserver {
             self.directives.insert(placeholder.clone(), directive.to_string());
             self.counter += 1;
 
-            // Replace with an XML comment that won't break parsing
-            // We use a special format that can be restored later
-            let replacement = format!("<!--{}-->", placeholder);
+            // For directives before the root element, use XML comment (will be in prolog)
+            // For directives inside the document, use custom element
+            let replacement = if m.start() < root_start {
+                // Before root - use comment that will be preserved in prolog
+                format!("<!-- {} -->", placeholder)
+            } else {
+                // Inside document - use custom element
+                format!("<WixerPreprocessor id=\"{}\"/>", placeholder)
+            };
+            
             result = format!(
                 "{}{}{}",
                 &result[..m.start()],
@@ -72,11 +83,15 @@ impl PreprocessorPreserver {
         let mut result = content.to_string();
 
         for (placeholder, directive) in &self.directives {
-            // Restore from XML comment format
-            let comment_form = format!("<!--{}-->", placeholder);
+            // Restore from custom element format
+            let element_form = format!("<WixerPreprocessor id=\"{}\"/>", placeholder);
+            result = result.replace(&element_form, directive);
+            
+            // Restore from comment format (used for prolog directives)
+            let comment_form = format!("<!-- {} -->", placeholder);
             result = result.replace(&comment_form, directive);
             
-            // Also handle case where it might appear without comment wrapper
+            // Also handle case where it might appear without wrapper
             result = result.replace(placeholder, directive);
         }
 
