@@ -80,8 +80,8 @@ impl WixerLsp {
                             // Add element completion
                             symbols
                                 .entry(def_name.clone())
-                                .and_modify(|info| info.kind = SchemaSymbolKind::Element)
-                                .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Element, def_schema));
+                                .and_modify(|info| info.update_from_schema(SchemaSymbolKind::Element, def_name, def_schema))
+                                .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Element, def_name, def_schema));
                             completions.push(CompletionItem {
                                 label: def_name.clone(),
                                 kind: Some(CompletionItemKind::CLASS),
@@ -103,8 +103,8 @@ impl WixerLsp {
 
                                     symbols
                                         .entry(prop_name.clone())
-                                        .and_modify(|info| info.update_from_schema(SchemaSymbolKind::Attribute, prop_schema))
-                                        .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Attribute, prop_schema));
+                                        .and_modify(|info| info.update_from_schema(SchemaSymbolKind::Attribute, prop_name, prop_schema))
+                                        .or_insert_with(|| SchemaSymbolInfo::from_schema(SchemaSymbolKind::Attribute, prop_name, prop_schema));
                                     completions.push(CompletionItem {
                                         label: prop_name.clone(),
                                         kind: Some(CompletionItemKind::PROPERTY),
@@ -320,13 +320,13 @@ fn extract_value_segment(val_part: &str) -> &str {
     without_comment.trim()
 }
 
-fn determine_value_token_type(value: &str, symbol: Option<&SchemaSymbolInfo>) -> u32 {
+fn determine_value_token(value: &str, symbol: Option<&SchemaSymbolInfo>) -> (u32, u32) {
     let stripped = strip_quotes(value);
 
     if let Some(info) = symbol {
         if let Some(enum_values) = &info.enum_values {
             if enum_values.contains(stripped) {
-                return 3; // enum member
+                return (3, if info.deprecated { 1 } else { 0 });
             }
         }
 
@@ -334,26 +334,30 @@ fn determine_value_token_type(value: &str, symbol: Option<&SchemaSymbolInfo>) ->
             match kind {
                 SchemaValueType::Boolean => {
                     if is_boolean_literal(stripped) {
-                        return 5;
+                        return (5, if info.deprecated { 1 } else { 0 });
                     }
                 }
                 SchemaValueType::Number | SchemaValueType::Integer => {
                     if is_numeric_literal(stripped) {
-                        return 4;
+                        return (4, if info.deprecated { 1 } else { 0 });
                     }
                 }
             }
         }
+
+        if info.is_id {
+            return (6, if info.deprecated { 1 } else { 0 });
+        }
     }
 
     if is_boolean_literal(stripped) {
-        return 5;
+        return (5, 0);
     }
     if is_numeric_literal(stripped) {
-        return 4;
+        return (4, 0);
     }
 
-    2
+    (2, 0)
 }
 
 fn strip_quotes(value: &str) -> &str {
@@ -383,6 +387,28 @@ fn is_numeric_literal(value: &str) -> bool {
     value.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+')
 }
 
+fn schema_indicates_id(name: &str, schema: &Value) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if lower == "id" || lower.ends_with("id") {
+        return true;
+    }
+    if schema
+        .get("format")
+        .and_then(|v| v.as_str())
+        .map(|s| matches!(s, "uuid" | "guid" | "wix-id"))
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
+        let pattern_lower = pattern.to_ascii_lowercase();
+        if pattern_lower.contains("id") {
+            return true;
+        }
+    }
+    false
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for WixerLsp {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
@@ -404,8 +430,9 @@ impl LanguageServer for WixerLsp {
                                 SemanticTokenType::ENUM_MEMBER, // 3: Enum values
                                 SemanticTokenType::NUMBER,   // 4: Numbers
                                 SemanticTokenType::BOOLEAN,  // 5: Booleans
+                                SemanticTokenType::VARIABLE, // 6: Identifiers/IDs
                             ],
-                            token_modifiers: vec![],
+                            token_modifiers: vec![SemanticTokenModifier::DEPRECATED],
                         },
                         full: Some(SemanticTokensFullOptions::Bool(true)),
                         range: None,
@@ -448,20 +475,21 @@ impl LanguageServer for WixerLsp {
                     let is_known = completions.iter().any(|c| c.label == key);
                     
                     // Determine token type
-                    let token_type = if let Some(info) = symbols.get(key) {
-                        match info.kind {
+                    let (token_type, modifier_bits) = if let Some(info) = symbols.get(key) {
+                        let token_type = match info.kind {
                             SchemaSymbolKind::Element => 0,
                             SchemaSymbolKind::Attribute => 1,
                             SchemaSymbolKind::EnumValue => 3,
-                        }
+                        };
+                        (token_type, if info.deprecated { 1 } else { 0 })
                     } else if is_known {
                         if key.chars().next().is_some_and(|c| c.is_uppercase()) {
-                            0
+                            (0, 0)
                         } else {
-                            1
+                            (1, 0)
                         }
                     } else {
-                        1
+                        (1, 0)
                     };
 
                     // Relative calculations for Delta encoding
@@ -477,7 +505,7 @@ impl LanguageServer for WixerLsp {
                         delta_start,
                         length: key.len() as u32,
                         token_type,
-                        token_modifiers_bitset: 0,
+                        token_modifiers_bitset: modifier_bits,
                     });
 
                     prev_line = line_idx as u32;
@@ -491,7 +519,7 @@ impl LanguageServer for WixerLsp {
                              let value_segment = extract_value_segment(val_part);
                              if !value_segment.is_empty() {
                                  let val_start_col = colon_idx + 1 + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
-                                 let value_token_type = determine_value_token_type(value_segment, symbols.get(key));
+                                 let (value_token_type, value_modifier_bits) = determine_value_token(value_segment, symbols.get(key));
                                  let delta_line_val = 0; // Same line
                                  let delta_start_val = val_start_col as u32 - prev_start;
 
@@ -500,7 +528,7 @@ impl LanguageServer for WixerLsp {
                                     delta_start: delta_start_val,
                                     length: value_segment.len() as u32,
                                     token_type: value_token_type,
-                                    token_modifiers_bitset: 0,
+                                    token_modifiers_bitset: value_modifier_bits,
                                  });
                                  prev_start = val_start_col as u32;
                              }
