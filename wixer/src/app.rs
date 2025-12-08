@@ -131,6 +131,9 @@ pub async fn run() -> Result<()> {
         Commands::Upgrade { input, output } => {
             run_blocking(move || commands::upgrade::run(input, output)).await?;
         }
+        Commands::Analyze { path } => {
+            run_blocking(move || commands::analyze::run(&path)).await?;
+        }
         Commands::InspectPdb { path, symbol } => {
             run_blocking(move || commands::pdb::run(&path, symbol)).await?;
         }
@@ -535,6 +538,12 @@ enum Commands {
         /// Output file
         #[arg(index = 2)]
         output: Option<PathBuf>,
+    },
+    /// Analyze WiX project for potential issues (pre-build validation)
+    Analyze {
+        /// Path to WiX project directory
+        #[arg(index = 1, default_value = ".")]
+        path: PathBuf,
     },
     /// Inspect WiX PDB file
     InspectPdb {

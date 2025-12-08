@@ -1,7 +1,7 @@
 use crate::common::AttributeStrategy;
 use crate::config::WixerConfig;
 use crate::constants::{
-    EXT_WIXPDB, EXT_WSI, EXT_WSI_YAML, EXT_WXI, EXT_WXI_YAML, EXT_WXL, EXT_WXL_YAML, EXT_WXS,
+    EXT_MSI, EXT_WIXPDB, EXT_WSI, EXT_WSI_YAML, EXT_WXI, EXT_WXI_YAML, EXT_WXL, EXT_WXL_YAML, EXT_WXS,
     EXT_WXS_YAML, INTERMEDIATES_DIR, WIXER_DIR,
 };
 use crate::schema_mapping_v3v4::detect_required_extensions;
@@ -95,6 +95,14 @@ pub fn run(args: Vec<String>) -> Result<()> {
             build_args.remove(pos + 1);
             build_args.remove(pos);
         }
+
+    // Check for --validate flag (wixer-specific, runs ICE validation after build)
+    let run_validation = if let Some(pos) = build_args.iter().position(|a| a == "--validate") {
+        build_args.remove(pos);
+        true
+    } else {
+        false
+    };
 
     let build_config = config.get_build_config(profile.as_deref());
     let wix_exe = build_config.real_wix_path.unwrap_or_else(|| "wix".to_string());
@@ -319,24 +327,31 @@ pub fn run(args: Vec<String>) -> Result<()> {
         }
     }
 
-    // Post-build actions
+    // Determine output MSI path for post-build actions
+    let msi_path = if let Some(ref out) = output_path {
+        out.clone()
+    } else if let Some(ref inp) = input_file {
+        let file_stem = inp.file_stem().unwrap_or_default();
+        PathBuf::from(file_stem).with_extension(EXT_MSI)
+    } else {
+        PathBuf::from(format!("output.{}", EXT_MSI))
+    };
+
+    // Post-build: ICE validation
+    if run_validation {
+        if msi_path.exists() {
+            info!("Running ICE validation on {}...", msi_path.display());
+            run_ice_validation(&msi_path)?;
+        } else {
+            warn!("MSI file not found for validation: {}", msi_path.display());
+        }
+    }
+
+    // Post-build: PDB inspection
     if config.build.inspect_pdb {
         info!("Running post-build PDB inspection...");
         
-        let pdb_path = if let Some(out) = output_path {
-            out.with_extension(EXT_WIXPDB)
-        } else if let Some(inp) = input_file {
-            // Default output is input filename + .msi? No, wix defaults to input filename basis
-            // If input is CloseApp.wxs, output is CloseApp.msi/wixpdb
-            let file_stem = inp.file_stem().unwrap_or_default();
-            // Assuming current directory for output if not specified? 
-            // Wix 4 usually outputs to current dir unless -o is specified.
-            PathBuf::from(file_stem).with_extension(EXT_WIXPDB)
-        } else if let Some(input) = input_file.as_ref() {
-             input.with_extension(EXT_WIXPDB)
-        } else {
-             PathBuf::from(format!("output.{}", EXT_WIXPDB))
-        };
+        let pdb_path = msi_path.with_extension(EXT_WIXPDB);
 
         if pdb_path.exists() {
              for symbol in &build_config.inspect_symbols {
@@ -347,6 +362,50 @@ pub fn run(args: Vec<String>) -> Result<()> {
              }
         } else {
              warn!("PDB file not found at expected location: {}", pdb_path.display());
+        }
+    }
+
+    Ok(())
+}
+
+/// Run ICE validation on an MSI file using `wix msi validate`
+fn run_ice_validation(msi_path: &Path) -> Result<()> {
+    let output = Command::new("wix")
+        .args(["msi", "validate", msi_path.to_str().unwrap_or_default()])
+        .output()
+        .context("Failed to run 'wix msi validate'. Is WiX Toolset installed?")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    // Parse errors and warnings
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+
+    for line in combined.lines() {
+        if line.contains("error WIX") {
+            errors.push(line);
+        } else if line.contains("warning WIX") {
+            warnings.push(line);
+        }
+    }
+
+    // Report results
+    if errors.is_empty() && warnings.is_empty() {
+        info!("ICE validation passed ✓");
+    } else {
+        if !warnings.is_empty() {
+            warn!("ICE validation warnings ({}):", warnings.len());
+            for w in &warnings {
+                warn!("  {}", w);
+            }
+        }
+        if !errors.is_empty() {
+            for e in &errors {
+                warn!("  {}", e);
+            }
+            bail!("ICE validation failed with {} error(s)", errors.len());
         }
     }
 

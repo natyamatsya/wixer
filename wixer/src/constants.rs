@@ -31,6 +31,7 @@ define_extensions! {
 
 // Other extensions
 pub const EXT_WIXPDB: &str = "wixpdb";
+pub const EXT_MSI: &str = "msi";
 
 /// Directory and File Names
 pub const WIXER_DIR: &str = ".wixer";

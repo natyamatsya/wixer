@@ -1,3 +1,4 @@
+pub mod analyze;
 pub mod build;
 pub mod describe;
 pub mod doc;
