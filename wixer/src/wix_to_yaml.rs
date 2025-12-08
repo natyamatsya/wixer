@@ -159,6 +159,29 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
                 let comment = e.unescape()?.to_string();
                 pending_comment = Some(comment);
             }
+            Ok(Event::PI(e)) => {
+                // Handle processing instructions like <?include filename?>
+                let pi_content = String::from_utf8(e.as_ref().to_vec())?;
+                if pi_content.starts_with("include ") {
+                    let include_path = pi_content.trim_start_matches("include ").trim();
+                    // Convert to !include syntax
+                    // Change extension from .wxi to .wxi.yaml if it's a WiX include
+                    let yaml_path = if include_path.ends_with(".wxi") {
+                        format!("{}.yaml", include_path)
+                    } else if include_path.ends_with(".wxs") {
+                        format!("{}.yaml", include_path)
+                    } else {
+                        include_path.to_string()
+                    };
+                    
+                    if let Some((_, parent_map)) = stack.last_mut() {
+                        // Store as special _include directive
+                        // Format: "!include path" which yaml_to_wix will recognize
+                        parent_map.insert("_include".to_string(), Value::String(format!("!include {}", yaml_path)));
+                    }
+                }
+                // Ignore other PIs like <?xml version="1.0"?>
+            }
             Ok(Event::End(_)) => {
                 if let Some((name, map)) = stack.pop() {
                     if let Some((_, parent_map)) = stack.last_mut() {

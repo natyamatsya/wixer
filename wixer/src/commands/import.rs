@@ -89,9 +89,10 @@ pub fn run(
 
                 // Check for preprocessor directives that can't be converted to YAML
                 let content = fs::read_to_string(path).unwrap_or_default();
-                if content.contains("<?if") || content.contains("<?define") || content.contains("<?include") {
-                    // Copy as-is with .yaml extension - can't convert preprocessor directives
-                    info!(file = %path.display(), "Skipping YAML conversion (preprocessor directives)");
+                
+                // <?if?> and <?define?> can't be converted - copy as-is
+                if content.contains("<?if") || content.contains("<?define") {
+                    info!(file = %path.display(), "Skipping YAML conversion (conditional preprocessor directives)");
                     fs::copy(path, &final_output_path).with_context(|| {
                         format!("Failed to copy {}", path.display())
                     })?;
