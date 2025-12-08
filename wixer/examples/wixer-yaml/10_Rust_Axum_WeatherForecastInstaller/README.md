@@ -1,4 +1,4 @@
-# 11_Rust_Axum_WeatherForecastInstaller
+# 10_Rust_Axum_WeatherForecastInstaller
 
 A modernized version of the ASP.NET Core WeatherForecast example, rebuilt using **Rust** and the **Axum** web framework.
 
@@ -15,12 +15,12 @@ A modernized version of the ASP.NET Core WeatherForecast example, rebuilt using 
 ## Project Structure
 
 ```
-11_Rust_Axum_WeatherForecastInstaller/
+10_Rust_Axum_WeatherForecastInstaller/
 ├── README.md
 ├── weather-api/                    # Rust web API
 │   ├── Cargo.toml
 │   └── src/main.rs
-└── 11_WeatherForecastInstaller/    # WiX installer
+└── 10_WeatherForecastInstaller/    # WiX installer
     └── Product.wxs.yaml
 ```
 
@@ -97,7 +97,7 @@ cargo build --release
 cd ..
 
 # Then build the MSI
-wixer build 11_WeatherForecastInstaller/Product.wxs.yaml -d BinarySource=weather-api/target/release
+wixer build 10_WeatherForecastInstaller/Product.wxs.yaml -d BinarySource=weather-api/target/release
 ```
 
 ## Comparison with ASP.NET Version

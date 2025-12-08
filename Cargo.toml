@@ -3,7 +3,7 @@ members = [
     "wixer",
 ]
 exclude = [
-    "wixer/examples/wixer-yaml/11_Rust_Axum_WeatherForecastInstaller/weather-api",
+    "wixer/examples/wixer-yaml/10_Rust_Axum_WeatherForecastInstaller/weather-api",
 ]
 resolver = "2"
 
