@@ -37,7 +37,7 @@ Wix:
     # Binary containing the custom action DLL
     Binary:
       - Id: CustomActionBinary
-        SourceFile: MyCSharpCustomAction/bin/x64/Release/net6.0-windows/win-x64/publish/MyCSharpCustomAction.dll
+        SourceFile: MyCSharpCustomAction/bin/x64/Release/net8.0-windows/win-x64/publish/MyCSharpCustomAction.dll
 
     # Custom Actions
     CustomAction:

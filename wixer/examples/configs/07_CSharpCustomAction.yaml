@@ -1,9 +1,3 @@
 name: "07_CSharpCustomAction"
-description: "Modern C# custom action example targeting .NET 6 and .NET 8"
-
-buildable: false
-skip_reason: "Requires building the C# project first (dotnet publish)"
-
-requires:
-  - path: "MyCSharpCustomAction/bin/x64/Release/net6.0-windows/win-x64/publish/MyCSharpCustomAction.dll"
-    description: "Published C# custom action DLL"
+description: "Modern C# custom action example targeting .NET 8"
+buildable: true

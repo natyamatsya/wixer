@@ -1,9 +1,3 @@
 name: "08_CppCustomAction"
 description: "Modern C++23 custom action example using CMake"
-
-buildable: false
-skip_reason: "Requires building the C++ project first (cmake --preset default)"
-
-requires:
-  - path: "MyCppCustomAction/build/MyCppCustomAction.dll"
-    description: "C++23 custom action DLL built with CMake"
+buildable: true

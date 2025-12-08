@@ -5,7 +5,9 @@
 /// It demonstrates immediate and deferred custom actions without
 /// depending on the WiX SDK (wcautil.lib).
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <msiquery.h>
 #include <string>
@@ -15,31 +17,36 @@
 namespace {
 
 /// Log a message to the MSI log
-void LogMessage(MSIHANDLE hInstall, std::wstring_view message) {
+void LogMessage(MSIHANDLE hInstall, const std::wstring& message) {
     PMSIHANDLE hRecord = MsiCreateRecord(1);
     if (hRecord) {
         MsiRecordSetStringW(hRecord, 0, L"[1]");
-        MsiRecordSetStringW(hRecord, 1, message.data());
+        MsiRecordSetStringW(hRecord, 1, message.c_str());
         MsiProcessMessage(hInstall, INSTALLMESSAGE_INFO, hRecord);
     }
 }
 
 /// Get a property value from the MSI session
-[[nodiscard]] std::expected<std::wstring, UINT> GetProperty(MSIHANDLE hInstall, std::wstring_view name) {
+[[nodiscard]] std::expected<std::wstring, UINT> GetProperty(MSIHANDLE hInstall, const wchar_t* name) {
+    // First call: get required buffer size
     DWORD size = 0;
-    UINT result = MsiGetPropertyW(hInstall, name.data(), L"", &size);
+    UINT result = MsiGetPropertyW(hInstall, name, const_cast<wchar_t*>(L""), &size);
     
     if (result == ERROR_MORE_DATA) {
-        std::wstring value(size, L'\0');
-        ++size; // Include null terminator
-        result = MsiGetPropertyW(hInstall, name.data(), value.data(), &size);
+        // size now contains character count excluding null terminator
+        // Allocate buffer with space for null terminator
+        std::wstring value(size + 1, L'\0');
+        size = static_cast<DWORD>(value.size());
+        result = MsiGetPropertyW(hInstall, name, value.data(), &size);
         if (result == ERROR_SUCCESS) {
-            value.resize(size); // Trim to actual size
+            // size now contains actual character count excluding null
+            value.resize(size);
             return value;
         }
     }
     
     if (result == ERROR_SUCCESS) {
+        // Property exists but is empty
         return std::wstring{};
     }
     
@@ -55,14 +62,19 @@ void LogMessage(MSIHANDLE hInstall, std::wstring_view message) {
 extern "C" __declspec(dllexport) UINT __stdcall MyImmediateCustomAction(MSIHANDLE hInstall) {
     LogMessage(hInstall, L"MyImmediateCustomAction: Starting");
     
-    // Read a property
+    // Read a property (MY_PROPERTY may or may not be defined)
     auto myProperty = GetProperty(hInstall, L"MY_PROPERTY");
     if (myProperty) {
-        auto msg = std::format(L"MyImmediateCustomAction: MY_PROPERTY = '{}'", *myProperty);
-        LogMessage(hInstall, msg);
+        if (myProperty->empty()) {
+            LogMessage(hInstall, L"MyImmediateCustomAction: MY_PROPERTY is not set (empty)");
+        } else {
+            auto msg = std::format(L"MyImmediateCustomAction: MY_PROPERTY = '{}'", *myProperty);
+            LogMessage(hInstall, msg);
+        }
     } else {
-        LogMessage(hInstall, L"MyImmediateCustomAction: Failed to read MY_PROPERTY");
-        return ERROR_INSTALL_FAILURE;
+        // This shouldn't happen for property reads, but handle it gracefully
+        auto msg = std::format(L"MyImmediateCustomAction: Failed to read MY_PROPERTY (error {})", myProperty.error());
+        LogMessage(hInstall, msg);
     }
     
     // Set a property for later use
@@ -82,14 +94,18 @@ extern "C" __declspec(dllexport) UINT __stdcall MyDeferredCustomAction(MSIHANDLE
     // Deferred actions can only read CustomActionData
     auto customActionData = GetProperty(hInstall, L"CustomActionData");
     if (customActionData) {
-        auto msg = std::format(L"MyDeferredCustomAction: CustomActionData = '{}'", *customActionData);
-        LogMessage(hInstall, msg);
-        
-        // Parse CustomActionData (format: "Key1=Value1;Key2=Value2")
-        // In a real CA, you'd parse this to extract individual values
+        if (customActionData->empty()) {
+            LogMessage(hInstall, L"MyDeferredCustomAction: CustomActionData is empty");
+        } else {
+            auto msg = std::format(L"MyDeferredCustomAction: CustomActionData = '{}'", *customActionData);
+            LogMessage(hInstall, msg);
+            
+            // Parse CustomActionData (format: "Key1=Value1;Key2=Value2")
+            // In a real CA, you'd parse this to extract individual values
+        }
     } else {
-        LogMessage(hInstall, L"MyDeferredCustomAction: Failed to read CustomActionData");
-        return ERROR_INSTALL_FAILURE;
+        auto msg = std::format(L"MyDeferredCustomAction: Failed to read CustomActionData (error {})", customActionData.error());
+        LogMessage(hInstall, msg);
     }
     
     LogMessage(hInstall, L"MyDeferredCustomAction: Completed successfully");
