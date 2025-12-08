@@ -1,8 +1,4 @@
 name: "02_x64_arm64_Installer"
-description: "Platform-dependent installer demonstrating x64/arm64 conditional builds"
+description: "64-bit installer example for x64 architecture"
 arch: x64
-buildable: false
-skip_reason: "uses preprocessor directives - build from gallery/wix-v4 instead"
-
-defines:
-  Platform: x64
+buildable: true

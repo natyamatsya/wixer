@@ -1,0 +1,51 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    ProductCode: "*"
+    Language: 1033
+    Manufacturer: Acme Corporation
+    Name: "02_x64_arm64_Installer"
+    UpgradeCode: "{1AB189BA-5B13-4448-A916-4E25B814D2AA}"
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MajorUpgrade:
+      DowngradeErrorMessage: "A later version of [ProductName] is already installed. Setup will now exit."
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFiles64Folder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: "02_x64_arm64_Installer"
+    ComponentGroup:
+      Directory: INSTALLFOLDER
+      Id: ProductComponentGroup
+      Component:
+      - Id: cmp_FileToInstall.txt
+        Guid: "*"
+        Bitness: always64
+        File:
+          KeyPath: yes
+          Source: FileToInstall.txt
+      - Id: cmp_my.dll
+        Guid: "*"
+        Bitness: always64
+        File:
+          KeyPath: yes
+          Source: my_x64.dll
+      - Id: cmp_RegistryEntry
+        Guid: "*"
+        Bitness: always64
+        RegistryKey:
+          Root: HKLM
+          Key: "Software\\[Manufacturer]\\[ProductName]"
+          RegistryValue:
+            KeyPath: yes
+            Type: string
+            Name: Install location
+            Value: "[INSTALLFOLDER]"
+    Feature:
+      Id: HelloWorldFeature
+      ComponentGroupRef:
+        Id: ProductComponentGroup

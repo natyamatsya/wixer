@@ -401,13 +401,13 @@ fn discover_build_examples(
                     .map(|e| e.path().to_path_buf())
                     .collect();
                 
-                // Find YAML include files (.wxi.yaml) - these are templates
-                let yaml_include_files: Vec<PathBuf> = WalkDir::new(&path)
+                // Find YAML template files (.yaml.in) - these are templates for <?include?>
+                let yaml_template_files: Vec<PathBuf> = WalkDir::new(&path)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| {
                         let fname = e.file_name().to_str().unwrap_or("");
-                        fname.ends_with(".wxi.yaml")
+                        fname.ends_with(".yaml.in")
                     })
                     .map(|e| e.path().to_path_buf())
                     .collect();
@@ -424,12 +424,12 @@ fn discover_build_examples(
                     .collect();
                 
                 // Determine build files:
-                // Include all source files (.wxs.yaml, .wxs, .wxi.yaml)
-                // Mixed projects (XML + YAML) are supported
+                // Include all source files (.wxs.yaml, .wxs)
+                // .yaml.in templates are handled by wixer build automatically
                 let mut build_files = Vec::new();
                 build_files.extend(yaml_main_files);
                 build_files.extend(xml_files);
-                build_files.extend(yaml_include_files);
+                // Don't include .yaml.in templates - wixer build exports them automatically
                 
                 if build_files.is_empty() {
                     continue;
@@ -506,18 +506,6 @@ fn build_example(example: &BuildExample, msi_dir: &Path, wixer_path: &Path, _ver
         }
     }
     
-    // Export .wxi.yaml files to .wxi (templates for XML builds)
-    // This allows XML files with <?include?> to reference YAML-defined includes
-    for file in &example.build_files {
-        let fname = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if fname.ends_with(".wxi.yaml") {
-            let wxi_path = file.with_extension(""); // Remove .yaml -> .wxi
-            if let Err(e) = export_yaml_to_wxi(file, &wxi_path) {
-                return BuildResult::Error(format!("export {}: {}", fname, e));
-            }
-        }
-    }
-    
     let msi_path = msi_dir.join(format!("{}.msi", example.name));
     
     // Build command
@@ -565,13 +553,6 @@ fn build_example(example: &BuildExample, msi_dir: &Path, wixer_path: &Path, _ver
         }
         Err(e) => BuildResult::Error(format!("exec failed: {}", e)),
     }
-}
-
-/// Export a .wxi.yaml file to .wxi (XML)
-/// This allows XML files with <?include?> to reference YAML-defined includes
-fn export_yaml_to_wxi(yaml_path: &Path, wxi_path: &Path) -> Result<()> {
-    use wixer::yaml_to_wix;
-    yaml_to_wix::convert_file(yaml_path, wxi_path, AttributeStrategy::Inline, &std::collections::HashSet::new())
 }
 
 /// Find examples from submodule (v3 WiX files)

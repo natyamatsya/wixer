@@ -272,6 +272,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
         new_args.push(arg.clone());
     }
     
+    // Export template files (.in suffix) referenced by <?include?> directives
+    // e.g., if Product.wxs has <?include Foo.wxi?> and Foo.wxi.in exists, export it to Foo.wxi
+    export_template_files(&converted_files, &known_attributes)?;
+    
     // Auto-detect required extensions if user didn't specify any
     if !has_ext_arg {
         let mut required_extensions: HashSet<&str> = HashSet::new();
@@ -409,5 +413,47 @@ fn run_ice_validation(msi_path: &Path) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Export YAML template files (.yaml.in suffix) to their target XML files
+/// Scans XML files for <?include file.wxi?> directives and checks if file.wxi.yaml.in exists
+fn export_template_files(files: &[PathBuf], known_attributes: &HashSet<String>) -> Result<()> {
+    use regex::Regex;
+    
+    let include_re = Regex::new(r#"<\?include\s+([^?]+)\s*\?>"#).unwrap();
+    
+    for file_path in files {
+        let content = match std::fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        
+        let file_dir = file_path.parent().unwrap_or(Path::new("."));
+        
+        for cap in include_re.captures_iter(&content) {
+            let include_file = cap.get(1).map(|m| m.as_str().trim()).unwrap_or("");
+            if include_file.is_empty() {
+                continue;
+            }
+            
+            let include_path = file_dir.join(include_file);
+            let template_path = file_dir.join(format!("{}.yaml.in", include_file));
+            
+            // Check if YAML template file exists (e.g., Foo.wxi.yaml.in -> Foo.wxi)
+            if template_path.exists() && !include_path.exists() {
+                info!("Exporting template: {} -> {}", template_path.display(), include_path.display());
+                
+                // Convert YAML template to XML
+                yaml_to_wix::convert_file(
+                    &template_path,
+                    &include_path,
+                    crate::common::AttributeStrategy::Inline,
+                    known_attributes,
+                ).with_context(|| format!("Failed to export template {}", template_path.display()))?;
+            }
+        }
+    }
+    
     Ok(())
 }
