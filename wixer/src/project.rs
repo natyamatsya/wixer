@@ -57,10 +57,19 @@ impl WixProject {
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             
             let is_wix = matches!(ext, "wxs" | "wxi" | "wsi" | "wxl");
+            let is_yaml = ext == "yaml" || ext == "yml";
             let is_template = ext == "in";
 
+            // Load WiX XML files
             if is_wix || (is_template && path.file_stem().and_then(|s| Path::new(s).extension()).is_some()) {
                 self.add_file(path)?;
+            }
+            // Load YAML files that look like WiX YAML (e.g., Product.wxs.yaml)
+            else if is_yaml {
+                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if stem.ends_with(".wxs") || stem.ends_with(".wxi") || stem.ends_with(".wxl") {
+                    self.add_file(path)?;
+                }
             }
         }
         Ok(())

@@ -139,7 +139,10 @@ pub fn analyze_project(project: &WixProject) -> AnalysisResults {
 fn check_upgrade_code(project: &WixProject, results: &mut AnalysisResults) {
     let mut has_upgrade_code = false;
 
-    for (_path, file) in &project.files {
+    for (path, file) in &project.files {
+        let path_str = path.display().to_string();
+        
+        // Check XML files
         if let Ok(doc) = Document::parse(&file.content) {
             for node in doc.descendants() {
                 let name = node.tag_name().name();
@@ -149,6 +152,15 @@ fn check_upgrade_code(project: &WixProject, results: &mut AnalysisResults) {
                 }
             }
         }
+        
+        // Check YAML files (simple string search for UpgradeCode key)
+        if path_str.ends_with(".yaml") || path_str.ends_with(".yml") {
+            // Look for UpgradeCode: followed by a GUID-like value
+            if file.content.contains("UpgradeCode:") {
+                has_upgrade_code = true;
+            }
+        }
+        
         if has_upgrade_code {
             break;
         }
