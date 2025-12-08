@@ -2,6 +2,7 @@ Wix:
   xmlns: http://wixtoolset.org/schemas/v4/wxs
   Package:
     ProductCode: DD475EBC-D960-4AF4-BB8A-BE91FA942756
+    UpgradeCode: 7B1E5B3A-8F2D-4C6E-9A1B-3D4E5F6A7B8C
     Language: '1033'
     Manufacturer: Acme Corporation
     Name: Hello World

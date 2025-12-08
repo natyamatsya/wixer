@@ -8,16 +8,16 @@ Include:
   - Id: Upgrading
     After: SetFirstInstall
     Value: 'true'
-    Condition: WIX_UPGRADE_DETECTED AND NOT (REMOVE=&quot;ALL&quot;)
+    Condition: 'WIX_UPGRADE_DETECTED AND NOT (REMOVE="ALL")'
   - Id: RemovingForUpgrade
     After: RemoveExistingProducts
     Sequence: execute
     Value: 'true'
-    Condition: (REMOVE=&quot;ALL&quot;) AND UPGRADINGPRODUCTCODE
+    Condition: '(REMOVE="ALL") AND UPGRADINGPRODUCTCODE'
   - Id: Uninstalling
     After: SetUpgrading
     Value: 'true'
-    Condition: Installed AND (REMOVE=&quot;ALL&quot;) AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE)
+    Condition: 'Installed AND (REMOVE="ALL") AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE)'
   - Id: Maintenance
     After: SetUninstalling
     Value: 'true'

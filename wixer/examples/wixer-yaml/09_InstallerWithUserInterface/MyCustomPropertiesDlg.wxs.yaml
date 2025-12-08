@@ -48,7 +48,7 @@ Wix:
           Width: '100'
           Height: '15'
           TabSkip: no
-          Text: '&amp;My property:'
+          Text: '&My property:'
         - Id: NameEdit
           Type: Edit
           X: '30'
@@ -69,7 +69,7 @@ Wix:
           Y: '243'
           Width: '56'
           Height: '17'
-          Text: '&amp;Back'
+          Text: '&Back'
           Publish:
             Event: NewDialog
             Value: InstallDirDlg
@@ -81,8 +81,8 @@ Wix:
           Width: '56'
           Height: '17'
           Default: yes
-          Text: '&amp;Next'
-          EnableCondition: 'MY_PROPERTY &lt;&gt; ""'
+          Text: '&Next'
+          EnableCondition: 'MY_PROPERTY <> ""'
           DisableCondition: 'MY_PROPERTY = ""'
           Publish:
           - Event: SpawnWaitDialog

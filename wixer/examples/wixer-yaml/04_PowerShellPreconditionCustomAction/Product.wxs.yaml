@@ -64,7 +64,7 @@ Wix:
       Id: CA_AppendTextUsingPowerShell
       Before: CA_AppendTextUsingPowerShell
       Sequence: execute
-      Value: '&quot;[POWERSHELLEXE]&quot; -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Bypass -File &quot;[MY_INSTALL_LOCATION]MyAppendScript.ps1&quot; -propertyValue &quot;[MY_PROPERTY]&quot;'
+      Value: '"[POWERSHELLEXE]" -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Bypass -File "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -propertyValue "[MY_PROPERTY]"'
     CustomAction:
       Id: CA_AppendTextUsingPowerShell
       BinaryRef: Wix4UtilCA_X86

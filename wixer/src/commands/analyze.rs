@@ -305,6 +305,20 @@ fn check_xml_entities_in_yaml(project: &WixProject, results: &mut AnalysisResult
             continue;
         }
 
+        // Skip files that are actually XML (start with <?xml or <Wix)
+        // These are miscategorized and should be renamed to .wxs
+        let trimmed = file.content.trim_start();
+        if trimmed.starts_with("<?xml") || trimmed.starts_with("<Wix") || trimmed.starts_with("<Include") {
+            results.issues.push(
+                Issue::warning(
+                    "YAML002",
+                    "File has .yaml extension but contains XML content. Consider renaming to .wxs",
+                )
+                .with_file(path_str.clone()),
+            );
+            continue;
+        }
+
         for (entity, replacement) in &entities {
             if file.content.contains(entity) {
                 results.issues.push(
