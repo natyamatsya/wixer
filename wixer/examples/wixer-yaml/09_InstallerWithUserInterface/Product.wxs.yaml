@@ -14,7 +14,44 @@ Wix:
       DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
     MediaTemplate:
       EmbedCab: yes
-    _include: '!include InstallationStages.wxi.yaml'
+    SetProperty:
+    - Id: FirstInstall
+      After: FindRelatedProducts
+      Value: 'true'
+      Condition: NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT WIX_DOWNGRADE_DETECTED
+    - Id: Upgrading
+      After: SetFirstInstall
+      Value: 'true'
+      Condition: 'WIX_UPGRADE_DETECTED AND NOT (REMOVE="ALL")'
+    - Id: RemovingForUpgrade
+      After: RemoveExistingProducts
+      Sequence: execute
+      Value: 'true'
+      Condition: '(REMOVE="ALL") AND UPGRADINGPRODUCTCODE'
+    - Id: Uninstalling
+      After: SetUpgrading
+      Value: 'true'
+      Condition: 'Installed AND (REMOVE="ALL") AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE)'
+    - Id: Maintenance
+      After: SetUninstalling
+      Value: 'true'
+      Condition: Installed AND NOT Upgrading AND NOT Uninstalling AND NOT UPGRADINGPRODUCTCODE
+    - Id: CA_AppendTextUsingPowerShell_FirstInstall
+      Before: CA_AppendTextUsingPowerShell_FirstInstall
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s FirstInstall -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Upgrading
+      Before: CA_AppendTextUsingPowerShell_Upgrading
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Upgrading -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Uninstalling
+      Before: CA_AppendTextUsingPowerShell_Uninstalling
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Uninstalling -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Maintenance
+      Before: CA_AppendTextUsingPowerShell_Maintenance
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Maintenance -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
     Property:
     - Id: POWERSHELLVERSION
       RegistrySearch:
@@ -163,23 +200,6 @@ Wix:
             Type: string
             Name: My install location
             Value: '[MY_INSTALL_LOCATION]'
-    SetProperty:
-    - Id: CA_AppendTextUsingPowerShell_FirstInstall
-      Before: CA_AppendTextUsingPowerShell_FirstInstall
-      Sequence: execute
-      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s FirstInstall -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
-    - Id: CA_AppendTextUsingPowerShell_Upgrading
-      Before: CA_AppendTextUsingPowerShell_Upgrading
-      Sequence: execute
-      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Upgrading -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
-    - Id: CA_AppendTextUsingPowerShell_Uninstalling
-      Before: CA_AppendTextUsingPowerShell_Uninstalling
-      Sequence: execute
-      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Uninstalling -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
-    - Id: CA_AppendTextUsingPowerShell_Maintenance
-      Before: CA_AppendTextUsingPowerShell_Maintenance
-      Sequence: execute
-      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Maintenance -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
     UI:
       Id: MyWixUI_InstallDir
       ui:WixUI:
@@ -204,4 +224,3 @@ Wix:
       Id: HelloWorldFeature
       ComponentGroupRef:
         Id: ProductComponentGroup
-
