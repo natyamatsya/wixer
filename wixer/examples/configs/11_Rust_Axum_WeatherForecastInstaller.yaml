@@ -1,0 +1,5 @@
+name: "11_Rust_Axum_WeatherForecastInstaller"
+description: "Rust/Axum Weather API - single binary deployment with no runtime dependencies"
+buildable: true
+defines:
+  BinarySource: ../weather-api/target/release
