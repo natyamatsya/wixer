@@ -319,3 +319,107 @@ pub struct FileTypeAssociation {
     pub extensions: Vec<String>,
     pub icon: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_v3_detection() {
+        let mut project = WixProject::new();
+        project.files.insert(
+            PathBuf::from("test.wxs"),
+            WixFile {
+                path: PathBuf::from("test.wxs"),
+                content: r#"<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Test" Version="1.0" Manufacturer="Test" UpgradeCode="{00000000-0000-0000-0000-000000000000}">
+    <Package/>
+  </Product>
+</Wix>"#.to_string(),
+            },
+        );
+        assert!(project.is_v3());
+        assert!(!project.is_v4());
+    }
+
+    #[test]
+    fn test_is_v4_detection() {
+        let mut project = WixProject::new();
+        project.files.insert(
+            PathBuf::from("test.wxs"),
+            WixFile {
+                path: PathBuf::from("test.wxs"),
+                content: r#"<?xml version="1.0"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package ProductCode="*" Name="Test" Version="1.0" Manufacturer="Test" UpgradeCode="{00000000-0000-0000-0000-000000000000}"/>
+</Wix>"#.to_string(),
+            },
+        );
+        assert!(!project.is_v3());
+        assert!(project.is_v4());
+    }
+
+    #[test]
+    fn test_build_upgrade_context() {
+        let mut project = WixProject::new();
+        project.files.insert(
+            PathBuf::from("Product.wxs"),
+            WixFile {
+                path: PathBuf::from("Product.wxs"),
+                content: r#"<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product>
+    <Property Id="WIXUI_INSTALLDIR" Value="MY_INSTALL_LOCATION"/>
+  </Product>
+</Wix>"#.to_string(),
+            },
+        );
+        project.files.insert(
+            PathBuf::from("UI.wxs"),
+            WixFile {
+                path: PathBuf::from("UI.wxs"),
+                content: r#"<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <UIRef Id="WixUI_InstallDir"/>
+  </Fragment>
+</Wix>"#.to_string(),
+            },
+        );
+
+        let ctx = project.build_upgrade_context();
+        
+        // Context should have property from Product.wxs
+        assert_eq!(ctx.get_wixui_install_directory(), Some("MY_INSTALL_LOCATION"));
+        // Context should have UIRef from UI.wxs
+        assert!(ctx.has_ui_ref("WixUI_InstallDir"));
+        assert!(ctx.needs_ui_namespace);
+    }
+
+    #[test]
+    fn test_upgrade_to_v4() {
+        let mut project = WixProject::new();
+        project.files.insert(
+            PathBuf::from("test.wxs"),
+            WixFile {
+                path: PathBuf::from("test.wxs"),
+                content: r#"<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Test" Version="1.0" Manufacturer="Test" UpgradeCode="{00000000-0000-0000-0000-000000000000}">
+    <Package Compressed="yes"/>
+  </Product>
+</Wix>"#.to_string(),
+            },
+        );
+
+        let upgraded = project.upgrade_to_v4().unwrap();
+        let content = upgraded.get(&PathBuf::from("test.wxs")).unwrap();
+        
+        // Should have v4 namespace
+        assert!(content.contains("http://wixtoolset.org/schemas/v4/wxs"));
+        // Should have Package instead of Product
+        assert!(content.contains("<Package"));
+        assert!(!content.contains("<Product"));
+    }
+}
