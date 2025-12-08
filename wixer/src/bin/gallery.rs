@@ -14,9 +14,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
 
-use wixer::commands::{import, upgrade};
+use wixer::commands::import;
 use wixer::common::AttributeStrategy;
 use wixer::example_config::ExampleConfig;
+use wixer::project::WixProject;
 
 #[derive(Parser)]
 #[command(name = "wixer-gallery")]
@@ -146,26 +147,19 @@ fn main() -> Result<()> {
         // Copy non-WiX files (README, scripts, etc.) to v4 dir
         copy_supporting_files(&example.path, &v4_example_dir)?;
 
-        // Collect all file pairs for batch upgrade (enables cross-file context)
-        let mut file_pairs: Vec<(PathBuf, PathBuf)> = Vec::new();
+        // Load example as a WixProject for cross-file context
+        let mut project = WixProject::new();
         for wxs_file in &example.wxs_files {
-            let relative = wxs_file.strip_prefix(&example.path).unwrap_or(wxs_file);
-            let v4_output = v4_example_dir.join(relative);
-
-            // Create parent dirs
-            if let Some(parent) = v4_output.parent() {
-                fs::create_dir_all(parent)?;
+            if let Err(e) = project.add_file(wxs_file) {
+                eprintln!("  ⚠ Warning: Failed to load {}: {}", wxs_file.display(), e);
             }
-
-            file_pairs.push((wxs_file.clone(), v4_output));
         }
 
-        // Batch upgrade all files with shared cross-file context
-        // This enables transformations like WIXUI_INSTALLDIR in one file, UIRef in another
-        match upgrade::run_batch(&file_pairs) {
-            Ok(()) => {
-                for (input, _output) in &file_pairs {
-                    let relative = input.strip_prefix(&example.path).unwrap_or(input);
+        // Upgrade using WixProject (shared cross-file context)
+        match project.upgrade_to_v4_dir(&example.path, &v4_example_dir) {
+            Ok(output_paths) => {
+                for path in &output_paths {
+                    let relative = path.strip_prefix(&v4_example_dir).unwrap_or(path);
                     stats.upgraded += 1;
                     if args.verbose {
                         println!("  ✓ Upgraded: {}", relative.display());
@@ -173,7 +167,7 @@ fn main() -> Result<()> {
                 }
             }
             Err(e) => {
-                stats.upgrade_errors += file_pairs.len();
+                stats.upgrade_errors += example.wxs_files.len();
                 eprintln!("  ✗ Failed to upgrade example: {}", e);
             }
         }

@@ -6,6 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::upgrade::{UpgradeContext, upgrade_content_with_context};
+
 #[derive(Debug, Clone)]
 pub struct WixFile {
     pub path: PathBuf,
@@ -218,6 +220,95 @@ impl WixProject {
             }
         }
         None
+    }
+
+    // ========================================================================
+    // Upgrade Support
+    // ========================================================================
+
+    /// Build an UpgradeContext from all files in the project
+    /// 
+    /// This enables cross-file transformations during v3→v4 upgrade,
+    /// such as finding WIXUI_INSTALLDIR property in one file when
+    /// UIRef is in another.
+    pub fn build_upgrade_context(&self) -> UpgradeContext {
+        let mut ctx = UpgradeContext::new();
+        for file in self.files.values() {
+            // Ignore errors - context building is best-effort
+            let _ = ctx.analyze_content(&file.content);
+        }
+        ctx
+    }
+
+    /// Upgrade all files in the project from WiX v3 to v4
+    /// 
+    /// Uses shared cross-file context for transformations that
+    /// depend on information from other files.
+    /// 
+    /// Returns a map of original path → upgraded content
+    pub fn upgrade_to_v4(&self) -> Result<HashMap<PathBuf, String>> {
+        let ctx = self.build_upgrade_context();
+        let mut results = HashMap::new();
+        
+        for (path, file) in &self.files {
+            let upgraded = upgrade_content_with_context(&file.content, &ctx)
+                .with_context(|| format!("Failed to upgrade {}", path.display()))?;
+            results.insert(path.clone(), upgraded);
+        }
+        
+        Ok(results)
+    }
+
+    /// Upgrade all files and write to an output directory
+    /// 
+    /// Preserves the relative directory structure from the project root.
+    pub fn upgrade_to_v4_dir(&self, project_root: &Path, output_dir: &Path) -> Result<Vec<PathBuf>> {
+        let upgraded = self.upgrade_to_v4()?;
+        let mut output_paths = Vec::new();
+        
+        for (input_path, content) in upgraded {
+            // Compute relative path from project root
+            let relative = input_path.strip_prefix(project_root)
+                .unwrap_or(&input_path);
+            let output_path = output_dir.join(relative);
+            
+            // Create parent directories
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            
+            fs::write(&output_path, content)
+                .with_context(|| format!("Failed to write {}", output_path.display()))?;
+            
+            output_paths.push(output_path);
+        }
+        
+        Ok(output_paths)
+    }
+
+    /// Check if the project appears to be WiX v3 (needs upgrade)
+    pub fn is_v3(&self) -> bool {
+        for file in self.files.values() {
+            // Check for v3 namespace
+            if file.content.contains("http://schemas.microsoft.com/wix/2006/wi") {
+                return true;
+            }
+            // Check for Product element (v3) vs Package (v4)
+            if file.content.contains("<Product ") || file.content.contains("<Product>") {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if the project appears to be WiX v4
+    pub fn is_v4(&self) -> bool {
+        for file in self.files.values() {
+            if file.content.contains("http://wixtoolset.org/schemas/v4/wxs") {
+                return true;
+            }
+        }
+        false
     }
 }
 
