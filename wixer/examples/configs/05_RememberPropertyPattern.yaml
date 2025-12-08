@@ -1,7 +1,6 @@
 name: "05_RememberPropertyPattern"
 description: "Demonstrates the Remember Property pattern for persisting values across installs"
+buildable: true
 
 extensions:
   - WixToolset.Util.wixext
-
-buildable: true

@@ -1,17 +1,22 @@
-//! Gallery Builder - Builds the wixer example gallery from WiXInstallerExamples
+//! Gallery Builder - Builds the wixer example gallery
 //!
-//! This tool processes the WiXInstallerExamples submodule and creates:
-//! - v4/     WiX v4 XML files (upgraded from v3)
-//! - yaml/   YAML equivalents of the v4 files
+//! This tool processes examples from multiple sources:
+//! - WiXInstallerExamples submodule (v3 → v4 upgrade)
+//! - Curated wixer-yaml gallery (native YAML examples)
 //!
 //! Usage:
-//!   wixer-gallery [--clean] [--source <path>] [--output <path>]
+//!   wixer-gallery --build --source-type yaml    # Build only curated YAML examples
+//!   wixer-gallery --build --source-type all     # Build from all sources
+//!   wixer-gallery --upgrade                     # Upgrade submodule v3 → v4
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use walkdir::WalkDir;
 
 use wixer::commands::import;
@@ -19,10 +24,24 @@ use wixer::common::AttributeStrategy;
 use wixer::example_config::ExampleConfig;
 use wixer::project::WixProject;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum SourceType {
+    /// Only curated YAML examples (wixer-yaml/)
+    Yaml,
+    /// Only upgraded submodule examples (WiXInstallerExamples → wix-v4/)
+    Submodule,
+    /// All examples from both sources
+    All,
+}
+
 #[derive(Parser)]
 #[command(name = "wixer-gallery")]
-#[command(about = "Build the wixer example gallery from WiXInstallerExamples")]
+#[command(about = "Build the wixer example gallery")]
 struct Args {
+    /// Source type to process
+    #[arg(long, default_value = "all")]
+    source_type: SourceType,
+
     /// Source directory containing WiX v3 examples (submodule)
     #[arg(short, long, default_value = "examples/WiXInstallerExamples")]
     source: PathBuf,
@@ -47,11 +66,11 @@ struct Args {
     #[arg(long)]
     only: Option<String>,
 
-    /// Skip YAML conversion (only upgrade to v4)
+    /// Upgrade submodule examples from v3 to v4
     #[arg(long)]
-    no_yaml: bool,
+    upgrade: bool,
 
-    /// Build MSI packages from the curated YAML gallery
+    /// Build MSI packages
     #[arg(short, long)]
     build: bool,
 
@@ -70,6 +89,10 @@ struct Args {
     /// Run ICE validation on built MSI files
     #[arg(long)]
     validate: bool,
+
+    /// Number of parallel jobs (0 = auto)
+    #[arg(short = 'j', long, default_value = "0")]
+    jobs: usize,
 }
 
 fn main() -> Result<()> {
@@ -86,247 +109,152 @@ fn main() -> Result<()> {
             .init();
     }
 
-    let source = if args.source.is_absolute() {
-        args.source.clone()
-    } else {
-        std::env::current_dir()?.join(&args.source)
-    };
-
-    let output = if args.output.is_absolute() {
-        args.output.clone()
-    } else {
-        std::env::current_dir()?.join(&args.output)
-    };
-
-    let yaml_gallery = if args.yaml_gallery.is_absolute() {
-        args.yaml_gallery.clone()
-    } else {
-        std::env::current_dir()?.join(&args.yaml_gallery)
-    };
-
-    if !source.exists() {
-        anyhow::bail!(
-            "Source directory not found: {}\nRun from the wixer root or specify --source",
-            source.display()
-        );
+    // Configure thread pool
+    if args.jobs > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.jobs)
+            .build_global()
+            .ok();
     }
 
-    // wix-v4/ is always regenerated from submodule (ephemeral)
+    let cwd = std::env::current_dir()?;
+    let source = if args.source.is_absolute() { args.source.clone() } else { cwd.join(&args.source) };
+    let output = if args.output.is_absolute() { args.output.clone() } else { cwd.join(&args.output) };
+    let yaml_gallery = if args.yaml_gallery.is_absolute() { args.yaml_gallery.clone() } else { cwd.join(&args.yaml_gallery) };
+    let configs_dir = if args.configs.is_absolute() { args.configs.clone() } else { cwd.join(&args.configs) };
+
     let v4_dir = output.join("wix-v4");
-    // wixer-yaml/ is the curated gallery (tracked in git)
-    // We only write to it with --refresh
-
-    // Clean v4 output if requested (never clean curated yaml gallery automatically)
-    if args.clean {
-        if v4_dir.exists() {
-            println!("Cleaning {}", v4_dir.display());
-            fs::remove_dir_all(&v4_dir)?;
-        }
-    }
-
-    fs::create_dir_all(&v4_dir)?;
+    let msi_dir = output.join("msi");
 
     // Parse filter
     let filter: Option<Vec<String>> = args.only.map(|s| {
-        s.split(',')
-            .map(|p| p.trim().to_string())
-            .collect()
+        s.split(',').map(|p| p.trim().to_string()).collect()
     });
 
-    // Find all example directories
-    let examples = find_examples(&source, filter.as_ref())?;
-
-    println!("Found {} examples to process", examples.len());
-    println!();
+    // Clean if requested
+    if args.clean {
+        for dir in [&v4_dir, &msi_dir] {
+            if dir.exists() {
+                println!("Cleaning {}", dir.display());
+                fs::remove_dir_all(dir)?;
+            }
+        }
+    }
 
     let mut stats = Stats::default();
 
-    for example in &examples {
-        println!("Processing: {}", example.name);
-
-        // Create v4 output directory
-        let v4_example_dir = v4_dir.join(&example.name);
-        fs::create_dir_all(&v4_example_dir)?;
-
-        // Copy non-WiX files (README, scripts, etc.) to v4 dir
-        copy_supporting_files(&example.path, &v4_example_dir)?;
-
-        // Load example as a WixProject for cross-file context
-        let mut project = WixProject::new();
-        for wxs_file in &example.wxs_files {
-            if let Err(e) = project.add_file(wxs_file) {
-                eprintln!("  ⚠ Warning: Failed to load {}: {}", wxs_file.display(), e);
-            }
-        }
-
-        // Upgrade using WixProject (shared cross-file context)
-        match project.upgrade_to_v4_dir(&example.path, &v4_example_dir) {
-            Ok(output_paths) => {
-                for path in &output_paths {
-                    let relative = path.strip_prefix(&v4_example_dir).unwrap_or(path);
-                    stats.upgraded += 1;
-                    if args.verbose {
-                        println!("  ✓ Upgraded: {}", relative.display());
-                    }
-                }
-            }
-            Err(e) => {
-                stats.upgrade_errors += example.wxs_files.len();
-                eprintln!("  ✗ Failed to upgrade example: {}", e);
-            }
-        }
-
-        // Refresh curated YAML gallery if requested
-        if args.refresh {
-            let yaml_example_dir = yaml_gallery.join(&example.name);
-            fs::create_dir_all(&yaml_example_dir)?;
-            copy_supporting_files(&example.path, &yaml_example_dir)?;
+    // === UPGRADE: Process submodule examples (v3 → v4) ===
+    if args.upgrade && (args.source_type == SourceType::Submodule || args.source_type == SourceType::All) {
+        if !source.exists() {
+            eprintln!("Warning: Submodule source not found: {}", source.display());
+        } else {
+            fs::create_dir_all(&v4_dir)?;
+            let submodule_examples = find_submodule_examples(&source, filter.as_ref())?;
             
-            match import::run(&v4_example_dir, &yaml_example_dir, AttributeStrategy::Inline) {
-                Ok(()) => {
-                    stats.converted += 1;
-                    if args.verbose {
-                        println!("  ✓ Refreshed YAML gallery");
-                    }
+            println!("=== Upgrading Submodule Examples (v3 → v4) ===");
+            println!("Found {} examples", submodule_examples.len());
+            println!();
+
+            for example in &submodule_examples {
+                print!("Upgrading {}... ", example.name);
+                
+                let v4_example_dir = v4_dir.join(&example.name);
+                fs::create_dir_all(&v4_example_dir)?;
+                copy_supporting_files(&example.path, &v4_example_dir)?;
+
+                let mut project = WixProject::new();
+                for wxs_file in &example.wxs_files {
+                    let _ = project.add_file(wxs_file);
                 }
-                Err(e) => {
-                    stats.convert_errors += 1;
-                    eprintln!("  ✗ Failed to convert to YAML: {}", e);
-                }
-            }
-        }
 
-        println!();
-    }
-
-    // Print summary
-    println!("=== Gallery Upgrade Complete ===");
-    println!("Examples processed: {}", examples.len());
-    println!("Files upgraded:     {} ({} errors)", stats.upgraded, stats.upgrade_errors);
-    if args.refresh {
-        println!("YAML refreshed:     {} ({} errors)", stats.converted, stats.convert_errors);
-    }
-    println!();
-    println!("Output:");
-    println!("  v4:   {}", v4_dir.display());
-    if args.refresh {
-        println!("  yaml: {}", yaml_gallery.display());
-    }
-
-    // Generate index
-    generate_index(&output, &examples)?;
-
-    // Build MSI packages if requested (from curated YAML gallery)
-    if args.build {
-        println!();
-        println!("=== Building MSI Packages (from curated gallery) ===");
-        
-        let msi_dir = output.join("msi");
-        fs::create_dir_all(&msi_dir)?;
-        
-        // Resolve configs directory (relative paths are relative to CWD)
-        let configs_dir = &args.configs;
-        
-        for example in &examples {
-            // Load example configuration from configs directory
-            let config_path = configs_dir.join(format!("{}.yaml", example.name));
-            let example_config = if config_path.exists() {
-                ExampleConfig::load(&config_path).ok()
-            } else {
-                None
-            };
-            
-            // Check if example is marked as not buildable
-            if let Some(ref config) = example_config {
-                if !config.buildable {
-                    print!("Building {}... ", example.name);
-                    println!("⊘ (skipped: {})", config.skip_reason.as_deref().unwrap_or("not buildable"));
-                    continue;
-                }
-            }
-            
-            // Build from curated wixer-yaml/ gallery
-            let yaml_example_dir = yaml_gallery.join(&example.name);
-            let v4_example_dir = v4_dir.join(&example.name);
-            let product_yaml = find_product_yaml(&yaml_example_dir);
-            
-            if let Some(yaml_path) = product_yaml {
-                let msi_path = msi_dir.join(format!("{}.msi", example.name));
-                
-                print!("Building {}... ", example.name);
-                
-                // Check if the "yaml" file is actually XML (copied due to preprocessor directives)
-                let content = fs::read_to_string(&yaml_path).unwrap_or_default();
-                let is_xml = content.trim_start().starts_with("<?xml") || content.trim_start().starts_with("<Wix");
-                
-                // Check if this is a multi-file project (has more than one .wxs file)
-                let all_wxs = find_all_wxs(&v4_example_dir);
-                let is_multi_file = all_wxs.len() > 1;
-                
-                let result = if is_xml || is_multi_file {
-                    // Build from v4 XML directly using wix.exe
-                    // For multi-file projects, we need to build all wxs files together
-                    if all_wxs.is_empty() {
-                        println!("✗ (no v4 wxs found)");
-                        stats.build_errors += 1;
-                        continue;
-                    }
-                    
-                    // Build all wxs files together
-                    let mut cmd = Command::new(&args.wixer);
-                    cmd.current_dir(&v4_example_dir);
-                    cmd.arg("build");
-                    for wxs in &all_wxs {
-                        cmd.arg(wxs.to_str().unwrap());
-                    }
-                    
-                    // Add config args (arch, defines, extensions)
-                    if let Some(ref config) = example_config {
-                        let config_args = config.build_args();
-                        cmd.args(&config_args);
-                    }
-                    
-                    cmd.args(["-o", msi_path.to_str().unwrap()]);
-                    cmd.output()
-                } else {
-                    // Build from YAML using wixer (single file)
-                    let mut cmd = Command::new(&args.wixer);
-                    cmd.current_dir(&yaml_example_dir);
-                    cmd.args(["build", yaml_path.to_str().unwrap()]);
-                    
-                    // Add config args (arch, defines, extensions)
-                    if let Some(ref config) = example_config {
-                        let config_args = config.build_args();
-                        cmd.args(&config_args);
-                    }
-                    
-                    cmd.args(["-o", msi_path.to_str().unwrap()]);
-                    cmd.output()
-                };
-                
-                match result {
-                    Ok(output) if output.status.success() => {
-                        println!("✓");
-                        stats.built += 1;
-                    }
-                    Ok(output) => {
-                        println!("✗");
-                        if args.verbose {
-                            eprintln!("  {}", String::from_utf8_lossy(&output.stderr));
-                        }
-                        stats.build_errors += 1;
+                match project.upgrade_to_v4_dir(&example.path, &v4_example_dir) {
+                    Ok(paths) => {
+                        println!("✓ ({} files)", paths.len());
+                        stats.upgraded += paths.len();
                     }
                     Err(e) => {
                         println!("✗ ({})", e);
-                        stats.build_errors += 1;
+                        stats.upgrade_errors += 1;
                     }
                 }
+
+                // Refresh YAML gallery if requested
+                if args.refresh {
+                    let yaml_example_dir = yaml_gallery.join(&example.name);
+                    fs::create_dir_all(&yaml_example_dir)?;
+                    copy_supporting_files(&example.path, &yaml_example_dir)?;
+                    let _ = import::run(&v4_example_dir, &yaml_example_dir, AttributeStrategy::Inline);
+                }
             }
+            
+            println!();
+            println!("Upgraded: {} files ({} errors)", stats.upgraded, stats.upgrade_errors);
+            generate_index(&output, &submodule_examples)?;
         }
+    }
+
+    // === BUILD: Build MSI packages ===
+    if args.build {
+        fs::create_dir_all(&msi_dir)?;
         
-        println!();
-        println!("MSI packages: {} built, {} failed", stats.built, stats.build_errors);
-        println!("Output: {}", msi_dir.display());
+        // Discover examples based on source type
+        let build_examples = discover_build_examples(
+            &args.source_type,
+            &yaml_gallery,
+            &v4_dir,
+            &configs_dir,
+            filter.as_ref(),
+        )?;
+        
+        if build_examples.is_empty() {
+            println!("No buildable examples found");
+        } else {
+            println!();
+            println!("=== Building MSI Packages ({} examples) ===", build_examples.len());
+            
+            // Counters for parallel builds
+            let built = AtomicUsize::new(0);
+            let skipped = AtomicUsize::new(0);
+            let errors = AtomicUsize::new(0);
+            let output_lines = Mutex::new(Vec::new());
+            
+            // Build in parallel
+            build_examples.par_iter().for_each(|example| {
+                let result = build_example(example, &msi_dir, &args.wixer, args.verbose);
+                
+                let line = match result {
+                    BuildResult::Success => {
+                        built.fetch_add(1, Ordering::Relaxed);
+                        format!("Building {}... ✓", example.name)
+                    }
+                    BuildResult::Skipped(reason) => {
+                        skipped.fetch_add(1, Ordering::Relaxed);
+                        format!("Building {}... ⊘ ({})", example.name, reason)
+                    }
+                    BuildResult::Error(msg) => {
+                        errors.fetch_add(1, Ordering::Relaxed);
+                        format!("Building {}... ✗ ({})", example.name, msg)
+                    }
+                };
+                
+                output_lines.lock().unwrap().push((example.name.clone(), line));
+            });
+            
+            // Print results in sorted order
+            let mut lines = output_lines.into_inner().unwrap();
+            lines.sort_by(|a, b| a.0.cmp(&b.0));
+            for (_, line) in lines {
+                println!("{}", line);
+            }
+            
+            stats.built = built.load(Ordering::Relaxed);
+            stats.build_errors = errors.load(Ordering::Relaxed);
+            
+            println!();
+            println!("MSI packages: {} built, {} skipped, {} failed", 
+                stats.built, skipped.load(Ordering::Relaxed), stats.build_errors);
+            println!("Output: {}", msi_dir.display());
+        }
 
         // Run ICE validation if requested
         if args.validate && stats.built > 0 {
@@ -395,7 +323,7 @@ fn main() -> Result<()> {
         }
     }
 
-    let has_errors = stats.upgrade_errors > 0 || stats.convert_errors > 0 || stats.build_errors > 0;
+    let has_errors = stats.upgrade_errors > 0 || stats.build_errors > 0;
     if has_errors {
         anyhow::bail!("Completed with errors");
     }
@@ -403,40 +331,10 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn find_product_yaml(dir: &Path) -> Option<PathBuf> {
-    WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .find(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| s == "Product.wxs.yaml")
-                .unwrap_or(false)
-        })
-        .map(|e| e.path().to_path_buf())
-}
-
-/// Find all .wxs files in a directory (for multi-file builds)
-fn find_all_wxs(dir: &Path) -> Vec<PathBuf> {
-    WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| s.ends_with(".wxs") && !s.ends_with(".wxi"))
-                .unwrap_or(false)
-        })
-        .map(|e| e.path().to_path_buf())
-        .collect()
-}
-
 #[derive(Default)]
 struct Stats {
     upgraded: usize,
     upgrade_errors: usize,
-    converted: usize,
-    convert_errors: usize,
     built: usize,
     build_errors: usize,
 }
@@ -447,7 +345,222 @@ struct Example {
     wxs_files: Vec<PathBuf>,
 }
 
-fn find_examples(source: &Path, filter: Option<&Vec<String>>) -> Result<Vec<Example>> {
+/// Example ready for building
+struct BuildExample {
+    name: String,
+    source_dir: PathBuf,
+    config: Option<ExampleConfig>,
+    /// Files to build (.wxs.yaml or .wxs)
+    build_files: Vec<PathBuf>,
+}
+
+enum BuildResult {
+    Success,
+    Skipped(String),
+    Error(String),
+}
+
+/// Discover examples to build based on source type
+fn discover_build_examples(
+    source_type: &SourceType,
+    yaml_gallery: &Path,
+    v4_dir: &Path,
+    configs_dir: &Path,
+    filter: Option<&Vec<String>>,
+) -> Result<Vec<BuildExample>> {
+    let mut examples = Vec::new();
+    
+    // Discover from YAML gallery
+    if *source_type == SourceType::Yaml || *source_type == SourceType::All {
+        if yaml_gallery.exists() {
+            for entry in fs::read_dir(yaml_gallery)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() { continue; }
+                
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                if name.starts_with('.') { continue; }
+                
+                // Apply filter
+                if let Some(prefixes) = filter {
+                    if !prefixes.iter().any(|p| name.starts_with(p)) { continue; }
+                }
+                
+                // Load config
+                let config_path = configs_dir.join(format!("{}.yaml", name));
+                let config = ExampleConfig::load(&config_path).ok();
+                
+                // Find YAML files to build
+                let yaml_files: Vec<PathBuf> = WalkDir::new(&path)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        let fname = e.file_name().to_str().unwrap_or("");
+                        fname.ends_with(".wxs.yaml") || fname.ends_with(".wxi.yaml")
+                    })
+                    .map(|e| e.path().to_path_buf())
+                    .collect();
+                
+                // Also check for XML files (preprocessor examples)
+                let xml_files: Vec<PathBuf> = WalkDir::new(&path)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        let fname = e.file_name().to_str().unwrap_or("");
+                        fname.ends_with(".wxs") || fname.ends_with(".wxi")
+                    })
+                    .map(|e| e.path().to_path_buf())
+                    .collect();
+                
+                let build_files = if !yaml_files.is_empty() {
+                    yaml_files
+                } else if !xml_files.is_empty() {
+                    xml_files
+                } else {
+                    continue;
+                };
+                
+                examples.push(BuildExample {
+                    name,
+                    source_dir: path,
+                    config,
+                    build_files,
+                });
+            }
+        }
+    }
+    
+    // Discover from v4 (upgraded submodule) - only if not already found in YAML
+    if *source_type == SourceType::Submodule || *source_type == SourceType::All {
+        if v4_dir.exists() {
+            // Collect names first to avoid borrow issues
+            let yaml_names: std::collections::HashSet<String> = examples.iter().map(|e| e.name.clone()).collect();
+            
+            for entry in fs::read_dir(v4_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() { continue; }
+                
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                if name.starts_with('.') { continue; }
+                
+                // Skip if already found in YAML gallery
+                if yaml_names.contains(&name) { continue; }
+                
+                // Apply filter
+                if let Some(prefixes) = filter {
+                    if !prefixes.iter().any(|p| name.starts_with(p)) { continue; }
+                }
+                
+                // Load config
+                let config_path = configs_dir.join(format!("{}.yaml", name));
+                let config = ExampleConfig::load(&config_path).ok();
+                
+                // Find WXS files
+                let wxs_files: Vec<PathBuf> = WalkDir::new(&path)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_name().to_str().map(|s| s.ends_with(".wxs")).unwrap_or(false))
+                    .map(|e| e.path().to_path_buf())
+                    .collect();
+                
+                if wxs_files.is_empty() { continue; }
+                
+                examples.push(BuildExample {
+                    name,
+                    source_dir: path,
+                    config,
+                    build_files: wxs_files,
+                });
+            }
+        }
+    }
+    
+    // Sort by name
+    examples.sort_by(|a, b| a.name.cmp(&b.name));
+    
+    Ok(examples)
+}
+
+/// Build a single example
+fn build_example(example: &BuildExample, msi_dir: &Path, wixer_path: &Path, _verbose: bool) -> BuildResult {
+    // Check if buildable
+    if let Some(ref config) = example.config {
+        if !config.buildable {
+            return BuildResult::Skipped(config.skip_reason.clone().unwrap_or_else(|| "not buildable".to_string()));
+        }
+    }
+    
+    // Export .wxi.yaml files to .wxi (templates for XML builds)
+    // This allows XML files with <?include?> to reference YAML-defined includes
+    for file in &example.build_files {
+        let fname = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if fname.ends_with(".wxi.yaml") {
+            let wxi_path = file.with_extension(""); // Remove .yaml -> .wxi
+            if let Err(e) = export_yaml_to_wxi(file, &wxi_path) {
+                return BuildResult::Error(format!("export {}: {}", fname, e));
+            }
+        }
+    }
+    
+    let msi_path = msi_dir.join(format!("{}.msi", example.name));
+    
+    // Build command
+    let mut cmd = Command::new(wixer_path);
+    cmd.current_dir(&example.source_dir);
+    cmd.arg("build");
+    
+    // Add source files (only .wxs files, not .wxi) - use relative paths
+    for file in &example.build_files {
+        let fname = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if fname.ends_with(".wxs.yaml") || fname.ends_with(".wxs") {
+            // Convert to relative path from source_dir
+            let rel_path = file.strip_prefix(&example.source_dir).unwrap_or(file);
+            cmd.arg(rel_path);
+        }
+    }
+    
+    // Add config args (arch, defines, extensions)
+    if let Some(ref config) = example.config {
+        cmd.args(config.build_args());
+    }
+    
+    cmd.args(["-o", msi_path.to_str().unwrap_or_default()]);
+    
+    // Debug: print command
+    if _verbose {
+        eprintln!("  Running: {:?}", cmd);
+    }
+    
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                BuildResult::Success
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let combined = format!("{}\n{}", stderr, stdout);
+                
+                // Look for actual error lines
+                let first_error = combined.lines()
+                    .find(|l| l.contains("error WIX") || l.contains("error:"))
+                    .unwrap_or("build failed");
+                BuildResult::Error(first_error.chars().take(80).collect())
+            }
+        }
+        Err(e) => BuildResult::Error(format!("exec failed: {}", e)),
+    }
+}
+
+/// Export a .wxi.yaml file to .wxi (XML)
+/// This allows XML files with <?include?> to reference YAML-defined includes
+fn export_yaml_to_wxi(yaml_path: &Path, wxi_path: &Path) -> Result<()> {
+    use wixer::yaml_to_wix;
+    yaml_to_wix::convert_file(yaml_path, wxi_path, AttributeStrategy::Inline, &std::collections::HashSet::new())
+}
+
+/// Find examples from submodule (v3 WiX files)
+fn find_submodule_examples(source: &Path, filter: Option<&Vec<String>>) -> Result<Vec<Example>> {
     let mut examples = Vec::new();
 
     for entry in fs::read_dir(source)? {

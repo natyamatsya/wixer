@@ -1,5 +1,6 @@
 name: "09_InstallerWithUserInterface"
 description: "Installer with custom WixUI dialogs and user interface"
+buildable: true
 
 extensions:
   - WixToolset.UI.wixext
@@ -9,5 +10,3 @@ sources:
   - Product.wxs
   - MyCustomPropertiesDlg.wxs
   - InstallationStages.wxi
-
-buildable: true

@@ -98,6 +98,16 @@ pub fn convert_file(
 
     let content = fs::read_to_string(input)?;
     
+    // Check for XML content in YAML file - this is a common mistake
+    let trimmed = content.trim_start();
+    if trimmed.starts_with("<?xml") || trimmed.starts_with("<Wix") || trimmed.starts_with("<Include") {
+        anyhow::bail!(
+            "File '{}' has .yaml extension but contains XML content. \
+             Please rename it to .wxs or .wxi, or convert it to YAML format.",
+            input.display()
+        );
+    }
+    
     // Resolve !include tags
     let mut visited = HashSet::new();
     let canonical_input = input.canonicalize().unwrap_or_else(|_| input.to_path_buf());
@@ -209,7 +219,15 @@ fn convert_element(
                     AttributeStrategy::Prefix => key.starts_with('@'),
                     AttributeStrategy::Separate => false, // handled differently
                     AttributeStrategy::Inline => {
-                        (key.starts_with("xmlns") || known_attributes.contains(key) || key == CPACK_VAR_KEY)
+                        // Treat simple values as attributes unless they're known to be elements
+                        // Known element names that should not be attributes
+                        let known_elements = ["_include", "_comment"];
+                        !known_elements.contains(&key)
+                            && (key.starts_with("xmlns") 
+                                || known_attributes.contains(key) 
+                                || key == CPACK_VAR_KEY
+                                // Heuristic: simple values (not mappings/sequences) are likely attributes
+                                || (!v.is_mapping() && !v.is_sequence()))
                             && !v.is_mapping()
                             && !v.is_sequence()
                     }
@@ -321,7 +339,9 @@ mod tests {
     use std::io::Write;
 
     fn create_temp_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("wixer_test_{}", std::process::id()));
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("wixer_test_{}_{}", std::process::id(), timestamp));
         let _ = fs::create_dir_all(&dir);
         dir
     }
