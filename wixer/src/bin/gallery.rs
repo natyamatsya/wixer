@@ -280,11 +280,10 @@ fn main() -> Result<()> {
                         cmd.arg(wxs.to_str().unwrap());
                     }
                     
-                    // Add defines from config
+                    // Add config args (arch, defines, extensions)
                     if let Some(ref config) = example_config {
-                        for (key, value) in &config.defines {
-                            cmd.args(["-d", &format!("{}={}", key, value)]);
-                        }
+                        let config_args = config.build_args();
+                        cmd.args(&config_args);
                     }
                     
                     cmd.args(["-o", msi_path.to_str().unwrap()]);
@@ -295,11 +294,10 @@ fn main() -> Result<()> {
                     cmd.current_dir(&yaml_example_dir);
                     cmd.args(["build", yaml_path.to_str().unwrap()]);
                     
-                    // Add defines from config
+                    // Add config args (arch, defines, extensions)
                     if let Some(ref config) = example_config {
-                        for (key, value) in &config.defines {
-                            cmd.args(["-d", &format!("{}={}", key, value)]);
-                        }
+                        let config_args = config.build_args();
+                        cmd.args(&config_args);
                     }
                     
                     cmd.args(["-o", msi_path.to_str().unwrap()]);

@@ -1,3 +1,4 @@
 name: "08_CppCustomAction"
 description: "Modern C++23 custom action example using CMake"
+arch: x64
 buildable: true

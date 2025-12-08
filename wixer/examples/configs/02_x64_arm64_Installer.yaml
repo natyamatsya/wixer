@@ -1,0 +1,8 @@
+name: "02_x64_arm64_Installer"
+description: "Platform-dependent installer demonstrating x64/arm64 conditional builds"
+arch: x64
+
+defines:
+  Platform: x64
+
+buildable: true

@@ -27,6 +27,7 @@ Wix:
       Component:
         Id: cmpWeatherApi
         Guid: '*'
+        Bitness: always64
         File:
           Id: weather_api_exe
           Name: weather-api.exe

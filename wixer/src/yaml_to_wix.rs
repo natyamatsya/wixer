@@ -336,15 +336,19 @@ mod tests {
         
         // Create included file
         let include_path = temp_dir.join("included.yaml");
-        let mut include_file = fs::File::create(&include_path).unwrap();
-        writeln!(include_file, "Property:").unwrap();
-        writeln!(include_file, "  Id: TEST").unwrap();
+        {
+            let mut include_file = fs::File::create(&include_path).unwrap();
+            writeln!(include_file, "Property:").unwrap();
+            writeln!(include_file, "  Id: TEST").unwrap();
+        } // File handle dropped here
         
         // Create main file with !include
         let main_path = temp_dir.join("main.yaml");
-        let mut main_file = fs::File::create(&main_path).unwrap();
-        writeln!(main_file, "Wix:").unwrap();
-        writeln!(main_file, "  Package: !include included.yaml").unwrap();
+        {
+            let mut main_file = fs::File::create(&main_path).unwrap();
+            writeln!(main_file, "Wix:").unwrap();
+            writeln!(main_file, "  Package: !include included.yaml").unwrap();
+        } // File handle dropped here
         
         let content = fs::read_to_string(&main_path).unwrap();
         let mut visited = HashSet::new();
@@ -372,8 +376,10 @@ mod tests {
         
         // Create file that includes itself
         let self_include_path = temp_dir.join("self.yaml");
-        let mut self_file = fs::File::create(&self_include_path).unwrap();
-        writeln!(self_file, "Wix: !include self.yaml").unwrap();
+        {
+            let mut self_file = fs::File::create(&self_include_path).unwrap();
+            writeln!(self_file, "Wix: !include self.yaml").unwrap();
+        } // File handle dropped here
         
         let content = fs::read_to_string(&self_include_path).unwrap();
         let mut visited = HashSet::new();

@@ -8,17 +8,17 @@
       <Directory Id="INSTALLFOLDER" Name="02_x86_x64_Installer"/>
     </Directory>
     <ComponentGroup Directory="INSTALLFOLDER" Id="ProductComponentGroup">
-      <Component Id="cmp_FileToInstall.txt" Guid="*">
+      <Component Id="cmp_FileToInstall.txt" Guid="*" Bitness="$(var.PlatformBitness)">
         <File KeyPath="yes" Source="FileToInstall.txt"/>
       </Component>
-      <Component Id="cmp_my.dll" Guid="*">
+      <Component Id="cmp_my.dll" Guid="*" Bitness="$(var.PlatformBitness)">
         <?if $(var.Platform) = x64?>
         <File KeyPath="yes" Source="my_x64.dll"/>
-        <?else?>
-        <File KeyPath="yes" Source="my_x86.dll"/>
+        <?elseif $(var.Platform) = arm64?>
+        <File KeyPath="yes" Source="my_arm64.dll"/>
         <?endif?>
       </Component>
-      <Component Id="cmp_RegistryEntry" Guid="*">
+      <Component Id="cmp_RegistryEntry" Guid="*" Bitness="$(var.PlatformBitness)">
         <RegistryKey Root="HKLM" Key="Software\[Manufacturer]\[ProductName]">
           <RegistryValue KeyPath="yes" Type="string" Name="Install location" Value="[INSTALLFOLDER]"/>
         </RegistryKey>

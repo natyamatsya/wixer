@@ -1,7 +1,0 @@
-name: "02_x86_x64_Installer"
-description: "Platform-dependent installer demonstrating x86/x64 conditional builds"
-
-defines:
-  Platform: x64
-
-buildable: true

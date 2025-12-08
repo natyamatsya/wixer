@@ -1,3 +1,4 @@
 name: "07_CSharpCustomAction"
 description: "Modern C# custom action example targeting .NET 8"
+arch: x64
 buildable: true

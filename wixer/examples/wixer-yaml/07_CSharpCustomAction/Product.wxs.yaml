@@ -29,6 +29,7 @@ Wix:
       Component:
         - Id: ReadmeComponent
           Guid: "*"
+          Bitness: always64
           File:
             - Id: ReadmeFile
               Source: README.md

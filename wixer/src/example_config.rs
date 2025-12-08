@@ -18,6 +18,10 @@ pub struct ExampleConfig {
     #[serde(default)]
     pub description: String,
 
+    /// Target architecture (x86, x64, arm64)
+    #[serde(default)]
+    pub arch: Option<String>,
+
     /// Preprocessor variable definitions (-d flags)
     #[serde(default)]
     pub defines: HashMap<String, String>,
@@ -81,6 +85,12 @@ impl ExampleConfig {
     pub fn build_args(&self) -> Vec<String> {
         let mut args = Vec::new();
 
+        // Add -arch flag if specified
+        if let Some(arch) = &self.arch {
+            args.push("-arch".to_string());
+            args.push(arch.clone());
+        }
+
         // Add -d flags for defines
         for (key, value) in &self.defines {
             args.push("-d".to_string());
@@ -114,6 +124,7 @@ impl Default for ExampleConfig {
         Self {
             name: String::new(),
             description: String::new(),
+            arch: None,
             defines: HashMap::new(),
             sources: Vec::new(),
             extensions: Vec::new(),
