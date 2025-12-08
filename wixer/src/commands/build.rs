@@ -168,10 +168,24 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     // It is 'build', let's intercept inputs
+    // Use a unique intermediates directory per build to support parallel builds
+    // Combine process ID (for cross-process uniqueness) with file hash (for within-process uniqueness)
+    let unique_id = {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        std::env::current_dir().unwrap_or_default().hash(&mut hasher);
+        // Include first non-flag arg as part of hash for uniqueness
+        if let Some(first_input) = build_args.iter().find(|a| !a.starts_with('-')) {
+            first_input.hash(&mut hasher);
+        }
+        format!("{}_{:x}", std::process::id(), hasher.finish())
+    };
+    
     let intermediates_dir = if let Ok(root) = find_project_root() {
-        root.join(WIXER_DIR).join(INTERMEDIATES_DIR)
+        root.join(WIXER_DIR).join(INTERMEDIATES_DIR).join(&unique_id)
     } else {
-         std::env::temp_dir().join("wixer_intermediates")
+        std::env::temp_dir().join("wixer_intermediates").join(&unique_id)
     };
 
     if !intermediates_dir.exists() {
