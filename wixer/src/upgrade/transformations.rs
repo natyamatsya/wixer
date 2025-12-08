@@ -214,6 +214,251 @@ impl Transformation for RemoveDeprecatedAttributes {
 }
 
 // ============================================================================
+// UI Control Text Inner to Attribute
+// ============================================================================
+
+/// Converts Control elements where <Text>inner</Text> should become Text="value" attribute
+/// WiX v4 error: WIX0400: The Text element contains inner text which is obsolete.
+pub struct ControlTextToAttribute;
+
+impl Transformation for ControlTextToAttribute {
+    fn name(&self) -> &'static str {
+        "ControlTextToAttribute"
+    }
+
+    fn applies_to(&self, node: &Node) -> bool {
+        if node.tag_name().name() != "Control" {
+            return false;
+        }
+        // Check if there's a Text child element with inner text
+        node.children().any(|c| {
+            c.tag_name().name() == "Text" 
+                && c.children().any(|t| t.is_text() && !t.text().unwrap_or("").trim().is_empty())
+        })
+    }
+
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+        let mut elem = BytesStart::new("Control");
+
+        // Copy existing attributes
+        for attr in node.attributes() {
+            elem.push_attribute((attr.name(), attr.value()));
+        }
+
+        // Find Text child and extract inner text
+        for child in node.children() {
+            if child.tag_name().name() == "Text" {
+                let text_content: String = child
+                    .children()
+                    .filter_map(|c| c.text())
+                    .collect();
+                let text_content = text_content.trim();
+                if !text_content.is_empty() {
+                    elem.push_attribute(("Text", text_content));
+                }
+            }
+        }
+
+        // Check for other children (non-Text elements)
+        let has_other_children = node.children().any(|c| {
+            c.is_element() && c.tag_name().name() != "Text"
+        });
+
+        if has_other_children {
+            writer.write_event(Event::Start(elem))?;
+            Ok(false) // Let pipeline process remaining children (skip Text elements)
+        } else {
+            writer.write_event(Event::Empty(elem))?;
+            Ok(true)
+        }
+    }
+}
+
+// ============================================================================
+// UI Control Condition to Attributes
+// ============================================================================
+
+/// Converts Control/Condition child elements to EnableCondition/DisableCondition attributes
+/// WiX v4 error: WIX0005: The Control element contains an unexpected child element 'Condition'.
+pub struct ControlConditionToAttribute;
+
+impl Transformation for ControlConditionToAttribute {
+    fn name(&self) -> &'static str {
+        "ControlConditionToAttribute"
+    }
+
+    fn applies_to(&self, node: &Node) -> bool {
+        if node.tag_name().name() != "Control" {
+            return false;
+        }
+        // Check if there's a Condition child element
+        node.children().any(|c| c.tag_name().name() == "Condition")
+    }
+
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+        let mut elem = BytesStart::new("Control");
+
+        // Copy existing attributes
+        for attr in node.attributes() {
+            elem.push_attribute((attr.name(), attr.value()));
+        }
+
+        // Find Condition children and convert to attributes
+        let mut enable_condition: Option<String> = None;
+        let mut disable_condition: Option<String> = None;
+
+        for child in node.children() {
+            if child.tag_name().name() == "Condition" {
+                let action = child.attribute("Action").unwrap_or("");
+                let condition_text: String = child
+                    .children()
+                    .filter_map(|c| c.text())
+                    .collect();
+                let condition_text = condition_text.trim().to_string();
+
+                match action.to_lowercase().as_str() {
+                    "enable" => enable_condition = Some(condition_text),
+                    "disable" => disable_condition = Some(condition_text),
+                    _ => {} // Ignore other actions like "show", "hide", "default"
+                }
+            }
+        }
+
+        if let Some(cond) = disable_condition {
+            elem.push_attribute(("DisableCondition", cond.as_str()));
+        }
+        if let Some(cond) = enable_condition {
+            elem.push_attribute(("EnableCondition", cond.as_str()));
+        }
+
+        // Check for other children (non-Condition elements)
+        let has_other_children = node.children().any(|c| {
+            c.is_element() && c.tag_name().name() != "Condition"
+        });
+
+        if has_other_children {
+            writer.write_event(Event::Start(elem))?;
+            Ok(false) // Let pipeline process remaining children (skip Condition elements)
+        } else {
+            writer.write_event(Event::Empty(elem))?;
+            Ok(true)
+        }
+    }
+}
+
+// ============================================================================
+// Skip Text and Condition children under Control
+// ============================================================================
+
+/// Skips Text and Condition elements that are children of Control
+/// (they've been converted to attributes by other transformations)
+pub struct SkipControlTextAndCondition;
+
+impl Transformation for SkipControlTextAndCondition {
+    fn name(&self) -> &'static str {
+        "SkipControlTextAndCondition"
+    }
+
+    fn applies_to(&self, node: &Node) -> bool {
+        let tag = node.tag_name().name();
+        if tag != "Text" && tag != "Condition" {
+            return false;
+        }
+        // Only skip if parent is Control
+        node.parent().map(|p| p.tag_name().name() == "Control").unwrap_or(false)
+    }
+
+    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+        // Skip this element entirely - it's been converted to an attribute
+        Ok(true)
+    }
+}
+
+// ============================================================================
+// UIRef to ui:WixUI Transformation
+// ============================================================================
+
+/// Converts UIRef elements referencing WixUI_* to ui:WixUI elements
+/// WiX v4: UIRef Id="WixUI_InstallDir" → ui:WixUI Id="WixUI_InstallDir" InstallDirectory="..."
+pub struct UIRefToWixUI;
+
+impl Transformation for UIRefToWixUI {
+    fn name(&self) -> &'static str {
+        "UIRefToWixUI"
+    }
+
+    fn applies_to(&self, node: &Node) -> bool {
+        if node.tag_name().name() != "UIRef" {
+            return false;
+        }
+        node.attribute("Id")
+            .map(|id| id.starts_with("WixUI_"))
+            .unwrap_or(false)
+    }
+
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+        let id = node.attribute("Id").unwrap_or("WixUI_Minimal");
+        
+        let mut elem = BytesStart::new("ui:WixUI");
+        elem.push_attribute(("Id", id));
+        
+        // For WixUI_InstallDir, try to find WIXUI_INSTALLDIR property in siblings
+        if id == "WixUI_InstallDir" {
+            // Look for WIXUI_INSTALLDIR property in parent's children
+            if let Some(parent) = node.parent() {
+                for sibling in parent.children() {
+                    if sibling.tag_name().name() == "Property" 
+                        && sibling.attribute("Id") == Some("WIXUI_INSTALLDIR") {
+                        if let Some(value) = sibling.attribute("Value") {
+                            elem.push_attribute(("InstallDirectory", value));
+                        }
+                    }
+                }
+            }
+        }
+        
+        writer.write_event(Event::Empty(elem))?;
+        Ok(true)
+    }
+}
+
+// ============================================================================
+// Skip WIXUI_INSTALLDIR Property (now set by ui:WixUI)
+// ============================================================================
+
+/// Skips WIXUI_INSTALLDIR Property element when UIRef is converted to ui:WixUI
+/// (the InstallDirectory is now an attribute on ui:WixUI)
+pub struct SkipWixUIInstallDirProperty;
+
+impl Transformation for SkipWixUIInstallDirProperty {
+    fn name(&self) -> &'static str {
+        "SkipWixUIInstallDirProperty"
+    }
+
+    fn applies_to(&self, node: &Node) -> bool {
+        if node.tag_name().name() != "Property" {
+            return false;
+        }
+        if node.attribute("Id") != Some("WIXUI_INSTALLDIR") {
+            return false;
+        }
+        // Only skip if there's a UIRef to WixUI_InstallDir in the same parent
+        if let Some(parent) = node.parent() {
+            return parent.children().any(|sibling| {
+                sibling.tag_name().name() == "UIRef" 
+                    && sibling.attribute("Id") == Some("WixUI_InstallDir")
+            });
+        }
+        false
+    }
+
+    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+        // Skip this element - it's been converted to an attribute on ui:WixUI
+        Ok(true)
+    }
+}
+
+// ============================================================================
 // Factory function
 // ============================================================================
 
@@ -224,5 +469,11 @@ pub fn standard_transformations() -> Vec<Box<dyn Transformation>> {
         Box::new(InnerTextToCondition),
         Box::new(CustomActionTransform),
         Box::new(RemoveDeprecatedAttributes),
+        // UI transformations
+        Box::new(ControlTextToAttribute),
+        Box::new(ControlConditionToAttribute),
+        Box::new(SkipControlTextAndCondition),
+        Box::new(UIRefToWixUI),
+        Box::new(SkipWixUIInstallDirProperty),
     ]
 }

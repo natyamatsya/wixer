@@ -128,6 +128,22 @@ fn process_root(
     }
 }
 
+/// Check if document contains WixUI references that need the UI namespace
+fn needs_ui_namespace(node: &Node) -> bool {
+    // Check for UIRef elements referencing WixUI_* 
+    fn check_node(n: &Node) -> bool {
+        if n.tag_name().name() == "UIRef" {
+            if let Some(id) = n.attribute("Id") {
+                if id.starts_with("WixUI_") {
+                    return true;
+                }
+            }
+        }
+        n.children().any(|c| c.is_element() && check_node(&c))
+    }
+    check_node(node)
+}
+
 /// Process Wix root element
 fn process_wix_element(
     node: Node,
@@ -136,6 +152,11 @@ fn process_wix_element(
 ) -> Result<()> {
     let mut elem = BytesStart::new("Wix");
     elem.push_attribute(("xmlns", V4_NAMESPACE));
+
+    // Add UI namespace if needed for WixUI references
+    if needs_ui_namespace(&node) {
+        elem.push_attribute(("xmlns:ui", "http://wixtoolset.org/schemas/v4/wxs/ui"));
+    }
 
     // Copy other namespace declarations
     for attr in node.attributes() {
