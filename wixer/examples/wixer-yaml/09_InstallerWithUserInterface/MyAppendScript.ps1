@@ -1,17 +1,17 @@
 param
 (
-    [Parameter(Mandatory=$false)][string]$installationStage,
-    [Parameter(Mandatory=$false)][string]$propertyValue,
-    [Parameter(Mandatory=$false)][string]$version,
-    [Parameter(Mandatory=$false)][string]$installLocation
+    [string]$s,  # stage
+    [string]$p,  # property value
+    [string]$v,  # version
+    [string]$l   # install location
 )
 
 Push-Location $PSScriptRoot
 
 $fileName = "InstallationStages.txt"
 $time = Get-Date -Format "HH:mm:ss.fff"
-$installLocation = $installLocation.Trim()
+$l = $l.Trim()
 
-Add-Content -Path $fileName -Value "$time - $installLocation - $version - $propertyValue - $installationStage"
+Add-Content -Path $fileName -Value "$time - $l - $v - $p - $s"
 
 Pop-Location

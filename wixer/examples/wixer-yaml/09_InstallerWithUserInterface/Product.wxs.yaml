@@ -1,0 +1,207 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  xmlns:ui: http://wixtoolset.org/schemas/v4/wxs/ui
+  Package:
+    ProductCode: '*'
+    Language: '1033'
+    Manufacturer: Acme Corporation
+    Name: 09_InstallerWithUserInterface
+    UpgradeCode: '{1A4CB73C-DB79-4B4F-9B99-DCCE811B1F0C}'
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MajorUpgrade:
+      DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
+    MediaTemplate:
+      EmbedCab: yes
+    _include: '!include InstallationStages.wxi.yaml'
+    Property:
+    - Id: POWERSHELLVERSION
+      RegistrySearch:
+        Id: POWERSHELLVERSION
+        Type: raw
+        Root: HKLM
+        Key: SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine
+        Name: PowerShellVersion
+    - Id: POWERSHELLEXE
+      RegistrySearch:
+        Id: POWERSHELLEXE
+        Type: raw
+        Root: HKLM
+        Key: SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell
+        Name: Path
+    - Id: MY_PROPERTY
+      Value: default value
+      Secure: yes
+      RegistrySearch:
+        Id: RegSearch_MY_PROPERTY
+        Root: HKLM
+        Key: Software\[Manufacturer]\[ProductName]
+        Name: My property
+        Type: raw
+    - Id: MY_INSTALL_LOCATION
+      Secure: yes
+      RegistrySearch:
+        Id: RegSearch_MY_INSTALL_LOCATION
+        Root: HKLM
+        Key: Software\[Manufacturer]\[ProductName]
+        Name: My install location
+        Type: raw
+    Launch:
+      Condition: Installed OR (POWERSHELLEXE AND POWERSHELLVERSION >= "3.0")
+      Message: You must have PowerShell 3.0 or higher.
+    CustomAction:
+    - Id: SaveCmdLineValue_MY_PROPERTY
+      Property: CMDLINE_MY_PROPERTY
+      Value: '[MY_PROPERTY]'
+      Execute: firstSequence
+    - Id: SetFromCmdLineValue_MY_PROPERTY
+      Property: MY_PROPERTY
+      Value: '[CMDLINE_MY_PROPERTY]'
+      Execute: firstSequence
+    - Id: SaveCmdLineValue_MY_INSTALL_LOCATION
+      Property: CMDLINE_MY_INSTALL_LOCATION
+      Value: '[MY_INSTALL_LOCATION]'
+      Execute: firstSequence
+    - Id: SetFromCmdLineValue_MY_INSTALL_LOCATION
+      Property: MY_INSTALL_LOCATION
+      Value: '[CMDLINE_MY_INSTALL_LOCATION]'
+      Execute: firstSequence
+    - Id: CA_AppendTextUsingPowerShell_FirstInstall
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    - Id: CA_AppendTextUsingPowerShell_Upgrading
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    - Id: CA_AppendTextUsingPowerShell_Uninstalling
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    - Id: CA_AppendTextUsingPowerShell_Maintenance
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    InstallUISequence:
+    - Custom:
+      - Action: SaveCmdLineValue_MY_PROPERTY
+        Before: AppSearch
+      - Action: SetFromCmdLineValue_MY_PROPERTY
+        After: AppSearch
+        Condition: CMDLINE_MY_PROPERTY AND (CMDLINE_MY_PROPERTY <> "default value")
+    - Custom:
+      - Action: SaveCmdLineValue_MY_INSTALL_LOCATION
+        Before: AppSearch
+      - Action: SetFromCmdLineValue_MY_INSTALL_LOCATION
+        After: AppSearch
+        Condition: CMDLINE_MY_INSTALL_LOCATION
+    InstallExecuteSequence:
+    - Custom:
+      - Action: SaveCmdLineValue_MY_PROPERTY
+        Before: AppSearch
+      - Action: SetFromCmdLineValue_MY_PROPERTY
+        After: AppSearch
+        Condition: CMDLINE_MY_PROPERTY AND (CMDLINE_MY_PROPERTY <> "default value")
+    - Custom:
+      - Action: SaveCmdLineValue_MY_INSTALL_LOCATION
+        Before: AppSearch
+      - Action: SetFromCmdLineValue_MY_INSTALL_LOCATION
+        After: AppSearch
+        Condition: CMDLINE_MY_INSTALL_LOCATION
+    - Custom:
+      - Action: CA_AppendTextUsingPowerShell_FirstInstall
+        Before: InstallFinalize
+        Condition: FirstInstall
+      - Action: CA_AppendTextUsingPowerShell_Upgrading
+        Before: InstallFinalize
+        Condition: Upgrading
+      - Action: CA_AppendTextUsingPowerShell_Uninstalling
+        Before: RemoveFiles
+        Condition: Uninstalling
+      - Action: CA_AppendTextUsingPowerShell_Maintenance
+        Before: InstallFinalize
+        Condition: Maintenance
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: MY_INSTALL_LOCATION
+        Name: 09_InstallerWithUserInterface
+    ComponentGroup:
+      Directory: MY_INSTALL_LOCATION
+      Id: ProductComponentGroup
+      Component:
+      - Id: cmp_MyAppendScript_ps1
+        File:
+          KeyPath: yes
+          Source: MyAppendScript.ps1
+      - Id: cmp_RegistryEntry_MY_PROPERTY
+        Guid: '*'
+        RegistryKey:
+          Root: HKLM
+          Key: Software\[Manufacturer]\[ProductName]
+          RegistryValue:
+            KeyPath: yes
+            Type: string
+            Name: My property
+            Value: '[MY_PROPERTY]'
+      - Id: cmp_RegistryEntry_MY_INSTALL_LOCATION
+        Guid: '*'
+        RegistryKey:
+          Root: HKLM
+          Key: Software\[Manufacturer]\[ProductName]
+          RegistryValue:
+            KeyPath: yes
+            Type: string
+            Name: My install location
+            Value: '[MY_INSTALL_LOCATION]'
+    SetProperty:
+    - Id: CA_AppendTextUsingPowerShell_FirstInstall
+      Before: CA_AppendTextUsingPowerShell_FirstInstall
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s FirstInstall -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Upgrading
+      Before: CA_AppendTextUsingPowerShell_Upgrading
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Upgrading -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Uninstalling
+      Before: CA_AppendTextUsingPowerShell_Uninstalling
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Uninstalling -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Maintenance
+      Before: CA_AppendTextUsingPowerShell_Maintenance
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Maintenance -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    UI:
+      Id: MyWixUI_InstallDir
+      ui:WixUI:
+        Id: WixUI_InstallDir
+        InstallDirectory: MY_INSTALL_LOCATION
+      DialogRef:
+        Id: MyCustomPropertiesDlg
+      Publish:
+      - Dialog: InstallDirDlg
+        Control: Next
+        Event: NewDialog
+        Value: MyCustomPropertiesDlg
+        Order: '4'
+        Condition: WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1"
+      - Dialog: VerifyReadyDlg
+        Control: Back
+        Event: NewDialog
+        Value: MyCustomPropertiesDlg
+        Order: '1'
+        Condition: '1'
+    Feature:
+      Id: HelloWorldFeature
+      ComponentGroupRef:
+        Id: ProductComponentGroup
+

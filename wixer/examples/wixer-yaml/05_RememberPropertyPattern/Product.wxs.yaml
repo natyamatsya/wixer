@@ -1,0 +1,143 @@
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    ProductCode: '*'
+    Language: '1033'
+    Manufacturer: Acme Corporation
+    Name: 05_RememberPropertyPattern
+    UpgradeCode: '{A00615FD-CB7F-49EF-9D92-E91E55511184}'
+    Version: 1.0.0.0
+    Scope: perMachine
+    Compressed: yes
+    MajorUpgrade:
+      DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
+    MediaTemplate:
+      EmbedCab: yes
+    _include: InstallationStages.wxi
+    Property:
+    - Id: POWERSHELLVERSION
+      RegistrySearch:
+        Id: POWERSHELLVERSION
+        Type: raw
+        Root: HKLM
+        Key: SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine
+        Name: PowerShellVersion
+    - Id: POWERSHELLEXE
+      RegistrySearch:
+        Id: POWERSHELLEXE
+        Type: raw
+        Root: HKLM
+        Key: SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell
+        Name: Path
+    - Id: MY_PROPERTY
+      Value: default value
+      RegistrySearch:
+        Id: RegSearch_MY_PROPERTY
+        Root: HKLM
+        Key: Software\[Manufacturer]\[ProductName]
+        Name: My property
+        Type: raw
+    - Id: MY_INSTALL_LOCATION
+      Secure: yes
+      RegistrySearch:
+        Id: RegSearch_MY_INSTALL_LOCATION
+        Root: HKLM
+        Key: Software\[Manufacturer]\[ProductName]
+        Name: My install location
+        Type: raw
+    Launch:
+      Condition: Installed OR (POWERSHELLEXE AND POWERSHELLVERSION >= "3.0")
+      Message: You must have PowerShell 3.0 or higher.
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: MY_INSTALL_LOCATION
+        Name: 05_RememberPropertyPattern
+    ComponentGroup:
+      Directory: MY_INSTALL_LOCATION
+      Id: ProductComponentGroup
+      Component:
+      - Id: cmp_MyAppendScript_ps1
+        File:
+          KeyPath: yes
+          Source: MyAppendScript.ps1
+      - Id: cmp_RegistryEntry_MY_PROPERTY
+        Guid: '*'
+        RegistryKey:
+          Root: HKLM
+          Key: Software\[Manufacturer]\[ProductName]
+          RegistryValue:
+            KeyPath: yes
+            Type: string
+            Name: My property
+            Value: '[MY_PROPERTY]'
+      - Id: cmp_RegistryEntry_MY_INSTALL_LOCATION
+        Guid: '*'
+        RegistryKey:
+          Root: HKLM
+          Key: Software\[Manufacturer]\[ProductName]
+          RegistryValue:
+            KeyPath: yes
+            Type: string
+            Name: My install location
+            Value: '[MY_INSTALL_LOCATION]'
+    SetProperty:
+    - Id: CA_AppendTextUsingPowerShell_FirstInstall
+      Before: CA_AppendTextUsingPowerShell_FirstInstall
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s FirstInstall -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Upgrading
+      Before: CA_AppendTextUsingPowerShell_Upgrading
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Upgrading -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Uninstalling
+      Before: CA_AppendTextUsingPowerShell_Uninstalling
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Uninstalling -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    - Id: CA_AppendTextUsingPowerShell_Maintenance
+      Before: CA_AppendTextUsingPowerShell_Maintenance
+      Sequence: execute
+      Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Maintenance -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+    CustomAction:
+    - Id: CA_AppendTextUsingPowerShell_FirstInstall
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    - Id: CA_AppendTextUsingPowerShell_Upgrading
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    - Id: CA_AppendTextUsingPowerShell_Uninstalling
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    - Id: CA_AppendTextUsingPowerShell_Maintenance
+      BinaryRef: Wix4UtilCA_X86
+      DllEntry: WixQuietExec
+      Execute: deferred
+      Return: check
+      Impersonate: no
+    InstallExecuteSequence:
+      Custom:
+      - Action: CA_AppendTextUsingPowerShell_FirstInstall
+        Before: InstallFinalize
+        Condition: FirstInstall
+      - Action: CA_AppendTextUsingPowerShell_Upgrading
+        Before: InstallFinalize
+        Condition: Upgrading
+      - Action: CA_AppendTextUsingPowerShell_Uninstalling
+        Before: RemoveFiles
+        Condition: Uninstalling
+      - Action: CA_AppendTextUsingPowerShell_Maintenance
+        Before: InstallFinalize
+        Condition: Maintenance
+    Feature:
+      Id: HelloWorldFeature
+      ComponentGroupRef:
+        Id: ProductComponentGroup
