@@ -31,7 +31,7 @@ Wix:
     - Id: MY_PROPERTY
       Value: default value
     Launch:
-      Condition: Installed OR (POWERSHELLEXE AND POWERSHELLVERSION &gt;= &quot;3.0&quot;)
+      Condition: 'Installed OR (POWERSHELLEXE AND POWERSHELLVERSION >= "3.0")'
       Message: You must have PowerShell 3.0 or higher.
     StandardDirectory:
       Id: ProgramFilesFolder

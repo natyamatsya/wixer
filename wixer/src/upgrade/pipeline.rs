@@ -458,4 +458,26 @@ mod tests {
         
         assert!(result.contains("<?include Variables.wxi?>"));
     }
+
+    #[test]
+    fn test_cdata_condition_not_double_escaped() {
+        let input = r#"<?xml version="1.0"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Test" Version="1.0.0" Manufacturer="Test" UpgradeCode="{00000000-0000-0000-0000-000000000000}">
+    <Package/>
+    <Condition Message="Need PowerShell"><![CDATA[VERSION >= "3.0"]]></Condition>
+  </Product>
+</Wix>"#;
+
+        let result = upgrade_content(input).unwrap();
+        
+        // Should have Launch element with properly escaped condition
+        assert!(result.contains("<Launch"));
+        // Should NOT have double-escaped entities like &gt; or &quot;
+        assert!(!result.contains("&amp;gt;"), "Should not have double-escaped &gt;");
+        assert!(!result.contains("&amp;quot;"), "Should not have double-escaped &quot;");
+        // The >= should be escaped as &gt;= in the attribute (single escape)
+        // and quotes should be &quot;
+        println!("Result:\n{}", result);
+    }
 }

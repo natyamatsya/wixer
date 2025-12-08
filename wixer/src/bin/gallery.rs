@@ -66,6 +66,10 @@ struct Args {
     /// Verbose output
     #[arg(short, long)]
     verbose: bool,
+
+    /// Run ICE validation on built MSI files
+    #[arg(long)]
+    validate: bool,
 }
 
 fn main() -> Result<()> {
@@ -325,6 +329,72 @@ fn main() -> Result<()> {
         println!();
         println!("MSI packages: {} built, {} failed", stats.built, stats.build_errors);
         println!("Output: {}", msi_dir.display());
+
+        // Run ICE validation if requested
+        if args.validate && stats.built > 0 {
+            println!();
+            println!("=== Running ICE Validation ===");
+            
+            let mut validation_errors = 0;
+            let mut validation_warnings = 0;
+            
+            for entry in fs::read_dir(&msi_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().map(|e| e == "msi").unwrap_or(false) {
+                    let name = path.file_stem().unwrap_or_default().to_string_lossy();
+                    print!("Validating {}... ", name);
+                    
+                    let output = Command::new("wix")
+                        .args(["msi", "validate", path.to_str().unwrap()])
+                        .output();
+                    
+                    match output {
+                        Ok(out) => {
+                            let stdout = String::from_utf8_lossy(&out.stdout);
+                            let stderr = String::from_utf8_lossy(&out.stderr);
+                            let combined = format!("{}{}", stdout, stderr);
+                            
+                            let errors: Vec<&str> = combined.lines()
+                                .filter(|l| l.contains("error WIX"))
+                                .collect();
+                            let warnings: Vec<&str> = combined.lines()
+                                .filter(|l| l.contains("warning WIX"))
+                                .collect();
+                            
+                            if errors.is_empty() && warnings.is_empty() {
+                                println!("✓");
+                            } else if errors.is_empty() {
+                                println!("⚠ ({} warnings)", warnings.len());
+                                validation_warnings += warnings.len();
+                                if args.verbose {
+                                    for w in &warnings {
+                                        eprintln!("  {}", w);
+                                    }
+                                }
+                            } else {
+                                println!("✗ ({} errors, {} warnings)", errors.len(), warnings.len());
+                                validation_errors += errors.len();
+                                validation_warnings += warnings.len();
+                                for e in &errors {
+                                    eprintln!("  {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("✗ (wix not found: {})", e);
+                        }
+                    }
+                }
+            }
+            
+            println!();
+            println!("Validation: {} errors, {} warnings", validation_errors, validation_warnings);
+            
+            if validation_errors > 0 {
+                stats.build_errors += 1; // Count validation errors as build errors
+            }
+        }
     }
 
     let has_errors = stats.upgrade_errors > 0 || stats.convert_errors > 0 || stats.build_errors > 0;
