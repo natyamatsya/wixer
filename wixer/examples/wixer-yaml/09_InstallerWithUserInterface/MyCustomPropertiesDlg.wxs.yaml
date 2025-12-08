@@ -25,8 +25,7 @@ Wix:
           Height: '15'
           Transparent: yes
           NoPrefix: yes
-          Text:
-            _value: '{\WixUI_Font_Title}Custom properties'
+          Text: '{\WixUI_Font_Title}Custom properties'
         - Id: Description
           Type: Text
           X: '25'
@@ -35,8 +34,7 @@ Wix:
           Height: '15'
           Transparent: yes
           NoPrefix: yes
-          Text:
-            _value: Please enter custom properties
+          Text: Please enter custom properties
         - Id: BannerLine
           Type: Line
           X: '0'
@@ -84,6 +82,8 @@ Wix:
           Height: '17'
           Default: yes
           Text: '&amp;Next'
+          EnableCondition: 'MY_PROPERTY &lt;&gt; ""'
+          DisableCondition: 'MY_PROPERTY = ""'
           Publish:
           - Event: SpawnWaitDialog
             Value: WaitForCostingDlg
@@ -91,11 +91,6 @@ Wix:
           - Event: NewDialog
             Value: VerifyReadyDlg
             Condition: MY_PROPERTY
-          Condition:
-          - Action: disable
-            _value: MY_PROPERTY = ""
-          - Action: enable
-            _value: MY_PROPERTY <> ""
         - Id: Cancel
           Type: PushButton
           X: '304'

@@ -4,11 +4,4 @@ description: "Platform-dependent installer demonstrating x86/x64 conditional bui
 defines:
   Platform: x64
 
-buildable: false
-skip_reason: "Requires platform-specific DLL files (my_x64.dll, my_x86.dll)"
-
-requires:
-  - path: "my_x64.dll"
-    description: "64-bit DLL for x64 builds"
-  - path: "my_x86.dll"
-    description: "32-bit DLL for x86 builds"
+buildable: true

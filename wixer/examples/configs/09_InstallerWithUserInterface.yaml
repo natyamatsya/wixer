@@ -11,4 +11,4 @@ sources:
   - InstallationStages.wxi
 
 buildable: false
-skip_reason: "WixUI v3 to v4 migration requires manual dialog updates"
+skip_reason: "WiX v4 UI migration: UIRef→ui:WixUI, Control/Condition→EnableCondition/DisableCondition, Text inner→Value attribute"
