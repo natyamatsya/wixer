@@ -219,11 +219,13 @@ fn main() -> Result<()> {
             let skipped = AtomicUsize::new(0);
             let errors = AtomicUsize::new(0);
             let completed = AtomicUsize::new(0);
+            let job_id = AtomicUsize::new(0);
             let output_lines = Mutex::new(Vec::new());
             
             // Build in parallel
             build_examples.par_iter().for_each(|example| {
-                let result = build_example(example, &msi_dir, &args.wixer, args.verbose);
+                let my_job_id = job_id.fetch_add(1, Ordering::Relaxed);
+                let result = build_example(example, &msi_dir, &args.wixer, args.verbose, my_job_id);
                 let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
                 
                 let line = match result {
@@ -501,7 +503,7 @@ fn discover_build_examples(
 }
 
 /// Build a single example
-fn build_example(example: &BuildExample, msi_dir: &Path, wixer_path: &Path, _verbose: bool) -> BuildResult {
+fn build_example(example: &BuildExample, msi_dir: &Path, wixer_path: &Path, _verbose: bool, job_id: usize) -> BuildResult {
     // Check if buildable
     if let Some(ref config) = example.config {
         if !config.buildable {
@@ -514,6 +516,8 @@ fn build_example(example: &BuildExample, msi_dir: &Path, wixer_path: &Path, _ver
     // Build command
     let mut cmd = Command::new(wixer_path);
     cmd.current_dir(&example.source_dir);
+    // Set unique build ID for parallel builds
+    cmd.env("WIXER_BUILD_ID", format!("{}", job_id));
     cmd.arg("build");
     
     // Add source files (only .wxs files, not .wxi) - use relative paths

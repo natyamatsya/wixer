@@ -169,8 +169,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     // It is 'build', let's intercept inputs
     // Use a unique intermediates directory per build to support parallel builds
-    // Combine process ID (for cross-process uniqueness) with path hash (for within-process uniqueness)
-    let unique_id = {
+    // Use WIXER_BUILD_ID env var if set (for parallel builds from gallery), otherwise generate from path
+    let unique_id = if let Ok(build_id) = std::env::var("WIXER_BUILD_ID") {
+        build_id
+    } else {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
@@ -178,12 +180,11 @@ pub fn run(args: Vec<String>) -> Result<()> {
         cwd.hash(&mut hasher);
         // Include first non-flag arg as part of hash for uniqueness
         if let Some(first_input) = build_args.iter().find(|a| !a.starts_with('-')) {
-            // Hash both the cwd-joined path and the filename for uniqueness
             let input_path = cwd.join(first_input);
             input_path.hash(&mut hasher);
             first_input.hash(&mut hasher);
         }
-        format!("{}_{:x}", std::process::id(), hasher.finish())
+        format!("{:x}", hasher.finish())
     };
     
     let intermediates_dir = if let Ok(root) = find_project_root() {
