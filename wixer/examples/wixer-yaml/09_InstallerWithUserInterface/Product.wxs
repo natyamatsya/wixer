@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package ProductCode="*" Language="1033" Manufacturer="Acme Corporation" Name="09_InstallerWithUserInterface" UpgradeCode="{1A4CB73C-DB79-4B4F-9B99-DCCE811B1F0C}" Version="1.0.0.0" Scope="perMachine" Compressed="yes">
     <MajorUpgrade DowngradeErrorMessage="A later version of [ProductName] is already installed. Setup will now exit."/>
     <MediaTemplate EmbedCab="yes"/>
     <?include InstallationStages.wxi?>
-    <Property Id="WIXUI_INSTALLDIR" Value="MY_INSTALL_LOCATION"/>
     <Property Id="POWERSHELLVERSION">
       <RegistrySearch Id="POWERSHELLVERSION" Type="raw" Root="HKLM" Key="SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine" Name="PowerShellVersion"/>
     </Property>
@@ -71,7 +70,7 @@
       <Custom Action="CA_AppendTextUsingPowerShell_Maintenance" Before="InstallFinalize" Condition="Maintenance"/>
     </InstallExecuteSequence>
     <UI Id="MyWixUI_InstallDir">
-      <UIRef Id="WixUI_InstallDir"/>
+      <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="MY_INSTALL_LOCATION"/>
       <DialogRef Id="MyCustomPropertiesDlg"/>
       <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="MyCustomPropertiesDlg" Order="4" Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;"/>
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MyCustomPropertiesDlg" Order="1" Condition="1"/>

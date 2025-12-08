@@ -390,18 +390,29 @@ fn discover_build_examples(
                 let config_path = configs_dir.join(format!("{}.yaml", name));
                 let config = ExampleConfig::load(&config_path).ok();
                 
-                // Find YAML files to build
-                let yaml_files: Vec<PathBuf> = WalkDir::new(&path)
+                // Find main YAML source files (.wxs.yaml only - .wxi.yaml are includes)
+                let yaml_main_files: Vec<PathBuf> = WalkDir::new(&path)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| {
                         let fname = e.file_name().to_str().unwrap_or("");
-                        fname.ends_with(".wxs.yaml") || fname.ends_with(".wxi.yaml")
+                        fname.ends_with(".wxs.yaml")
                     })
                     .map(|e| e.path().to_path_buf())
                     .collect();
                 
-                // Also check for XML files (preprocessor examples)
+                // Find YAML include files (.wxi.yaml) - these are templates
+                let yaml_include_files: Vec<PathBuf> = WalkDir::new(&path)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        let fname = e.file_name().to_str().unwrap_or("");
+                        fname.ends_with(".wxi.yaml")
+                    })
+                    .map(|e| e.path().to_path_buf())
+                    .collect();
+                
+                // Find XML files (for preprocessor examples)
                 let xml_files: Vec<PathBuf> = WalkDir::new(&path)
                     .into_iter()
                     .filter_map(|e| e.ok())
@@ -412,13 +423,17 @@ fn discover_build_examples(
                     .map(|e| e.path().to_path_buf())
                     .collect();
                 
-                let build_files = if !yaml_files.is_empty() {
-                    yaml_files
-                } else if !xml_files.is_empty() {
-                    xml_files
-                } else {
+                // Determine build files:
+                // Include all source files (.wxs.yaml, .wxs, .wxi.yaml)
+                // Mixed projects (XML + YAML) are supported
+                let mut build_files = Vec::new();
+                build_files.extend(yaml_main_files);
+                build_files.extend(xml_files);
+                build_files.extend(yaml_include_files);
+                
+                if build_files.is_empty() {
                     continue;
-                };
+                }
                 
                 examples.push(BuildExample {
                     name,

@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <?if $(var.Platform) = x64 ?>
-  <?define PlatformProductName = "02_x64_arm64_Installer (x64)" ?>
+  <?define PlatformProductName = "02_x86_x64_Installer (x64)" ?>
   <?define PlatformUpgradeCode = "1AB189BA-5B13-4448-A916-4E25B814D2AA" ?>
   <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
-  <?define PlatformBitness = "always64" ?>
-  <?elseif $(var.Platform) = arm64 ?>
-  <?define PlatformProductName = "02_x64_arm64_Installer (arm64)" ?>
-  <?define PlatformUpgradeCode = "2BC29ACB-6C24-5559-B027-5F36C925E295" ?>
-  <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
-  <?define PlatformBitness = "always64" ?>
   <?else ?>
-  <?error Unsupported platform: $(var.Platform). Use x64 or arm64. ?>
+  <?define PlatformProductName = "02_x86_x64_Installer (x86)" ?>
+  <?define PlatformUpgradeCode = "1F633E9D-7F55-449D-8BC9-56F9E72342E8" ?>
+  <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
   <?endif ?>
 </Include>
