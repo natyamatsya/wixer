@@ -169,14 +169,18 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
     // It is 'build', let's intercept inputs
     // Use a unique intermediates directory per build to support parallel builds
-    // Combine process ID (for cross-process uniqueness) with file hash (for within-process uniqueness)
+    // Combine process ID (for cross-process uniqueness) with path hash (for within-process uniqueness)
     let unique_id = {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
-        std::env::current_dir().unwrap_or_default().hash(&mut hasher);
+        let cwd = std::env::current_dir().unwrap_or_default();
+        cwd.hash(&mut hasher);
         // Include first non-flag arg as part of hash for uniqueness
         if let Some(first_input) = build_args.iter().find(|a| !a.starts_with('-')) {
+            // Hash both the cwd-joined path and the filename for uniqueness
+            let input_path = cwd.join(first_input);
+            input_path.hash(&mut hasher);
             first_input.hash(&mut hasher);
         }
         format!("{}_{:x}", std::process::id(), hasher.finish())
@@ -286,9 +290,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
         new_args.push(arg.clone());
     }
     
-    // Export template files (.in suffix) referenced by <?include?> directives
-    // e.g., if Product.wxs has <?include Foo.wxi?> and Foo.wxi.in exists, export it to Foo.wxi
-    export_template_files(&converted_files, &known_attributes)?;
+    // Export template files (.yaml.in suffix) referenced by <?include?> directives
+    // e.g., if Product.wxs has <?include Foo.wxi?> and Foo.wxi.yaml.in exists, export it
+    // Templates are exported to the intermediates directory to support parallel builds
+    export_template_files(&converted_files, &intermediates_dir, &known_attributes)?;
     
     // Auto-detect required extensions if user didn't specify any
     if !has_ext_arg {
@@ -309,6 +314,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
             new_args.push(ext.to_string());
         }
     }
+    
+    // Add intermediates directory to include search path for template exports
+    new_args.push("-I".to_string());
+    new_args.push(intermediates_dir.to_string_lossy().to_string());
 
     info!("Running: {} {}", wix_exe, new_args.join(" "));
     let output = Command::new(&wix_exe)
@@ -430,9 +439,9 @@ fn run_ice_validation(msi_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Export YAML template files (.yaml.in suffix) to their target XML files
+/// Export YAML template files (.yaml.in suffix) to the intermediates directory
 /// Scans XML files for <?include file.wxi?> directives and checks if file.wxi.yaml.in exists
-fn export_template_files(files: &[PathBuf], known_attributes: &HashSet<String>) -> Result<()> {
+fn export_template_files(files: &[PathBuf], intermediates_dir: &Path, known_attributes: &HashSet<String>) -> Result<()> {
     use regex::Regex;
     
     let include_re = Regex::new(r#"<\?include\s+([^?]+)\s*\?>"#).unwrap();
@@ -451,17 +460,18 @@ fn export_template_files(files: &[PathBuf], known_attributes: &HashSet<String>) 
                 continue;
             }
             
-            let include_path = file_dir.join(include_file);
             let template_path = file_dir.join(format!("{}.yaml.in", include_file));
             
             // Check if YAML template file exists (e.g., Foo.wxi.yaml.in -> Foo.wxi)
-            if template_path.exists() && !include_path.exists() {
-                info!("Exporting template: {} -> {}", template_path.display(), include_path.display());
+            if template_path.exists() {
+                // Export to intermediates directory for parallel build safety
+                let output_path = intermediates_dir.join(include_file);
+                info!("Exporting template: {} -> {}", template_path.display(), output_path.display());
                 
                 // Convert YAML template to XML
                 yaml_to_wix::convert_file(
                     &template_path,
-                    &include_path,
+                    &output_path,
                     crate::common::AttributeStrategy::Inline,
                     known_attributes,
                 ).with_context(|| format!("Failed to export template {}", template_path.display()))?;

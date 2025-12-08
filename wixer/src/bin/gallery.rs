@@ -258,7 +258,6 @@ fn main() -> Result<()> {
         // Run ICE validation if requested (parallel)
         if args.validate && stats.built > 0 {
             println!();
-            println!("=== Running ICE Validation ===");
             
             let msi_files: Vec<_> = fs::read_dir(&msi_dir)?
                 .filter_map(|e| e.ok())
@@ -266,9 +265,13 @@ fn main() -> Result<()> {
                 .filter(|p| p.extension().map(|e| e == "msi").unwrap_or(false))
                 .collect();
             
+            let total = msi_files.len();
+            let jobs = rayon::current_num_threads();
+            println!("=== Running ICE Validation ({} files, {} parallel jobs) ===", total, jobs);
+            
             let validation_errors = AtomicUsize::new(0);
             let validation_warnings = AtomicUsize::new(0);
-            let validation_output = Mutex::new(Vec::new());
+            let completed = AtomicUsize::new(0);
             
             msi_files.par_iter().for_each(|path| {
                 let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
@@ -276,6 +279,8 @@ fn main() -> Result<()> {
                 let output = Command::new("wix")
                     .args(["msi", "validate", path.to_str().unwrap()])
                     .output();
+                
+                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
                 
                 let line = match output {
                     Ok(out) => {
@@ -291,29 +296,23 @@ fn main() -> Result<()> {
                             .collect();
                         
                         if errors.is_empty() && warnings.is_empty() {
-                            format!("Validating {}... ✓", name)
+                            format!("[{}/{}] Validating {}... ✓", done, total, name)
                         } else if errors.is_empty() {
                             validation_warnings.fetch_add(warnings.len(), Ordering::Relaxed);
-                            format!("Validating {}... ⚠ ({} warnings)", name, warnings.len())
+                            format!("[{}/{}] Validating {}... ⚠ ({} warnings)", done, total, name, warnings.len())
                         } else {
                             validation_errors.fetch_add(errors.len(), Ordering::Relaxed);
                             validation_warnings.fetch_add(warnings.len(), Ordering::Relaxed);
                             let error_details: String = errors.iter().map(|e| format!("\n  {}", e)).collect();
-                            format!("Validating {}... ✗ ({} errors, {} warnings){}", name, errors.len(), warnings.len(), error_details)
+                            format!("[{}/{}] Validating {}... ✗ ({} errors, {} warnings){}", done, total, name, errors.len(), warnings.len(), error_details)
                         }
                     }
-                    Err(e) => format!("Validating {}... ✗ (wix not found: {})", name, e),
+                    Err(e) => format!("[{}/{}] Validating {}... ✗ (wix not found: {})", done, total, name, e),
                 };
                 
-                validation_output.lock().unwrap().push((name, line));
-            });
-            
-            // Print results in sorted order
-            let mut lines = validation_output.into_inner().unwrap();
-            lines.sort_by(|a, b| a.0.cmp(&b.0));
-            for (_, line) in lines {
+                // Print progress immediately
                 println!("{}", line);
-            }
+            });
             
             let validation_errors = validation_errors.load(Ordering::Relaxed);
             let validation_warnings = validation_warnings.load(Ordering::Relaxed);
