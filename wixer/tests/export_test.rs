@@ -15,6 +15,8 @@ fn test_recursive_export() {
     let status = Command::new("cargo")
         .args(&[
             "run",
+            "--bin",
+            "wixer",
             "--",
             "export",
             input_dir.to_str().unwrap(),

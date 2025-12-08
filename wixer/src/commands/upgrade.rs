@@ -17,3 +17,14 @@ pub fn run(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     let output_path = output.unwrap_or_else(|| input.clone());
     upgrade::upgrade_file(&input, &output_path)
 }
+
+/// Upgrade multiple WiX v3 files to v4 with shared cross-file context
+///
+/// This enables transformations that depend on information from other files,
+/// such as WIXUI_INSTALLDIR property in one file and UIRef in another.
+///
+/// # Arguments
+/// * `files` - List of (input, output) path pairs
+pub fn run_batch(files: &[(PathBuf, PathBuf)]) -> Result<()> {
+    upgrade::upgrade_files(files)
+}

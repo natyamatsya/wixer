@@ -8,8 +8,13 @@ use quick_xml::Writer;
 use roxmltree::Node;
 use std::io::Cursor;
 
+use super::context::UpgradeContext;
+
 /// WiX v4 namespace constant
-pub const V4_NAMESPACE: &'static str = "http://wixtoolset.org/schemas/v4/wxs";
+pub const V4_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs";
+
+/// WiX v4 UI namespace constant
+pub const V4_UI_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs/ui";
 
 /// Trait for XML node transformations
 pub trait Transformation {
@@ -17,11 +22,11 @@ pub trait Transformation {
     fn name(&self) -> &'static str;
 
     /// Check if this transformation applies to the given node
-    fn applies_to(&self, node: &Node) -> bool;
+    fn applies_to(&self, node: &Node, ctx: &UpgradeContext) -> bool;
 
     /// Apply the transformation, writing output to the writer
     /// Returns true if the node was handled, false to continue with default handling
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool>;
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, ctx: &UpgradeContext) -> anyhow::Result<bool>;
 }
 
 // ============================================================================
@@ -41,11 +46,11 @@ impl Transformation for InnerTextToCondition {
         "InnerTextToCondition"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         Self::ELEMENTS.contains(&node.tag_name().name())
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let tag_name = node.tag_name().name();
         let mut elem = BytesStart::new(tag_name);
 
@@ -82,7 +87,7 @@ impl Transformation for ConditionToLaunch {
         "ConditionToLaunch"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         // In v3, Condition is under Product; in v4 it would be under Package
         // We check for both since we're transforming v3 to v4
         node.tag_name().name() == "Condition"
@@ -92,7 +97,7 @@ impl Transformation for ConditionToLaunch {
             }).unwrap_or(false)
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let message = node.attribute("Message").unwrap_or("Installation cannot continue.");
         
         let condition_text: String = node
@@ -127,11 +132,11 @@ impl Transformation for CustomActionTransform {
         "CustomActionTransform"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         node.tag_name().name() == "CustomAction"
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let mut elem = BytesStart::new("CustomAction");
 
         let binary_key = node.attribute("BinaryKey").or_else(|| node.attribute("BinaryRef"));
@@ -184,13 +189,13 @@ impl Transformation for RemoveDeprecatedAttributes {
         "RemoveDeprecatedAttributes"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         let tag = node.tag_name().name();
         Self::ELEMENTS.contains(&tag)
             && node.attributes().any(|a| Self::DEPRECATED_ATTRS.contains(&a.name()))
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let tag_name = node.tag_name().name();
         let mut elem = BytesStart::new(tag_name);
 
@@ -226,7 +231,7 @@ impl Transformation for ControlTextToAttribute {
         "ControlTextToAttribute"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         if node.tag_name().name() != "Control" {
             return false;
         }
@@ -237,7 +242,7 @@ impl Transformation for ControlTextToAttribute {
         })
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let mut elem = BytesStart::new("Control");
 
         // Copy existing attributes
@@ -287,7 +292,7 @@ impl Transformation for ControlConditionToAttribute {
         "ControlConditionToAttribute"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         if node.tag_name().name() != "Control" {
             return false;
         }
@@ -295,7 +300,7 @@ impl Transformation for ControlConditionToAttribute {
         node.children().any(|c| c.tag_name().name() == "Condition")
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let mut elem = BytesStart::new("Control");
 
         // Copy existing attributes
@@ -359,7 +364,7 @@ impl Transformation for SkipControlTextAndCondition {
         "SkipControlTextAndCondition"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         let tag = node.tag_name().name();
         if tag != "Text" && tag != "Condition" {
             return false;
@@ -368,7 +373,7 @@ impl Transformation for SkipControlTextAndCondition {
         node.parent().map(|p| p.tag_name().name() == "Control").unwrap_or(false)
     }
 
-    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         // Skip this element entirely - it's been converted to an attribute
         Ok(true)
     }
@@ -380,6 +385,7 @@ impl Transformation for SkipControlTextAndCondition {
 
 /// Converts UIRef elements referencing WixUI_* to ui:WixUI elements
 /// WiX v4: UIRef Id="WixUI_InstallDir" → ui:WixUI Id="WixUI_InstallDir" InstallDirectory="..."
+/// Uses cross-file context to find WIXUI_INSTALLDIR property value
 pub struct UIRefToWixUI;
 
 impl Transformation for UIRefToWixUI {
@@ -387,7 +393,7 @@ impl Transformation for UIRefToWixUI {
         "UIRefToWixUI"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         if node.tag_name().name() != "UIRef" {
             return false;
         }
@@ -396,21 +402,27 @@ impl Transformation for UIRefToWixUI {
             .unwrap_or(false)
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, ctx: &UpgradeContext) -> anyhow::Result<bool> {
         let id = node.attribute("Id").unwrap_or("WixUI_Minimal");
         
         let mut elem = BytesStart::new("ui:WixUI");
         elem.push_attribute(("Id", id));
         
-        // For WixUI_InstallDir, try to find WIXUI_INSTALLDIR property in siblings
+        // For WixUI_InstallDir, get WIXUI_INSTALLDIR from cross-file context
         if id == "WixUI_InstallDir" {
-            // Look for WIXUI_INSTALLDIR property in parent's children
-            if let Some(parent) = node.parent() {
-                for sibling in parent.children() {
-                    if sibling.tag_name().name() == "Property" 
-                        && sibling.attribute("Id") == Some("WIXUI_INSTALLDIR") {
-                        if let Some(value) = sibling.attribute("Value") {
-                            elem.push_attribute(("InstallDirectory", value));
+            // First try cross-file context (most reliable)
+            if let Some(install_dir) = ctx.get_wixui_install_directory() {
+                elem.push_attribute(("InstallDirectory", install_dir));
+            } else {
+                // Fallback: try to find in same file (siblings)
+                if let Some(parent) = node.parent() {
+                    for sibling in parent.children() {
+                        if sibling.tag_name().name() == "Property" 
+                            && sibling.attribute("Id") == Some("WIXUI_INSTALLDIR") {
+                            if let Some(value) = sibling.attribute("Value") {
+                                elem.push_attribute(("InstallDirectory", value));
+                                break;
+                            }
                         }
                     }
                 }
@@ -428,6 +440,7 @@ impl Transformation for UIRefToWixUI {
 
 /// Skips WIXUI_INSTALLDIR Property element when UIRef is converted to ui:WixUI
 /// (the InstallDirectory is now an attribute on ui:WixUI)
+/// Uses cross-file context to detect if WixUI_InstallDir is used anywhere
 pub struct SkipWixUIInstallDirProperty;
 
 impl Transformation for SkipWixUIInstallDirProperty {
@@ -435,14 +448,18 @@ impl Transformation for SkipWixUIInstallDirProperty {
         "SkipWixUIInstallDirProperty"
     }
 
-    fn applies_to(&self, node: &Node) -> bool {
+    fn applies_to(&self, node: &Node, ctx: &UpgradeContext) -> bool {
         if node.tag_name().name() != "Property" {
             return false;
         }
         if node.attribute("Id") != Some("WIXUI_INSTALLDIR") {
             return false;
         }
-        // Only skip if there's a UIRef to WixUI_InstallDir in the same parent
+        // Skip if WixUI_InstallDir is used anywhere (cross-file context)
+        if ctx.has_ui_ref("WixUI_InstallDir") {
+            return true;
+        }
+        // Fallback: check same parent for UIRef
         if let Some(parent) = node.parent() {
             return parent.children().any(|sibling| {
                 sibling.tag_name().name() == "UIRef" 
@@ -452,7 +469,7 @@ impl Transformation for SkipWixUIInstallDirProperty {
         false
     }
 
-    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>) -> anyhow::Result<bool> {
+    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
         // Skip this element - it's been converted to an attribute on ui:WixUI
         Ok(true)
     }

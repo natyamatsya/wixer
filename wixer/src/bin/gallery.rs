@@ -146,7 +146,8 @@ fn main() -> Result<()> {
         // Copy non-WiX files (README, scripts, etc.) to v4 dir
         copy_supporting_files(&example.path, &v4_example_dir)?;
 
-        // Process each .wxs file - upgrade v3 → v4
+        // Collect all file pairs for batch upgrade (enables cross-file context)
+        let mut file_pairs: Vec<(PathBuf, PathBuf)> = Vec::new();
         for wxs_file in &example.wxs_files {
             let relative = wxs_file.strip_prefix(&example.path).unwrap_or(wxs_file);
             let v4_output = v4_example_dir.join(relative);
@@ -156,18 +157,24 @@ fn main() -> Result<()> {
                 fs::create_dir_all(parent)?;
             }
 
-            // Upgrade v3 → v4
-            match upgrade::run(wxs_file.clone(), Some(v4_output.clone())) {
-                Ok(()) => {
+            file_pairs.push((wxs_file.clone(), v4_output));
+        }
+
+        // Batch upgrade all files with shared cross-file context
+        // This enables transformations like WIXUI_INSTALLDIR in one file, UIRef in another
+        match upgrade::run_batch(&file_pairs) {
+            Ok(()) => {
+                for (input, _output) in &file_pairs {
+                    let relative = input.strip_prefix(&example.path).unwrap_or(input);
                     stats.upgraded += 1;
                     if args.verbose {
                         println!("  ✓ Upgraded: {}", relative.display());
                     }
                 }
-                Err(e) => {
-                    stats.upgrade_errors += 1;
-                    eprintln!("  ✗ Failed to upgrade {}: {}", relative.display(), e);
-                }
+            }
+            Err(e) => {
+                stats.upgrade_errors += file_pairs.len();
+                eprintln!("  ✗ Failed to upgrade example: {}", e);
             }
         }
 

@@ -2,11 +2,16 @@
 //!
 //! This module provides a transformation pipeline for upgrading WiX v3 XML files to v4.
 //! It handles preprocessor directives by extracting them before parsing and restoring after.
+//!
+//! For multi-file projects, use `upgrade_files` which collects cross-file context
+//! (e.g., WIXUI_INSTALLDIR property in one file, UIRef in another).
 
+mod context;
 mod preprocessor;
 mod transformations;
 mod pipeline;
 
-pub use pipeline::upgrade_file;
+pub use context::{UpgradeContext, analyze_files};
+pub use pipeline::{upgrade_file, upgrade_files, upgrade_content_with_context};
 pub use preprocessor::PreprocessorPreserver;
 pub use transformations::Transformation;

@@ -6,6 +6,10 @@
 //! 3. Apply transformations
 //! 4. Serialize
 //! 5. Restore preprocessor directives
+//!
+//! For multi-file projects, use `upgrade_files` which:
+//! 1. Analyzes all files to build cross-file context
+//! 2. Upgrades each file with that shared context
 
 use anyhow::{Context, Result};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
@@ -16,16 +20,21 @@ use std::io::Cursor;
 use std::path::Path;
 use tracing::info;
 
+use super::context::UpgradeContext;
 use super::preprocessor::PreprocessorPreserver;
-use super::transformations::{standard_transformations, Transformation, V4_NAMESPACE};
+use super::transformations::{standard_transformations, Transformation, V4_NAMESPACE, V4_UI_NAMESPACE};
 use crate::schema_mapping_v3v4::is_standard_directory;
 
-/// Upgrade a WiX v3 file to v4
+/// Upgrade a WiX v3 file to v4 (single file, no cross-file context)
 pub fn upgrade_file(input: &Path, output: &Path) -> Result<()> {
     let content = fs::read_to_string(input)
         .with_context(|| format!("Failed to read {}", input.display()))?;
 
-    let upgraded = upgrade_content(&content)?;
+    // Build context from single file
+    let mut ctx = UpgradeContext::new();
+    ctx.analyze_content(&content)?;
+    
+    let upgraded = upgrade_content_with_context(&content, &ctx)?;
 
     fs::write(output, &upgraded)
         .with_context(|| format!("Failed to write {}", output.display()))?;
@@ -34,8 +43,49 @@ pub fn upgrade_file(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Upgrade WiX v3 content to v4
+/// Upgrade multiple WiX v3 files to v4 with shared cross-file context
+/// 
+/// This function:
+/// 1. Analyzes all input files to build a shared context
+/// 2. Upgrades each file using that context
+/// 
+/// This enables cross-file transformations like:
+/// - WIXUI_INSTALLDIR property in one file, UIRef in another
+pub fn upgrade_files(files: &[(impl AsRef<Path>, impl AsRef<Path>)]) -> Result<()> {
+    // Phase 1: Analyze all files to build context
+    let mut ctx = UpgradeContext::new();
+    for (input, _output) in files {
+        let content = fs::read_to_string(input.as_ref())
+            .with_context(|| format!("Failed to read {}", input.as_ref().display()))?;
+        ctx.analyze_content(&content)?;
+    }
+    
+    // Phase 2: Upgrade each file with shared context
+    for (input, output) in files {
+        let content = fs::read_to_string(input.as_ref())
+            .with_context(|| format!("Failed to read {}", input.as_ref().display()))?;
+        
+        let upgraded = upgrade_content_with_context(&content, &ctx)?;
+        
+        fs::write(output.as_ref(), &upgraded)
+            .with_context(|| format!("Failed to write {}", output.as_ref().display()))?;
+        
+        info!("Upgraded {}", output.as_ref().display());
+    }
+    
+    Ok(())
+}
+
+/// Upgrade WiX v3 content to v4 (single file, builds its own context)
+#[allow(dead_code)]
 pub fn upgrade_content(content: &str) -> Result<String> {
+    let mut ctx = UpgradeContext::new();
+    ctx.analyze_content(content)?;
+    upgrade_content_with_context(content, &ctx)
+}
+
+/// Upgrade WiX v3 content to v4 with provided context
+pub fn upgrade_content_with_context(content: &str, ctx: &UpgradeContext) -> Result<String> {
     // Step 1: Extract preprocessor directives
     let mut preprocessor = PreprocessorPreserver::new();
     let clean_content = if PreprocessorPreserver::has_directives(content) {
@@ -61,7 +111,7 @@ pub fn upgrade_content(content: &str) -> Result<String> {
 
     // Process root element
     let root = doc.root_element();
-    process_root(root, &mut writer, &transformations)?;
+    process_root(root, &mut writer, &transformations, ctx)?;
 
     // Step 4: Serialize
     let result = writer.into_inner().into_inner();
@@ -120,28 +170,13 @@ fn process_root(
     root: Node,
     writer: &mut Writer<Cursor<Vec<u8>>>,
     transformations: &[Box<dyn Transformation>],
+    ctx: &UpgradeContext,
 ) -> Result<()> {
     match root.tag_name().name() {
-        "Wix" => process_wix_element(root, writer, transformations),
-        "Include" => process_include_element(root, writer, transformations),
-        _ => process_node(root, writer, transformations),
+        "Wix" => process_wix_element(root, writer, transformations, ctx),
+        "Include" => process_include_element(root, writer, transformations, ctx),
+        _ => process_node(root, writer, transformations, ctx),
     }
-}
-
-/// Check if document contains WixUI references that need the UI namespace
-fn needs_ui_namespace(node: &Node) -> bool {
-    // Check for UIRef elements referencing WixUI_* 
-    fn check_node(n: &Node) -> bool {
-        if n.tag_name().name() == "UIRef" {
-            if let Some(id) = n.attribute("Id") {
-                if id.starts_with("WixUI_") {
-                    return true;
-                }
-            }
-        }
-        n.children().any(|c| c.is_element() && check_node(&c))
-    }
-    check_node(node)
 }
 
 /// Process Wix root element
@@ -149,13 +184,29 @@ fn process_wix_element(
     node: Node,
     writer: &mut Writer<Cursor<Vec<u8>>>,
     transformations: &[Box<dyn Transformation>],
+    ctx: &UpgradeContext,
 ) -> Result<()> {
     let mut elem = BytesStart::new("Wix");
     elem.push_attribute(("xmlns", V4_NAMESPACE));
 
-    // Add UI namespace if needed for WixUI references
-    if needs_ui_namespace(&node) {
-        elem.push_attribute(("xmlns:ui", "http://wixtoolset.org/schemas/v4/wxs/ui"));
+    // Add UI namespace if needed (from cross-file context or local detection)
+    let needs_ui = ctx.needs_ui_namespace || {
+        // Fallback: check this file for UIRef
+        fn check_node(n: &Node) -> bool {
+            if n.tag_name().name() == "UIRef" {
+                if let Some(id) = n.attribute("Id") {
+                    if id.starts_with("WixUI_") {
+                        return true;
+                    }
+                }
+            }
+            n.children().any(|c| c.is_element() && check_node(&c))
+        }
+        check_node(&node)
+    };
+    
+    if needs_ui {
+        elem.push_attribute(("xmlns:ui", V4_UI_NAMESPACE));
     }
 
     // Copy other namespace declarations
@@ -172,9 +223,9 @@ fn process_wix_element(
         if child.is_element() {
             // Check for Product -> Package transformation
             if child.tag_name().name() == "Product" {
-                process_product_element(child, writer, transformations)?;
+                process_product_element(child, writer, transformations, ctx)?;
             } else {
-                process_node(child, writer, transformations)?;
+                process_node(child, writer, transformations, ctx)?;
             }
         }
     }
@@ -188,6 +239,7 @@ fn process_include_element(
     node: Node,
     writer: &mut Writer<Cursor<Vec<u8>>>,
     transformations: &[Box<dyn Transformation>],
+    ctx: &UpgradeContext,
 ) -> Result<()> {
     let mut elem = BytesStart::new("Include");
     elem.push_attribute(("xmlns", V4_NAMESPACE));
@@ -203,7 +255,7 @@ fn process_include_element(
         writer.write_event(Event::Start(elem))?;
         for child in node.children() {
             if child.is_element() {
-                process_node(child, writer, transformations)?;
+                process_node(child, writer, transformations, ctx)?;
             }
         }
         writer.write_event(Event::End(BytesEnd::new("Include")))?;
@@ -219,6 +271,7 @@ fn process_product_element(
     node: Node,
     writer: &mut Writer<Cursor<Vec<u8>>>,
     transformations: &[Box<dyn Transformation>],
+    ctx: &UpgradeContext,
 ) -> Result<()> {
     let mut elem = BytesStart::new("Package");
 
@@ -258,7 +311,7 @@ fn process_product_element(
     // Process children, skipping inner Package
     for child in node.children() {
         if child.is_element() && child.tag_name().name() != "Package" {
-            process_node(child, writer, transformations)?;
+            process_node(child, writer, transformations, ctx)?;
         }
     }
 
@@ -271,13 +324,14 @@ fn process_node(
     node: Node,
     writer: &mut Writer<Cursor<Vec<u8>>>,
     transformations: &[Box<dyn Transformation>],
+    ctx: &UpgradeContext,
 ) -> Result<()> {
     let tag_name = node.tag_name().name();
 
     // Try each transformation
     for transform in transformations {
-        if transform.applies_to(&node) {
-            let handled = transform.apply(&node, writer)?;
+        if transform.applies_to(&node, ctx) {
+            let handled = transform.apply(&node, writer, ctx)?;
             if handled {
                 return Ok(());
             }
@@ -285,7 +339,7 @@ fn process_node(
             // and we need to process children and close
             for child in node.children() {
                 if child.is_element() {
-                    process_node(child, writer, transformations)?;
+                    process_node(child, writer, transformations, ctx)?;
                 } else if child.is_text() {
                     if let Some(text) = child.text() {
                         if !text.trim().is_empty() {
@@ -303,7 +357,7 @@ fn process_node(
     if tag_name == "Directory" && node.attribute("Id") == Some("TARGETDIR") {
         for child in node.children() {
             if child.is_element() {
-                process_node(child, writer, transformations)?;
+                process_node(child, writer, transformations, ctx)?;
             }
         }
         return Ok(());
@@ -321,7 +375,7 @@ fn process_node(
                     writer.write_event(Event::Start(elem))?;
                     for child in node.children() {
                         if child.is_element() {
-                            process_node(child, writer, transformations)?;
+                            process_node(child, writer, transformations, ctx)?;
                         }
                     }
                     writer.write_event(Event::End(BytesEnd::new("StandardDirectory")))?;
@@ -351,7 +405,7 @@ fn process_node(
 
         for child in node.children() {
             if child.is_element() {
-                process_node(child, writer, transformations)?;
+                process_node(child, writer, transformations, ctx)?;
             } else if child.is_text() {
                 if let Some(text) = child.text() {
                     if !text.trim().is_empty() {
