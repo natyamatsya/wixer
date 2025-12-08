@@ -10,5 +10,4 @@ sources:
   - MyCustomPropertiesDlg.wxs
   - InstallationStages.wxi
 
-buildable: false
-skip_reason: "WiX v4 UI migration: UIRef→ui:WixUI, Control/Condition→EnableCondition/DisableCondition, Text inner→Value attribute"
+buildable: true

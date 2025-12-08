@@ -34,7 +34,7 @@ Wix:
           Height: '15'
           Transparent: yes
           NoPrefix: yes
-          Text: Please enter custom properties
+          Text: 'Please enter custom properties'
         - Id: BannerLine
           Type: Line
           X: '0'
