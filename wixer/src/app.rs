@@ -144,6 +144,13 @@ pub async fn run() -> Result<()> {
         Commands::Sequence { path, table } => {
             run_blocking(move || commands::sequence::run(&path, table)).await?;
         }
+        Commands::Simulate {
+            input,
+            mode,
+            verbose,
+        } => {
+            run_blocking(move || commands::simulate::run(&input, mode, verbose)).await?;
+        }
         Commands::Lsp => {
             commands::lsp::run().await?;
         }
@@ -573,5 +580,19 @@ enum Commands {
         /// Filter by table name (e.g. InstallExecuteSequence)
         #[arg(long)]
         table: Option<String>,
+    },
+    /// Simulate installer execution flow
+    Simulate {
+        /// Input WiX file (.wxs.yaml or .wxs)
+        #[arg(index = 1)]
+        input: PathBuf,
+
+        /// Installation mode to simulate
+        #[arg(long, value_enum, default_value = "first-install")]
+        mode: commands::simulate::SimulateMode,
+
+        /// Show all actions including skipped ones
+        #[arg(long, short)]
+        verbose: bool,
     },
 }

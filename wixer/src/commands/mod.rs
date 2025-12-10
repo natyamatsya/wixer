@@ -10,4 +10,5 @@ pub mod map_schemas;
 pub mod migrate;
 pub mod pdb;
 pub mod sequence;
+pub mod simulate;
 pub mod upgrade;
