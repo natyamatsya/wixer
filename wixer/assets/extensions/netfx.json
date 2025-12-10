@@ -74,51 +74,59 @@
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4NetFxExecuteNativeImageCommitUninstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "MsiPublishAssemblies",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4NetFxExecuteNativeImageUninstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "Wix4NetFxExecuteNativeImageCommitUninstall_X64",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4NetFxExecuteNativeImageCommitInstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "Wix4NetFxExecuteNativeImageUninstall_X64",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4NetFxExecuteNativeImageInstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "Wix4NetFxExecuteNativeImageCommitInstall_X64",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4NetFxDotNetCompatibilityCheck_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "LaunchConditions",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4NetFxDotNetCompatibilityCheck_X64",
       "sequence_table": "InstallUISequence",
       "before": "LaunchConditions",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     }
   ],
+  "publish_entries": [],
   "properties": [
     "WIX_IS_NETFRAMEWORK_481_OR_LATER_INSTALLED",
     "WIX_IS_NETFRAMEWORK_451_OR_LATER_INSTALLED",

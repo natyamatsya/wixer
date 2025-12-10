@@ -974,310 +974,355 @@
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallFinalize",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4WaitForEvent_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallFinalize",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4WaitForEventDeferred_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallInitialize",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ExitEarlyWithSuccess_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "FindRelatedProducts",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4RemoveFoldersEx_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "CostInitialize",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": false
     },
     {
       "action": "Wix4RemoveRegistryKeysEx_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveRegistryValues",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": false
     },
     {
       "action": "Wix4BroadcastSettingChange_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFinalize",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4BroadcastEnvironmentChange_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFinalize",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4CheckRebootRequired_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFinalize",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4CloseApplications_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4RegisterRestartResources_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallValidate",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix6ConfigureGroups_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigureUsers_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "InstallFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigureSmbInstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigureSmbUninstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "RemoveFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4InstallPerfCounterData_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "WriteRegistryValues",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4UninstallPerfCounterData_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveRegistryValues",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigurePerfmonInstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "WriteRegistryValues",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigurePerfmonUninstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveRegistryValues",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigurePerfmonManifestRegister_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigurePerfmonManifestUnregister_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "RemoveRegistryValues",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigureEventManifestRegister_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "Wix4SchedXmlFile_X64",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4ConfigureEventManifestUnregister_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "RemoveRegistryValues",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedServiceConfig_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallServices",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4TouchFileDuringUninstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4TouchFileDuringInstall_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedXmlFile_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "DuplicateFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedXmlConfig_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "DuplicateFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedInternetShortcuts_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveFolders",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4RollbackInternetShortcuts_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "Wix4CreateInternetShortcuts_X64",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4CreateInternetShortcuts_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "CreateShortcuts",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedSecureObjects_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallServices",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedSecureObjectsRollback_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "UnpublishFeatures",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4SchedFormatFiles_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFiles",
-      "condition": null
+      "condition": null,
+      "overridable": false
     },
     {
       "action": "Wix4QueryOsInfo_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsInfo_X64",
       "sequence_table": "InstallUISequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsDirs_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsDirs_X64",
       "sequence_table": "InstallUISequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsWellKnownSID_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsWellKnownSID_X64",
       "sequence_table": "InstallUISequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsDriverInfo_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryOsDriverInfo_X64",
       "sequence_table": "InstallUISequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryNativeMachine_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4QueryNativeMachine_X64",
       "sequence_table": "InstallUISequence",
       "before": null,
       "after": "AppSearch",
-      "condition": null
+      "condition": null,
+      "overridable": true
     }
   ],
+  "publish_entries": [],
   "properties": [],
   "binaries": [
     "Wix4UtilCA_X64"

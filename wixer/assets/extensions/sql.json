@@ -84,16 +84,19 @@
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4InstallSqlData_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     }
   ],
+  "publish_entries": [],
   "properties": [],
   "binaries": [
     "SqlCA_X64"

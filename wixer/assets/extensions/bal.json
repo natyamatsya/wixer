@@ -8,6 +8,7 @@
   "namespace": "http://wixtoolset.org/schemas/v4/wxs/bal",
   "custom_actions": [],
   "sequence_entries": [],
+  "publish_entries": [],
   "properties": [],
   "binaries": []
 }

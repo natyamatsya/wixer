@@ -224,23 +224,27 @@
       "sequence_table": "InstallExecuteSequence",
       "before": "RegisterUser",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4UninstallCertificates_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": "RemoveFiles",
       "after": null,
-      "condition": null
+      "condition": null,
+      "overridable": true
     },
     {
       "action": "Wix4InstallCertificates_X64",
       "sequence_table": "InstallExecuteSequence",
       "before": null,
       "after": "InstallFiles",
-      "condition": null
+      "condition": null,
+      "overridable": true
     }
   ],
+  "publish_entries": [],
   "properties": [
     "IISMAJORVERSION",
     "IISMINORVERSION"

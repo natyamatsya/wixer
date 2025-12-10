@@ -30,6 +30,9 @@ pub struct ExtractedSequenceEntry {
     pub before: Option<String>,
     pub after: Option<String>,
     pub condition: Option<String>,
+    /// If true, this scheduling can be overridden by user-defined actions
+    #[serde(default)]
+    pub overridable: bool,
 }
 
 /// License attribution for extracted WiX data (required by MS-RL)
@@ -38,6 +41,18 @@ pub struct ExtractedLicense {
     pub notice: String,
     pub source: String,
     pub spdx_id: String,
+}
+
+/// A dialog publish entry (UI event ordering)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtractedPublishEntry {
+    pub dialog: String,
+    pub control: String,
+    pub event: Option<String>,
+    pub value: Option<String>,
+    pub property: Option<String>,
+    pub order: Option<i32>,
+    pub condition: Option<String>,
 }
 
 /// Complete extension data loaded from JSON
@@ -49,6 +64,9 @@ pub struct ExtractedExtension {
     pub namespace: Option<String>,
     pub custom_actions: Vec<ExtractedCustomAction>,
     pub sequence_entries: Vec<ExtractedSequenceEntry>,
+    /// Dialog publish entries with ordering (UI extension)
+    #[serde(default)]
+    pub publish_entries: Vec<ExtractedPublishEntry>,
     #[serde(default)]
     pub properties: Vec<String>,
     #[serde(default)]

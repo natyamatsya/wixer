@@ -32,6 +32,21 @@ pub struct ExtractedSequenceEntry {
     pub before: Option<String>,
     pub after: Option<String>,
     pub condition: Option<String>,
+    /// If true, this scheduling can be overridden by user-defined actions
+    #[serde(default)]
+    pub overridable: bool,
+}
+
+/// A dialog publish entry (UI event ordering)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtractedPublishEntry {
+    pub dialog: String,
+    pub control: String,
+    pub event: Option<String>,
+    pub value: Option<String>,
+    pub property: Option<String>,
+    pub order: Option<i32>,
+    pub condition: Option<String>,
 }
 
 /// Complete extension data
@@ -43,6 +58,8 @@ pub struct ExtractedExtension {
     pub namespace: Option<String>,
     pub custom_actions: Vec<ExtractedCustomAction>,
     pub sequence_entries: Vec<ExtractedSequenceEntry>,
+    /// Dialog publish entries with ordering (UI extension)
+    pub publish_entries: Vec<ExtractedPublishEntry>,
     pub properties: Vec<String>,
     pub binaries: Vec<String>,
 }
@@ -137,6 +154,7 @@ fn extract_extension(wixlib_dir: &Path, name: &str, namespace: &str) -> Result<E
         namespace: Some(namespace.to_string()),
         custom_actions: Vec::new(),
         sequence_entries: Vec::new(),
+        publish_entries: Vec::new(),
         properties: Vec::new(),
         binaries: Vec::new(),
     };
@@ -192,6 +210,11 @@ fn parse_wix_file(path: &Path, extension: &mut ExtractedExtension) -> Result<()>
                     if !id.contains("$(") && !extension.binaries.contains(&id) {
                         extension.binaries.push(id);
                     }
+                }
+            }
+            "Publish" => {
+                if let Some(pub_entry) = extract_publish_entry(&node) {
+                    extension.publish_entries.push(pub_entry);
                 }
             }
             _ => {}
@@ -252,10 +275,14 @@ fn extract_custom_action(node: &Node) -> Option<ExtractedCustomAction> {
 }
 
 fn extract_sequence_entry(node: &Node) -> Option<ExtractedSequenceEntry> {
-    let action = node.attribute("Action")?;
-    let action = expand_vars(action);
+    let raw_action = node.attribute("Action")?;
 
-    // Skip virtual/template actions
+    // Check if action is marked as "virtual" (overridable)
+    let overridable = raw_action.starts_with("virtual ");
+
+    let action = expand_vars(raw_action);
+
+    // Skip unresolved template actions
     if action.contains("$(") {
         return None;
     }
@@ -287,6 +314,41 @@ fn extract_sequence_entry(node: &Node) -> Option<ExtractedSequenceEntry> {
         sequence_table,
         before: node.attribute("Before").map(expand_vars),
         after: node.attribute("After").map(expand_vars),
+        condition,
+        overridable,
+    })
+}
+
+fn extract_publish_entry(node: &Node) -> Option<ExtractedPublishEntry> {
+    let dialog = node.attribute("Dialog")?;
+    let control = node.attribute("Control")?;
+
+    // Skip entries with unresolved variables
+    let dialog = expand_vars(dialog);
+    let control = expand_vars(control);
+    if dialog.contains("$(") || control.contains("$(") {
+        return None;
+    }
+
+    let order = node.attribute("Order").and_then(|s| s.parse::<i32>().ok());
+
+    // Get condition from text content or Condition attribute
+    let condition = node
+        .attribute("Condition")
+        .map(|s| s.to_string())
+        .or_else(|| {
+            node.text()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        });
+
+    Some(ExtractedPublishEntry {
+        dialog,
+        control,
+        event: node.attribute("Event").map(|s| s.to_string()),
+        value: node.attribute("Value").map(expand_vars),
+        property: node.attribute("Property").map(|s| s.to_string()),
+        order,
         condition,
     })
 }
