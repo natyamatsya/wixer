@@ -1,3 +1,4 @@
+use crate::analysis::orphan_detection;
 use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
 use crate::dirs;
 use crate::simulation::extensions::ExtensionRegistry;
@@ -466,31 +467,51 @@ impl WixerLsp {
 
         let diagnostics = match serde_yaml::from_str::<serde_yaml::Value>(&text) {
             Ok(yaml_val) => {
-                if let Ok(mut json_val) = serde_json::to_value(yaml_val) {
+                let mut diags = Vec::new();
+
+                // Schema validation
+                if let Ok(mut json_val) = serde_json::to_value(&yaml_val) {
                     remove_xmlns(&mut json_val);
 
-                    match schema.validate(&json_val) {
-                        Ok(()) => vec![],
-                        Err(errors) => errors
-                            .map(|error| {
-                                let range = find_range(&text, &error.instance_path.to_string());
-                                Diagnostic {
-                                    range,
-                                    severity: Some(DiagnosticSeverity::ERROR),
-                                    code: None,
-                                    code_description: None,
-                                    source: Some("wixer".to_string()),
-                                    message: error.to_string(),
-                                    related_information: None,
-                                    tags: None,
-                                    data: None,
-                                }
-                            })
-                            .collect(),
+                    if let Err(errors) = schema.validate(&json_val) {
+                        diags.extend(errors.map(|error| {
+                            let range = find_range(&text, &error.instance_path.to_string());
+                            Diagnostic {
+                                range,
+                                severity: Some(DiagnosticSeverity::ERROR),
+                                code: None,
+                                code_description: None,
+                                source: Some("wixer".to_string()),
+                                message: error.to_string(),
+                                related_information: None,
+                                tags: None,
+                                data: None,
+                            }
+                        }));
                     }
-                } else {
-                    vec![]
                 }
+
+                // Orphan component detection
+                let orphans = orphan_detection::find_orphans(&yaml_val);
+                for orphan in orphans {
+                    let range = find_range(&text, &orphan.path);
+                    diags.push(Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        code: Some(NumberOrString::String("orphan-component".to_string())),
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: format!(
+                            "{} '{}' is not referenced by any Feature and will not be installed",
+                            orphan.kind, orphan.id
+                        ),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
+
+                diags
             }
             Err(e) => {
                 let range = if let Some(loc) = e.location() {
