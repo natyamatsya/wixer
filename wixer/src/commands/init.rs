@@ -6,7 +6,31 @@ use anyhow::{Context, Result};
 use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::Path;
 use tracing::{error, info};
+
+const LICENSE_TEXT: &str = r#"This cache contains schema files from the following sources:
+
+## WiX Toolset Schemas (xml-schema/, json-schema/)
+
+Copyright (c) .NET Foundation and contributors.
+Licensed under the Microsoft Reciprocal License (MS-RL).
+Source: https://github.com/wixtoolset/wix
+License: https://opensource.org/licenses/ms-rl
+
+## MSIX Packaging Schemas (msix-xsd-schema/)
+
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT License.
+Source: https://github.com/microsoft/msix-packaging
+"#;
+
+fn write_license_file(cache_dir: &Path) -> Result<()> {
+    let license_path = cache_dir.join("LICENSE.txt");
+    std::fs::write(&license_path, LICENSE_TEXT)
+        .with_context(|| format!("Failed to write license file: {}", license_path.display()))?;
+    Ok(())
+}
 
 pub async fn run(fresh: bool) -> Result<()> {
     let cache_base = dirs::get_cache_dir().context("Error determining cache directory")?;
@@ -25,6 +49,9 @@ pub async fn run(fresh: bool) -> Result<()> {
         std::fs::remove_dir_all(&cache_base).with_context(|| "Error clearing cache")?;
         std::fs::create_dir_all(&cache_base)?;
     }
+
+    // Write license attribution for cached schemas
+    write_license_file(&cache_base)?;
 
     let files = xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh)
         .await
