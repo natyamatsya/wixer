@@ -37,12 +37,22 @@ pub struct ExtractedSequenceEntry {
 /// Complete extension data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedExtension {
+    /// Attribution notice (required by MS-RL license)
+    pub license: ExtractedLicense,
     pub id: String,
     pub namespace: Option<String>,
     pub custom_actions: Vec<ExtractedCustomAction>,
     pub sequence_entries: Vec<ExtractedSequenceEntry>,
     pub properties: Vec<String>,
     pub binaries: Vec<String>,
+}
+
+/// License attribution for extracted WiX data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtractedLicense {
+    pub notice: String,
+    pub source: String,
+    pub spdx_id: String,
 }
 
 fn main() -> Result<()> {
@@ -118,6 +128,11 @@ fn main() -> Result<()> {
 
 fn extract_extension(wixlib_dir: &Path, name: &str, namespace: &str) -> Result<ExtractedExtension> {
     let mut extension = ExtractedExtension {
+        license: ExtractedLicense {
+            notice: "Copyright (c) .NET Foundation and contributors. Licensed under the Microsoft Reciprocal License (MS-RL).".to_string(),
+            source: "https://github.com/wixtoolset/wix".to_string(),
+            spdx_id: "MS-RL".to_string(),
+        },
         id: format!("WixToolset.{}.wixext", name),
         namespace: Some(namespace.to_string()),
         custom_actions: Vec::new(),

@@ -1,4 +1,9 @@
 {
+  "license": {
+    "notice": "Copyright (c) .NET Foundation and contributors. Licensed under the Microsoft Reciprocal License (MS-RL).",
+    "source": "https://github.com/wixtoolset/wix",
+    "spdx_id": "MS-RL"
+  },
   "id": "WixToolset.Util.wixext",
   "namespace": "http://wixtoolset.org/schemas/v4/wxs/util",
   "custom_actions": [

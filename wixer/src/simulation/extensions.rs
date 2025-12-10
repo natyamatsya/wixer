@@ -32,9 +32,19 @@ pub struct ExtractedSequenceEntry {
     pub condition: Option<String>,
 }
 
+/// License attribution for extracted WiX data (required by MS-RL)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtractedLicense {
+    pub notice: String,
+    pub source: String,
+    pub spdx_id: String,
+}
+
 /// Complete extension data loaded from JSON
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedExtension {
+    /// Attribution notice (required by MS-RL license)
+    pub license: ExtractedLicense,
     pub id: String,
     pub namespace: Option<String>,
     pub custom_actions: Vec<ExtractedCustomAction>,
