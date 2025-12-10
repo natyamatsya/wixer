@@ -69,26 +69,26 @@ impl WixPdb {
         let mut result = String::with_capacity(json.len());
         let mut in_string = false;
         let mut escape_next = false;
-        
+
         for ch in json.chars() {
             if escape_next {
                 result.push(ch);
                 escape_next = false;
                 continue;
             }
-            
+
             if ch == '\\' && in_string {
                 result.push(ch);
                 escape_next = true;
                 continue;
             }
-            
+
             if ch == '"' {
                 in_string = !in_string;
                 result.push(ch);
                 continue;
             }
-            
+
             if in_string {
                 // Escape control characters that should be escaped in JSON strings
                 match ch {
@@ -105,7 +105,7 @@ impl WixPdb {
                 result.push(ch);
             }
         }
-        
+
         result
     }
 
@@ -118,9 +118,10 @@ impl WixPdb {
                         results.push(symbol);
                     }
                 } else if let Some(symbol_id_str) = symbol.id.as_str()
-                    && symbol_id_str == id {
-                        results.push(symbol);
-                    }
+                    && symbol_id_str == id
+                {
+                    results.push(symbol);
+                }
             }
         }
         results

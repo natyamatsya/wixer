@@ -1,4 +1,3 @@
-
 /// WiX XML Namespaces
 pub const WIX_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs";
 pub const WIX_LOCALIZATION_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxl";

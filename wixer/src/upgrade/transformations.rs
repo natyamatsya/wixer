@@ -3,8 +3,8 @@
 //! Each transformation implements a single v3→v4 change.
 //! Transformations are composable and testable in isolation.
 
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Writer;
+use quick_xml::events::{BytesStart, Event};
 use roxmltree::Node;
 use std::io::Cursor;
 
@@ -26,7 +26,12 @@ pub trait Transformation {
 
     /// Apply the transformation, writing output to the writer
     /// Returns true if the node was handled, false to continue with default handling
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, ctx: &UpgradeContext) -> anyhow::Result<bool>;
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool>;
 }
 
 // ============================================================================
@@ -50,7 +55,12 @@ impl Transformation for InnerTextToCondition {
         Self::ELEMENTS.contains(&node.tag_name().name())
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         let tag_name = node.tag_name().name();
         let mut elem = BytesStart::new(tag_name);
 
@@ -60,10 +70,7 @@ impl Transformation for InnerTextToCondition {
         }
 
         // Convert inner text to Condition attribute
-        let condition_text: String = node
-            .children()
-            .filter_map(|c| c.text())
-            .collect();
+        let condition_text: String = node.children().filter_map(|c| c.text()).collect();
         let condition_text = condition_text.trim();
 
         if !condition_text.is_empty() {
@@ -91,19 +98,26 @@ impl Transformation for ConditionToLaunch {
         // In v3, Condition is under Product; in v4 it would be under Package
         // We check for both since we're transforming v3 to v4
         node.tag_name().name() == "Condition"
-            && node.parent().map(|p| {
-                let name = p.tag_name().name();
-                name == "Package" || name == "Product"
-            }).unwrap_or(false)
+            && node
+                .parent()
+                .map(|p| {
+                    let name = p.tag_name().name();
+                    name == "Package" || name == "Product"
+                })
+                .unwrap_or(false)
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
-        let message = node.attribute("Message").unwrap_or("Installation cannot continue.");
-        
-        let condition_text: String = node
-            .children()
-            .filter_map(|c| c.text())
-            .collect();
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
+        let message = node
+            .attribute("Message")
+            .unwrap_or("Installation cannot continue.");
+
+        let condition_text: String = node.children().filter_map(|c| c.text()).collect();
         let condition_text = condition_text.trim();
 
         if !condition_text.is_empty() {
@@ -136,10 +150,17 @@ impl Transformation for CustomActionTransform {
         node.tag_name().name() == "CustomAction"
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         let mut elem = BytesStart::new("CustomAction");
 
-        let binary_key = node.attribute("BinaryKey").or_else(|| node.attribute("BinaryRef"));
+        let binary_key = node
+            .attribute("BinaryKey")
+            .or_else(|| node.attribute("BinaryRef"));
         let dll_entry = node.attribute("DllEntry");
 
         // Check for WixQuietExec pattern
@@ -148,9 +169,7 @@ impl Transformation for CustomActionTransform {
 
         for attr in node.attributes() {
             let (name, value) = match attr.name() {
-                "BinaryKey" | "BinaryRef" if is_wix_quiet_exec => {
-                    ("BinaryRef", "Wix4UtilCA_X86")
-                }
+                "BinaryKey" | "BinaryRef" if is_wix_quiet_exec => ("BinaryRef", "Wix4UtilCA_X86"),
                 "BinaryKey" => ("BinaryRef", attr.value()),
                 "FileKey" => ("FileRef", attr.value()),
                 other => (other, attr.value()),
@@ -174,7 +193,7 @@ pub struct RemoveDeprecatedAttributes;
 impl RemoveDeprecatedAttributes {
     /// Attributes that should be removed entirely in v4
     const DEPRECATED_ATTRS: &'static [&'static str] = &["Win64"];
-    
+
     /// Elements that commonly have these deprecated attributes
     const ELEMENTS: &'static [&'static str] = &[
         "RegistrySearch",
@@ -192,10 +211,17 @@ impl Transformation for RemoveDeprecatedAttributes {
     fn applies_to(&self, node: &Node, _ctx: &UpgradeContext) -> bool {
         let tag = node.tag_name().name();
         Self::ELEMENTS.contains(&tag)
-            && node.attributes().any(|a| Self::DEPRECATED_ATTRS.contains(&a.name()))
+            && node
+                .attributes()
+                .any(|a| Self::DEPRECATED_ATTRS.contains(&a.name()))
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         let tag_name = node.tag_name().name();
         let mut elem = BytesStart::new(tag_name);
 
@@ -237,12 +263,18 @@ impl Transformation for ControlTextToAttribute {
         }
         // Check if there's a Text child element with inner text
         node.children().any(|c| {
-            c.tag_name().name() == "Text" 
-                && c.children().any(|t| t.is_text() && !t.text().unwrap_or("").trim().is_empty())
+            c.tag_name().name() == "Text"
+                && c.children()
+                    .any(|t| t.is_text() && !t.text().unwrap_or("").trim().is_empty())
         })
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         let mut elem = BytesStart::new("Control");
 
         // Copy existing attributes
@@ -252,22 +284,18 @@ impl Transformation for ControlTextToAttribute {
 
         // Find Text child and extract inner text
         for child in node.children() {
-            if child.tag_name().name() == "Text" {
-                let text_content: String = child
-                    .children()
-                    .filter_map(|c| c.text())
-                    .collect();
-                let text_content = text_content.trim();
-                if !text_content.is_empty() {
-                    elem.push_attribute(("Text", text_content));
-                }
+            if child.tag_name().name() == "Text"
+                && let Some(text) = child.text()
+                && !text.trim().is_empty()
+            {
+                elem.push_attribute(("Text", text.trim()));
             }
         }
 
         // Check for other children (non-Text elements)
-        let has_other_children = node.children().any(|c| {
-            c.is_element() && c.tag_name().name() != "Text"
-        });
+        let has_other_children = node
+            .children()
+            .any(|c| c.is_element() && c.tag_name().name() != "Text");
 
         if has_other_children {
             writer.write_event(Event::Start(elem))?;
@@ -300,7 +328,12 @@ impl Transformation for ControlConditionToAttribute {
         node.children().any(|c| c.tag_name().name() == "Condition")
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         let mut elem = BytesStart::new("Control");
 
         // Copy existing attributes
@@ -315,10 +348,7 @@ impl Transformation for ControlConditionToAttribute {
         for child in node.children() {
             if child.tag_name().name() == "Condition" {
                 let action = child.attribute("Action").unwrap_or("");
-                let condition_text: String = child
-                    .children()
-                    .filter_map(|c| c.text())
-                    .collect();
+                let condition_text: String = child.children().filter_map(|c| c.text()).collect();
                 let condition_text = condition_text.trim().to_string();
 
                 match action.to_lowercase().as_str() {
@@ -337,9 +367,9 @@ impl Transformation for ControlConditionToAttribute {
         }
 
         // Check for other children (non-Condition elements)
-        let has_other_children = node.children().any(|c| {
-            c.is_element() && c.tag_name().name() != "Condition"
-        });
+        let has_other_children = node
+            .children()
+            .any(|c| c.is_element() && c.tag_name().name() != "Condition");
 
         if has_other_children {
             writer.write_event(Event::Start(elem))?;
@@ -370,10 +400,17 @@ impl Transformation for SkipControlTextAndCondition {
             return false;
         }
         // Only skip if parent is Control
-        node.parent().map(|p| p.tag_name().name() == "Control").unwrap_or(false)
+        node.parent()
+            .map(|p| p.tag_name().name() == "Control")
+            .unwrap_or(false)
     }
 
-    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        _node: &Node,
+        _writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         // Skip this element entirely - it's been converted to an attribute
         Ok(true)
     }
@@ -402,12 +439,17 @@ impl Transformation for UIRefToWixUI {
             .unwrap_or(false)
     }
 
-    fn apply(&self, node: &Node, writer: &mut Writer<Cursor<Vec<u8>>>, ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        node: &Node,
+        writer: &mut Writer<Cursor<Vec<u8>>>,
+        ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         let id = node.attribute("Id").unwrap_or("WixUI_Minimal");
-        
+
         let mut elem = BytesStart::new("ui:WixUI");
         elem.push_attribute(("Id", id));
-        
+
         // For WixUI_InstallDir, get WIXUI_INSTALLDIR from cross-file context
         if id == "WixUI_InstallDir" {
             // First try cross-file context (most reliable)
@@ -417,18 +459,18 @@ impl Transformation for UIRefToWixUI {
                 // Fallback: try to find in same file (siblings)
                 if let Some(parent) = node.parent() {
                     for sibling in parent.children() {
-                        if sibling.tag_name().name() == "Property" 
-                            && sibling.attribute("Id") == Some("WIXUI_INSTALLDIR") {
-                            if let Some(value) = sibling.attribute("Value") {
-                                elem.push_attribute(("InstallDirectory", value));
-                                break;
-                            }
+                        if sibling.tag_name().name() == "Property"
+                            && sibling.attribute("Id") == Some("WIXUI_INSTALLDIR")
+                            && let Some(value) = sibling.attribute("Value")
+                        {
+                            elem.push_attribute(("InstallDirectory", value));
+                            break;
                         }
                     }
                 }
             }
         }
-        
+
         writer.write_event(Event::Empty(elem))?;
         Ok(true)
     }
@@ -462,14 +504,19 @@ impl Transformation for SkipWixUIInstallDirProperty {
         // Fallback: check same parent for UIRef
         if let Some(parent) = node.parent() {
             return parent.children().any(|sibling| {
-                sibling.tag_name().name() == "UIRef" 
+                sibling.tag_name().name() == "UIRef"
                     && sibling.attribute("Id") == Some("WixUI_InstallDir")
             });
         }
         false
     }
 
-    fn apply(&self, _node: &Node, _writer: &mut Writer<Cursor<Vec<u8>>>, _ctx: &UpgradeContext) -> anyhow::Result<bool> {
+    fn apply(
+        &self,
+        _node: &Node,
+        _writer: &mut Writer<Cursor<Vec<u8>>>,
+        _ctx: &UpgradeContext,
+    ) -> anyhow::Result<bool> {
         // Skip this element - it's been converted to an attribute on ui:WixUI
         Ok(true)
     }

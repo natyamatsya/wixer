@@ -1,10 +1,9 @@
+use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use std::path::PathBuf;
-use anyhow::{Context, Result};
 
 pub fn get_project_dirs() -> Result<ProjectDirs> {
-    ProjectDirs::from("com", "natyamatsya", "wixer")
-        .context("Could not determine home directory")
+    ProjectDirs::from("com", "natyamatsya", "wixer").context("Could not determine home directory")
 }
 
 pub fn get_cache_dir() -> Result<PathBuf> {

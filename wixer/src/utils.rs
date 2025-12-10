@@ -15,7 +15,10 @@ pub fn find_project_root() -> std::io::Result<PathBuf> {
 
     loop {
         // Check for indicators
-        if dir.join(".git").exists() || dir.join("wixer.yaml").exists() || dir.join(".wixer").exists() {
+        if dir.join(".git").exists()
+            || dir.join("wixer.yaml").exists()
+            || dir.join(".wixer").exists()
+        {
             return Ok(dir.to_path_buf());
         }
 
@@ -65,7 +68,10 @@ pub fn known_attributes_candidates(explicit: Option<&Path>) -> Vec<PathBuf> {
     candidates
 }
 
-pub fn load_known_attributes(explicit: Option<&Path>, warn_on_missing_inline: bool) -> HashSet<String> {
+pub fn load_known_attributes(
+    explicit: Option<&Path>,
+    warn_on_missing_inline: bool,
+) -> HashSet<String> {
     for candidate in known_attributes_candidates(explicit) {
         if !candidate.exists() {
             continue;
@@ -76,7 +82,9 @@ pub fn load_known_attributes(explicit: Option<&Path>, warn_on_missing_inline: bo
                 let reader = BufReader::new(file);
                 match serde_json::from_reader(reader) {
                     Ok(attrs) => return attrs,
-                    Err(e) => warn!(file = %candidate.display(), "Failed to parse attributes file: {}", e),
+                    Err(e) => {
+                        warn!(file = %candidate.display(), "Failed to parse attributes file: {}", e)
+                    }
                 }
             }
             Err(e) => warn!(file = %candidate.display(), "Failed to open attributes file: {}", e),
@@ -84,18 +92,51 @@ pub fn load_known_attributes(explicit: Option<&Path>, warn_on_missing_inline: bo
     }
 
     if warn_on_missing_inline {
-        warn!(
-            "No known_attributes.json found. Using default attribute list."
-        );
+        warn!("No known_attributes.json found. Using default attribute list.");
     }
 
     let defaults = [
-        "Id", "Name", "Version", "Manufacturer", "UpgradeCode", "Language", "Codepage",
-        "Title", "Description", "Level", "Source", "KeyPath", "Compressed", "Scope",
-        "InstallerVersion", "EmbedCab", "DowngradeErrorMessage", "Guid", "Directory",
-        "Target", "DiskId", "Vital", "Hidden", "System", "ReadOnly", "Checksum",
-        "PatchGroup", "Part", "File", "Component", "Feature", "Property", "Condition",
-        "Value", "Type", "Action", "Sequence", "Before", "After", "Cost", "Key"
+        "Id",
+        "Name",
+        "Version",
+        "Manufacturer",
+        "UpgradeCode",
+        "Language",
+        "Codepage",
+        "Title",
+        "Description",
+        "Level",
+        "Source",
+        "KeyPath",
+        "Compressed",
+        "Scope",
+        "InstallerVersion",
+        "EmbedCab",
+        "DowngradeErrorMessage",
+        "Guid",
+        "Directory",
+        "Target",
+        "DiskId",
+        "Vital",
+        "Hidden",
+        "System",
+        "ReadOnly",
+        "Checksum",
+        "PatchGroup",
+        "Part",
+        "File",
+        "Component",
+        "Feature",
+        "Property",
+        "Condition",
+        "Value",
+        "Type",
+        "Action",
+        "Sequence",
+        "Before",
+        "After",
+        "Cost",
+        "Key",
     ];
 
     defaults.iter().map(|s| s.to_string()).collect()

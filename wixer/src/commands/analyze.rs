@@ -69,7 +69,9 @@ impl AnalysisResults {
     }
 
     pub fn warnings(&self) -> impl Iterator<Item = &Issue> {
-        self.issues.iter().filter(|i| i.severity == Severity::Warning)
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning)
     }
 
     pub fn has_errors(&self) -> bool {
@@ -82,7 +84,8 @@ pub fn run(path: &Path) -> Result<()> {
     info!("Analyzing WiX project at: {}", path.display());
 
     let mut project = WixProject::new();
-    project.load_from_directory(path)
+    project
+        .load_from_directory(path)
         .context("Failed to load project")?;
 
     let results = analyze_project(&project);
@@ -107,12 +110,18 @@ pub fn run(path: &Path) -> Result<()> {
         if location.is_empty() {
             println!("{} {}: {}", prefix, issue.code, issue.message);
         } else {
-            println!("{} {} [{}]: {}", prefix, issue.code, location, issue.message);
+            println!(
+                "{} {} [{}]: {}",
+                prefix, issue.code, location, issue.message
+            );
         }
     }
 
     println!();
-    println!("Analysis complete: {} error(s), {} warning(s)", error_count, warning_count);
+    println!(
+        "Analysis complete: {} error(s), {} warning(s)",
+        error_count, warning_count
+    );
 
     if results.has_errors() {
         anyhow::bail!("Analysis found errors");
@@ -141,18 +150,20 @@ fn check_upgrade_code(project: &WixProject, results: &mut AnalysisResults) {
 
     for (path, file) in &project.files {
         let path_str = path.display().to_string();
-        
+
         // Check XML files
         if let Ok(doc) = Document::parse(&file.content) {
             for node in doc.descendants() {
                 let name = node.tag_name().name();
-                if (name == "Package" || name == "Product") && node.attribute("UpgradeCode").is_some() {
+                if (name == "Package" || name == "Product")
+                    && node.attribute("UpgradeCode").is_some()
+                {
                     has_upgrade_code = true;
                     break;
                 }
             }
         }
-        
+
         // Check YAML files (simple string search for UpgradeCode key)
         if path_str.ends_with(".yaml") || path_str.ends_with(".yml") {
             // Look for UpgradeCode: followed by a GUID-like value
@@ -160,7 +171,7 @@ fn check_upgrade_code(project: &WixProject, results: &mut AnalysisResults) {
                 has_upgrade_code = true;
             }
         }
-        
+
         if has_upgrade_code {
             break;
         }
@@ -193,13 +204,13 @@ fn check_bitness_mismatch(project: &WixProject, results: &mut AnalysisResults) {
 
             // Also check for directories under 64-bit standard directories
             for node in doc.descendants() {
-                if node.tag_name().name() == "Directory" || node.tag_name().name() == "StandardDirectory" {
-                    if let Some(id) = node.attribute("Id") {
-                        if dir_64bit.contains(&id) {
-                            // Mark all child directories as 64-bit
-                            mark_child_dirs_64bit(&node, &mut is_64bit_dir);
-                        }
-                    }
+                if (node.tag_name().name() == "Directory"
+                    || node.tag_name().name() == "StandardDirectory")
+                    && let Some(id) = node.attribute("Id")
+                    && dir_64bit.contains(&id)
+                {
+                    // Mark all child directories as 64-bit
+                    mark_child_dirs_64bit(&node, &mut is_64bit_dir);
                 }
             }
 
@@ -210,20 +221,21 @@ fn check_bitness_mismatch(project: &WixProject, results: &mut AnalysisResults) {
                     let is_32bit = bitness == "always32" || bitness == "default";
 
                     // Find parent directory
-                    if let Some(dir_ref) = node.attribute("Directory") {
-                        if is_32bit && is_64bit_dir.contains(dir_ref) {
-                            let comp_id = node.attribute("Id").unwrap_or("?");
-                            results.issues.push(
-                                Issue::error(
-                                    "ICE80",
-                                    format!(
-                                        "32-bit Component '{}' uses 64-bit Directory '{}'. Add Bitness=\"always64\" to the Component.",
-                                        comp_id, dir_ref
-                                    ),
-                                )
-                                .with_file(path.display().to_string()),
-                            );
-                        }
+                    if let Some(dir_ref) = node.attribute("Directory")
+                        && is_32bit
+                        && is_64bit_dir.contains(dir_ref)
+                    {
+                        let comp_id = node.attribute("Id").unwrap_or("?");
+                        results.issues.push(
+                            Issue::error(
+                                "ICE80",
+                                format!(
+                                    "32-bit Component '{}' uses 64-bit Directory '{}'. Add Bitness=\"always64\" to the Component.",
+                                    comp_id, dir_ref
+                                ),
+                            )
+                            .with_file(path.display().to_string()),
+                        );
                     }
                 }
             }
@@ -250,38 +262,37 @@ fn check_custom_action_length(project: &WixProject, results: &mut AnalysisResult
         if let Ok(doc) = Document::parse(&file.content) {
             for node in doc.descendants() {
                 if node.tag_name().name() == "CustomAction" {
-                    if let Some(value) = node.attribute("Value") {
-                        if value.len() > MAX_TARGET_LENGTH {
-                            let id = node.attribute("Id").unwrap_or("?");
-                            results.issues.push(
-                                Issue::warning(
-                                    "ICE03",
-                                    format!(
-                                        "CustomAction '{}' Value is {} chars (max {}). This may cause ICE03 string overflow.",
-                                        id, value.len(), MAX_TARGET_LENGTH
-                                    ),
-                                )
-                                .with_file(path.display().to_string()),
-                            );
-                        }
+                    if let Some(value) = node.attribute("Value")
+                        && value.len() > MAX_TARGET_LENGTH
+                    {
+                        let id = node.attribute("Id").unwrap_or("?");
+                        results.issues.push(
+                            Issue::warning(
+                                "ICE03",
+                                format!(
+                                    "CustomAction '{}' Value is {} chars (max {}). This may cause ICE03 string overflow.",
+                                    id, value.len(), MAX_TARGET_LENGTH
+                                ),
+                            )
+                            .with_file(path.display().to_string()),
+                        );
                     }
                     // Also check SetProperty pattern (has Property attribute)
-                    if node.attribute("Property").is_some() {
-                        if let Some(value) = node.attribute("Value") {
-                            if value.len() > MAX_TARGET_LENGTH {
-                                let id = node.attribute("Id").unwrap_or("?");
-                                results.issues.push(
-                                    Issue::warning(
-                                        "ICE03",
-                                        format!(
-                                            "SetProperty '{}' Value is {} chars (max {}). Consider using a shorter value or external file.",
-                                            id, value.len(), MAX_TARGET_LENGTH
-                                        ),
-                                    )
-                                    .with_file(path.display().to_string()),
-                                );
-                            }
-                        }
+                    if node.attribute("Property").is_some()
+                        && let Some(value) = node.attribute("Value")
+                        && value.len() > MAX_TARGET_LENGTH
+                    {
+                        let id = node.attribute("Id").unwrap_or("?");
+                        results.issues.push(
+                            Issue::warning(
+                                "ICE03",
+                                format!(
+                                    "SetProperty '{}' Value is {} chars (max {}). Consider using a shorter value or external file.",
+                                    id, value.len(), MAX_TARGET_LENGTH
+                                ),
+                            )
+                            .with_file(path.display().to_string()),
+                        );
                     }
                 }
             }
@@ -308,7 +319,10 @@ fn check_xml_entities_in_yaml(project: &WixProject, results: &mut AnalysisResult
         // Skip files that are actually XML (start with <?xml or <Wix)
         // These are miscategorized and should be renamed to .wxs
         let trimmed = file.content.trim_start();
-        if trimmed.starts_with("<?xml") || trimmed.starts_with("<Wix") || trimmed.starts_with("<Include") {
+        if trimmed.starts_with("<?xml")
+            || trimmed.starts_with("<Wix")
+            || trimmed.starts_with("<Include")
+        {
             results.issues.push(
                 Issue::warning(
                     "YAML002",
@@ -345,7 +359,7 @@ fn check_condition_syntax(project: &WixProject, results: &mut AnalysisResults) {
                 for attr in node.attributes() {
                     if attr.name().contains("Condition") || attr.name() == "Condition" {
                         let value = attr.value();
-                        
+
                         // Check for unbalanced quotes
                         let quote_count = value.chars().filter(|c| *c == '"').count();
                         if quote_count % 2 != 0 {
@@ -354,7 +368,11 @@ fn check_condition_syntax(project: &WixProject, results: &mut AnalysisResults) {
                                     "COND001",
                                     format!(
                                         "Condition has unbalanced quotes: {}",
-                                        if value.len() > 50 { &value[..50] } else { value }
+                                        if value.len() > 50 {
+                                            &value[..50]
+                                        } else {
+                                            value
+                                        }
                                     ),
                                 )
                                 .with_file(path.display().to_string()),
@@ -403,7 +421,8 @@ mod tests {
                 content: r#"<?xml version="1.0"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="Test" Version="1.0" Manufacturer="Test"/>
-</Wix>"#.to_string(),
+</Wix>"#
+                    .to_string(),
             },
         );
 
@@ -437,7 +456,8 @@ mod tests {
             WixFile {
                 path: PathBuf::from("test.wxs.yaml"),
                 content: r#"Package:
-  Condition: VERSION &gt;= "3.0""#.to_string(),
+  Condition: VERSION &gt;= "3.0""#
+                    .to_string(),
             },
         );
 
@@ -458,7 +478,8 @@ mod tests {
   <Package>
     <Launch Condition="A &amp;&amp; B" Message="Test"/>
   </Package>
-</Wix>"#.to_string(),
+</Wix>"#
+                    .to_string(),
             },
         );
 

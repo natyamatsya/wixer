@@ -20,7 +20,8 @@ pub fn run(
 
     fs::create_dir_all(output_dir)?;
 
-    let known_attributes = load_known_attributes(None, attribute_strategy == AttributeStrategy::Inline);
+    let known_attributes =
+        load_known_attributes(None, attribute_strategy == AttributeStrategy::Inline);
 
     let mut count = 0;
     let mut errors = 0;
@@ -89,13 +90,12 @@ pub fn run(
 
                 // Check for preprocessor directives that can't be converted to YAML
                 let content = fs::read_to_string(path).unwrap_or_default();
-                
+
                 // <?if?> and <?define?> can't be converted - copy as-is
                 if content.contains("<?if") || content.contains("<?define") {
                     info!(file = %path.display(), "Skipping YAML conversion (conditional preprocessor directives)");
-                    fs::copy(path, &final_output_path).with_context(|| {
-                        format!("Failed to copy {}", path.display())
-                    })?;
+                    fs::copy(path, &final_output_path)
+                        .with_context(|| format!("Failed to copy {}", path.display()))?;
                     count += 1;
                 } else if let Err(e) = wix_to_yaml::convert_file(
                     path,

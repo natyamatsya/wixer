@@ -3,90 +3,16 @@ use crate::constants::{
     ATTRIBUTES_PROPERTY, COMMENT_PROPERTY, CPACK_VAR_KEY, CPACK_VAR_TOKEN, CPACK_VAR_XML,
     ELEMENTS_PROPERTY, TEXT_PROPERTIES,
 };
-use anyhow::{Context, Result};
+use crate::includes;
+use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use regex::Regex;
 use serde_yaml::Value;
 use std::collections::HashSet;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 use tracing::info;
-
-
-/// Resolve `!include` tags in YAML content
-/// Returns the processed YAML with includes resolved
-fn resolve_includes(content: &str, base_path: &Path, visited: &mut HashSet<std::path::PathBuf>) -> Result<String> {
-    // Pattern to match !include tags: `!include filename` or `!include "filename"`
-    let include_re = Regex::new(r#"!include\s+["']?([^"'\s\n]+)["']?"#).unwrap();
-    
-    let mut result = content.to_string();
-    
-    // Find all includes
-    let matches: Vec<_> = include_re.captures_iter(content).collect();
-    
-    for cap in matches.iter().rev() {
-        // Process in reverse to maintain correct positions
-        let full_match = cap.get(0).unwrap();
-        let include_path_str = cap.get(1).unwrap().as_str();
-        
-        // Resolve path relative to the base file
-        let include_path = base_path.parent().unwrap_or(Path::new(".")).join(include_path_str);
-        let canonical = include_path.canonicalize()
-            .with_context(|| format!("Failed to resolve include path: {}", include_path.display()))?;
-        
-        // Check for cycles
-        if visited.contains(&canonical) {
-            anyhow::bail!("Circular include detected: {}", canonical.display());
-        }
-        visited.insert(canonical.clone());
-        
-        // Read and recursively resolve includes in the included file
-        let included_content = fs::read_to_string(&canonical)
-            .with_context(|| format!("Failed to read included file: {}", canonical.display()))?;
-        
-        let resolved_content = resolve_includes(&included_content, &canonical, visited)?;
-        
-        // Replace the !include tag with the resolved content
-        // We need to handle indentation - get the indentation of the !include line
-        let start = full_match.start();
-        let line_start = result[..start].rfind('\n').map(|p| p + 1).unwrap_or(0);
-        let indent = &result[line_start..start];
-        let indent = indent.chars().take_while(|c| c.is_whitespace()).collect::<String>();
-        
-        // Indent the included content to match
-        let indented_content = if indent.is_empty() {
-            resolved_content.trim().to_string()
-        } else {
-            resolved_content
-                .lines()
-                .enumerate()
-                .map(|(i, line)| {
-                    if i == 0 {
-                        line.to_string() // First line doesn't need extra indent
-                    } else if line.is_empty() {
-                        String::new()
-                    } else {
-                        format!("{}{}", indent, line)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
-        
-        result.replace_range(full_match.range(), &indented_content);
-        
-        visited.remove(&canonical);
-    }
-    
-    Ok(result)
-}
-
-/// Check if content has !include tags
-pub fn has_includes(content: &str) -> bool {
-    content.contains("!include")
-}
 
 pub fn convert_file(
     input: &Path,
@@ -96,25 +22,23 @@ pub fn convert_file(
 ) -> Result<()> {
     info!(input = %input.display(), output = %output.display(), "Converting file");
 
-    let content = fs::read_to_string(input)?;
-    
     // Check for XML content in YAML file - this is a common mistake
+    // We read the first few bytes to check
+    let content = fs::read_to_string(input)?;
     let trimmed = content.trim_start();
-    if trimmed.starts_with("<?xml") || trimmed.starts_with("<Wix") || trimmed.starts_with("<Include") {
+    if trimmed.starts_with("<?xml")
+        || trimmed.starts_with("<Wix")
+        || trimmed.starts_with("<Include")
+    {
         anyhow::bail!(
             "File '{}' has .yaml extension but contains XML content. \
              Please rename it to .wxs or .wxi, or convert it to YAML format.",
             input.display()
         );
     }
-    
-    // Resolve !include tags
-    let mut visited = HashSet::new();
-    let canonical_input = input.canonicalize().unwrap_or_else(|_| input.to_path_buf());
-    visited.insert(canonical_input.clone());
-    let resolved_content = resolve_includes(&content, input, &mut visited)?;
-    
-    let yaml_data: Value = serde_yaml::from_str(&resolved_content)?;
+
+    // Load and resolve includes using the new deep merge mechanism
+    let yaml_data = includes::load_and_process_yaml(input)?;
 
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
@@ -223,8 +147,8 @@ fn convert_element(
                         // Known element names that should not be attributes
                         let known_elements = ["_include", "_comment"];
                         !known_elements.contains(&key)
-                            && (key.starts_with("xmlns") 
-                                || known_attributes.contains(key) 
+                            && (key.starts_with("xmlns")
+                                || known_attributes.contains(key)
                                 || key == CPACK_VAR_KEY
                                 // Heuristic: simple values (not mappings/sequences) are likely attributes
                                 || (!v.is_mapping() && !v.is_sequence()))
@@ -331,84 +255,4 @@ fn convert_element(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-
-    fn create_temp_dir() -> std::path::PathBuf {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("wixer_test_{}_{}", std::process::id(), timestamp));
-        let _ = fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn cleanup_temp_dir(dir: &Path) {
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_resolve_includes() {
-        let temp_dir = create_temp_dir();
-        
-        // Create included file
-        let include_path = temp_dir.join("included.yaml");
-        {
-            let mut include_file = fs::File::create(&include_path).unwrap();
-            writeln!(include_file, "Property:").unwrap();
-            writeln!(include_file, "  Id: TEST").unwrap();
-        } // File handle dropped here
-        
-        // Create main file with !include
-        let main_path = temp_dir.join("main.yaml");
-        {
-            let mut main_file = fs::File::create(&main_path).unwrap();
-            writeln!(main_file, "Wix:").unwrap();
-            writeln!(main_file, "  Package: !include included.yaml").unwrap();
-        } // File handle dropped here
-        
-        let content = fs::read_to_string(&main_path).unwrap();
-        let mut visited = HashSet::new();
-        visited.insert(main_path.canonicalize().unwrap());
-        
-        let resolved = resolve_includes(&content, &main_path, &mut visited).unwrap();
-        
-        assert!(resolved.contains("Property:"));
-        assert!(resolved.contains("Id: TEST"));
-        assert!(!resolved.contains("!include"));
-        
-        cleanup_temp_dir(&temp_dir);
-    }
-
-    #[test]
-    fn test_has_includes() {
-        assert!(has_includes("foo: !include bar.yaml"));
-        assert!(has_includes("  _include: !include test.wxi.yaml"));
-        assert!(!has_includes("foo: bar"));
-    }
-
-    #[test]
-    fn test_circular_include_detection() {
-        let temp_dir = create_temp_dir();
-        
-        // Create file that includes itself
-        let self_include_path = temp_dir.join("self.yaml");
-        {
-            let mut self_file = fs::File::create(&self_include_path).unwrap();
-            writeln!(self_file, "Wix: !include self.yaml").unwrap();
-        } // File handle dropped here
-        
-        let content = fs::read_to_string(&self_include_path).unwrap();
-        let mut visited = HashSet::new();
-        visited.insert(self_include_path.canonicalize().unwrap());
-        
-        let result = resolve_includes(&content, &self_include_path, &mut visited);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular include"));
-        
-        cleanup_temp_dir(&temp_dir);
-    }
 }

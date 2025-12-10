@@ -89,11 +89,21 @@ pub fn analyze_launch_app(fields: &[Value]) -> String {
         _ => {}
     }
 
-    if async_exec { type_val |= CustomActionType::ASYNC; }
-    if ignore_result { type_val |= CustomActionType::CONTINUE; }
-    if hidden { type_val |= CustomActionType::HIDE_TARGET; }
-    if win64 { type_val |= CustomActionType::SIXTY_FOUR_BIT; }
-    if patch_uninstall { type_val |= CustomActionType::PATCH_UNINSTALL; }
+    if async_exec {
+        type_val |= CustomActionType::ASYNC;
+    }
+    if ignore_result {
+        type_val |= CustomActionType::CONTINUE;
+    }
+    if hidden {
+        type_val |= CustomActionType::HIDE_TARGET;
+    }
+    if win64 {
+        type_val |= CustomActionType::SIXTY_FOUR_BIT;
+    }
+    if patch_uninstall {
+        type_val |= CustomActionType::PATCH_UNINSTALL;
+    }
 
     // Execution Type
     // ExecutionType enum: FirstSequence=256, OncePerProcess=512, ClientRepeat=768, Deferred=1024, Rollback=1280, Commit=1536
@@ -108,10 +118,9 @@ pub fn analyze_launch_app(fields: &[Value]) -> String {
     }
 
     // Impersonation (only applies if InScript)
-    if (type_val & CustomActionType::IN_SCRIPT) != 0
-        && !impersonate {
-            type_val |= CustomActionType::NO_IMPERSONATE;
-        }
+    if (type_val & CustomActionType::IN_SCRIPT) != 0 && !impersonate {
+        type_val |= CustomActionType::NO_IMPERSONATE;
+    }
 
     // Generate description
     let mut flags = Vec::new();
@@ -132,12 +141,18 @@ pub fn analyze_launch_app(fields: &[Value]) -> String {
         _ => {}
     }
 
-    if (type_val & CustomActionType::ASYNC) != 0 { flags.push("Async"); }
-    if (type_val & CustomActionType::CONTINUE) != 0 { flags.push("IgnoreResult"); }
+    if (type_val & CustomActionType::ASYNC) != 0 {
+        flags.push("Async");
+    }
+    if (type_val & CustomActionType::CONTINUE) != 0 {
+        flags.push("IgnoreResult");
+    }
 
-    if (type_val & CustomActionType::IN_SCRIPT) != 0 { 
-        flags.push("Deferred"); 
-        if (type_val & CustomActionType::NO_IMPERSONATE) != 0 { flags.push("NoImpersonate"); }
+    if (type_val & CustomActionType::IN_SCRIPT) != 0 {
+        flags.push("Deferred");
+        if (type_val & CustomActionType::NO_IMPERSONATE) != 0 {
+            flags.push("NoImpersonate");
+        }
     }
 
     match type_val & CustomActionType::MASK_EXECUTION {
@@ -146,5 +161,10 @@ pub fn analyze_launch_app(fields: &[Value]) -> String {
         _ => {}
     }
 
-    format!("Calculated MSI Type: {} ({:#x})\nBehavior: {}", type_val, type_val, flags.join(" | "))
+    format!(
+        "Calculated MSI Type: {} ({:#x})\nBehavior: {}",
+        type_val,
+        type_val,
+        flags.join(" | ")
+    )
 }

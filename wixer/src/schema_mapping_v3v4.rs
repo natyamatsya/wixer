@@ -26,7 +26,7 @@ pub fn attribute_renames() -> HashMap<(&'static str, &'static str), &'static str
     map.insert(("Package", "InstallScope"), "Scope");
     // CustomAction/@BinaryKey -> CustomAction/@BinaryRef
     map.insert(("CustomAction", "BinaryKey"), "BinaryRef");
-    // CustomAction/@FileKey -> CustomAction/@FileRef  
+    // CustomAction/@FileKey -> CustomAction/@FileRef
     map.insert(("CustomAction", "FileKey"), "FileRef");
     // CustomAction/@Property -> CustomAction/@Property (stays same but usage changes)
     map
@@ -38,7 +38,10 @@ pub fn structural_element_changes() -> HashMap<&'static str, &'static str> {
     // Condition under Product -> Launch conditions handled differently
     // Custom inner text -> Custom/@Condition attribute
     map.insert("Custom", "Condition attribute instead of inner text");
-    map.insert("Condition", "Use Launch element with Condition/Message attributes");
+    map.insert(
+        "Condition",
+        "Use Launch element with Condition/Message attributes",
+    );
     map.insert("Publish", "Condition attribute instead of inner text");
     map
 }
@@ -61,27 +64,28 @@ pub fn extension_packages() -> HashMap<&'static str, &'static str> {
 /// Detect which extensions are needed based on element/attribute usage
 pub fn detect_required_extensions(content: &str) -> Vec<&'static str> {
     let mut extensions = Vec::new();
-    
+
     // WixCA binary -> Util extension
     if content.contains("WixCA") || content.contains("WixQuietExec") {
         extensions.push("WixToolset.Util.wixext");
     }
-    
+
     // UI references
     if content.contains("WixUI_") || content.contains("UIRef") {
         extensions.push("WixToolset.UI.wixext");
     }
-    
+
     // IIS elements
-    if content.contains("iis:") || content.contains("WebSite") || content.contains("WebApplication") {
+    if content.contains("iis:") || content.contains("WebSite") || content.contains("WebApplication")
+    {
         extensions.push("WixToolset.Iis.wixext");
     }
-    
+
     // .NET Framework
     if content.contains("netfx:") || content.contains("NetFx") {
         extensions.push("WixToolset.Netfx.wixext");
     }
-    
+
     extensions.sort();
     extensions.dedup();
     extensions
@@ -102,7 +106,7 @@ pub fn removed_attributes() -> Vec<(&'static str, &'static str)> {
 pub const STANDARD_DIRECTORIES: &[&str] = &[
     "TARGETDIR",
     "ProgramFilesFolder",
-    "ProgramFiles64Folder", 
+    "ProgramFiles64Folder",
     "ProgramFiles6432Folder",
     "CommonFilesFolder",
     "CommonFiles64Folder",
@@ -143,13 +147,34 @@ pub const V4_NAMESPACE: &str = "http://wixtoolset.org/schemas/v4/wxs";
 /// Extension namespace mappings
 pub fn extension_namespaces() -> HashMap<&'static str, &'static str> {
     let mut map = HashMap::new();
-    map.insert("http://schemas.microsoft.com/wix/UtilExtension", "http://wixtoolset.org/schemas/v4/wxs/util");
-    map.insert("http://schemas.microsoft.com/wix/IIsExtension", "http://wixtoolset.org/schemas/v4/wxs/iis");
-    map.insert("http://schemas.microsoft.com/wix/NetFxExtension", "http://wixtoolset.org/schemas/v4/wxs/netfx");
-    map.insert("http://schemas.microsoft.com/wix/FirewallExtension", "http://wixtoolset.org/schemas/v4/wxs/firewall");
-    map.insert("http://schemas.microsoft.com/wix/SqlExtension", "http://wixtoolset.org/schemas/v4/wxs/sql");
-    map.insert("http://schemas.microsoft.com/wix/VSExtension", "http://wixtoolset.org/schemas/v4/wxs/vs");
-    map.insert("http://schemas.microsoft.com/wix/BalExtension", "http://wixtoolset.org/schemas/v4/wxs/bal");
+    map.insert(
+        "http://schemas.microsoft.com/wix/UtilExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/util",
+    );
+    map.insert(
+        "http://schemas.microsoft.com/wix/IIsExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/iis",
+    );
+    map.insert(
+        "http://schemas.microsoft.com/wix/NetFxExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/netfx",
+    );
+    map.insert(
+        "http://schemas.microsoft.com/wix/FirewallExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/firewall",
+    );
+    map.insert(
+        "http://schemas.microsoft.com/wix/SqlExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/sql",
+    );
+    map.insert(
+        "http://schemas.microsoft.com/wix/VSExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/vs",
+    );
+    map.insert(
+        "http://schemas.microsoft.com/wix/BalExtension",
+        "http://wixtoolset.org/schemas/v4/wxs/bal",
+    );
     map
 }
 
@@ -174,13 +199,13 @@ pub enum StructuralChange {
 /// Get structural changes needed for an element
 pub fn get_structural_changes(element: &str, id: Option<&str>) -> Vec<StructuralChange> {
     let mut changes = Vec::new();
-    
+
     match element {
         "Directory" => {
-            if let Some(id) = id {
-                if is_standard_directory(id) {
-                    changes.push(StructuralChange::DirectoryToStandardDirectory);
-                }
+            if let Some(id) = id
+                && is_standard_directory(id)
+            {
+                changes.push(StructuralChange::DirectoryToStandardDirectory);
             }
         }
         "Product" => {
@@ -188,7 +213,7 @@ pub fn get_structural_changes(element: &str, id: Option<&str>) -> Vec<Structural
         }
         _ => {}
     }
-    
+
     changes
 }
 

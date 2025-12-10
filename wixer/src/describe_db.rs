@@ -1,9 +1,9 @@
+use crate::dirs;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
 use tracing::info;
-use crate::dirs;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WixProperty {

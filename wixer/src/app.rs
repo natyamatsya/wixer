@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use clap::{Parser, Subcommand};
 use tokio::task::spawn_blocking;
 use tracing::{error, info};
@@ -98,16 +98,20 @@ pub async fn run() -> Result<()> {
             output_dir,
             attribute_strategy,
         } => {
-            run_blocking(move || commands::import::run(&input_dir, &output_dir, attribute_strategy))
-                .await?;
+            run_blocking(move || {
+                commands::import::run(&input_dir, &output_dir, attribute_strategy)
+            })
+            .await?;
         }
         Commands::Export {
             input_dir,
             output_dir,
             attribute_strategy,
         } => {
-            run_blocking(move || commands::export::run(&input_dir, &output_dir, attribute_strategy))
-                .await?;
+            run_blocking(move || {
+                commands::export::run(&input_dir, &output_dir, attribute_strategy)
+            })
+            .await?;
         }
         Commands::Describe { term } => {
             run_blocking(move || commands::describe::run(term)).await?;
@@ -153,7 +157,7 @@ pub async fn run() -> Result<()> {
 
 fn setup_logging(config: &WixerConfig) -> Result<()> {
     use std::sync::Mutex;
-    
+
     let stderr_layer = fmt::layer()
         .with_writer(std::io::stderr)
         .with_filter(LevelFilter::INFO);
@@ -181,7 +185,11 @@ fn setup_logging(config: &WixerConfig) -> Result<()> {
                 eprintln!("Failed to create log file {}: {}", log_file, err);
 
                 tracing_subscriber::registry()
-                    .with(fmt::layer().with_writer(std::io::stderr).with_filter(LevelFilter::INFO))
+                    .with(
+                        fmt::layer()
+                            .with_writer(std::io::stderr)
+                            .with_filter(LevelFilter::INFO),
+                    )
                     .try_init()
                     .map_err(|e| anyhow!("Failed to initialize logging: {e}"))?;
             }
@@ -311,13 +319,16 @@ fn handle_yaml_to_wix(
     }
 
     if let (Some(input_path), Some(output_path)) = (input, output) {
-        yaml_to_wix::convert_file(&input_path, &output_path, attribute_strategy, &known_attributes)?;
+        yaml_to_wix::convert_file(
+            &input_path,
+            &output_path,
+            attribute_strategy,
+            &known_attributes,
+        )?;
         return Ok(());
     }
 
-    bail!(
-        "Either provide input and output files, or use --input-dir and --output-dir"
-    );
+    bail!("Either provide input and output files, or use --input-dir and --output-dir");
 }
 
 fn handle_wix_to_yaml(
@@ -338,13 +349,11 @@ fn handle_validate(
     yaml_dir: Option<PathBuf>,
 ) -> Result<()> {
     if let (Some(s_dir), Some(y_dir)) = (schema_dir, yaml_dir) {
-        return validate::validate_directory(&s_dir, &y_dir)
-            .context("Error validating directory");
+        return validate::validate_directory(&s_dir, &y_dir).context("Error validating directory");
     }
 
     if let (Some(schema_path), Some(yaml_path)) = (schema, yaml) {
-        return validate::validate_file(&schema_path, &yaml_path)
-            .context("Validation failed");
+        return validate::validate_file(&schema_path, &yaml_path).context("Validation failed");
     }
 
     bail!("Either provide schema and yaml files, or use --schema-dir and --yaml-dir");

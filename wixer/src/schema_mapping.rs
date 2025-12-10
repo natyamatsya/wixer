@@ -14,12 +14,12 @@ pub struct SchemaMapper {
 impl SchemaMapper {
     pub fn new() -> Result<Self> {
         let cache = dirs::get_cache_dir()?;
-        
+
         // Load WiX definitions
         let wix_json_path = cache.join("json-schema/wix.schema.json");
         let wix_content = fs::read_to_string(wix_json_path)?;
         let wix_schema: Value = serde_json::from_str(&wix_content)?;
-        
+
         let mut wix_defs = HashMap::new();
         if let Some(Value::Object(defs)) = wix_schema.get("definitions") {
             for (k, v) in defs {
@@ -30,26 +30,31 @@ impl SchemaMapper {
         // Load MSIX definitions
         let mut msix_elements = HashMap::new();
         let msix_root = cache.join("msix-xsd-schema");
-        
+
         if msix_root.exists() {
             for entry in WalkDir::new(&msix_root).into_iter().filter_map(|e| e.ok()) {
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "xsd") {
                     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
                     if let Ok(content) = fs::read_to_string(path)
-                        && let Ok(doc) = Document::parse(&content) {
-                            for node in doc.descendants() {
-                                if node.tag_name().name() == "element"
-                                    && let Some(name) = node.attribute("name") {
-                                        msix_elements.insert(name.to_string(), file_name.clone());
-                                    }
-                                if node.tag_name().name() == "complexType"
-                                    && let Some(name) = node.attribute("name") {
-                                        let clean_name = name.strip_prefix("CT_").unwrap_or(name);
-                                        msix_elements.entry(clean_name.to_string()).or_insert_with(|| file_name.clone());
-                                    }
+                        && let Ok(doc) = Document::parse(&content)
+                    {
+                        for node in doc.descendants() {
+                            if node.tag_name().name() == "element"
+                                && let Some(name) = node.attribute("name")
+                            {
+                                msix_elements.insert(name.to_string(), file_name.clone());
+                            }
+                            if node.tag_name().name() == "complexType"
+                                && let Some(name) = node.attribute("name")
+                            {
+                                let clean_name = name.strip_prefix("CT_").unwrap_or(name);
+                                msix_elements
+                                    .entry(clean_name.to_string())
+                                    .or_insert_with(|| file_name.clone());
                             }
                         }
+                    }
                 }
             }
         }

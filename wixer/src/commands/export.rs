@@ -40,7 +40,7 @@ pub fn run(
         let path = entry.path();
         if path.is_file() {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-            
+
             // Check for known YAML extensions (prepend y)
             // ywxs, ywxi, ywxl, ywsi
             // Also check for .in templates

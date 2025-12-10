@@ -43,21 +43,21 @@ pub fn convert_file(
         // Let's rely on the specific case for now or just the user requirement "robustly".
         // If we change it to an attribute, we might break existing attribute values.
         // Example: Value="@VAR@" -> Value="VAR="1"" -> Invalid XML.
-        
+
         // Let's Try to detect if we are likely in an attribute value?
         // No, let's just try to fix the specific parse error we saw:
         // xmlns="..."@VAR@ -> we want xmlns="..." VAR="1"
-        
+
         // If the match is preceded by `"` and followed by `>` or whitespace...
         // But regex crate doesn't support look-around.
 
         // Let's assume the user wants us to fix the specific crashing case:
         // `@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@`
-        
+
         if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" {
-             // Treat this specific one as a special attribute marker
-             // Add a space to ensure valid XML separation from previous attribute
-             " CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
+            // Treat this specific one as a special attribute marker
+            // Add a space to ensure valid XML separation from previous attribute
+            " CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
         } else {
             var.to_string()
         }
@@ -67,7 +67,7 @@ pub fn convert_file(
     // The previous error was with quick-xml (implied by stack trace or crate usage).
     // quick-xml usually handles & in comments fine unless configured otherwise?
     // Actually, the error `Cannot find ';' after '&'` suggests it was trying to parse entities.
-    
+
     // Let's try parsing the processed content
     let root_val = parse_xml_to_json(&processed_content, attribute_strategy)?;
 
@@ -166,18 +166,20 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
                     let include_path = pi_content.trim_start_matches("include ").trim();
                     // Convert to !include syntax
                     // Change extension from .wxi to .wxi.yaml if it's a WiX include
-                    let yaml_path = if include_path.ends_with(".wxi") {
-                        format!("{}.yaml", include_path)
-                    } else if include_path.ends_with(".wxs") {
-                        format!("{}.yaml", include_path)
-                    } else {
-                        include_path.to_string()
-                    };
-                    
+                    let yaml_path =
+                        if include_path.ends_with(".wxi") || include_path.ends_with(".wxs") {
+                            format!("{}.yaml", include_path)
+                        } else {
+                            include_path.to_string()
+                        };
+
                     if let Some((_, parent_map)) = stack.last_mut() {
                         // Store as special _include directive
                         // Format: "!include path" which yaml_to_wix will recognize
-                        parent_map.insert("_include".to_string(), Value::String(format!("!include {}", yaml_path)));
+                        parent_map.insert(
+                            "_include".to_string(),
+                            Value::String(format!("!include {}", yaml_path)),
+                        );
                     }
                 }
                 // Ignore other PIs like <?xml version="1.0"?>

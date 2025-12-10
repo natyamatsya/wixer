@@ -1,7 +1,7 @@
 use crate::describe_db::{self, WixProperty};
 use anyhow::Result;
-use tracing::warn;
 use strsim::jaro_winkler;
+use tracing::warn;
 
 pub fn run(term: String) -> Result<()> {
     let term_lower = term.to_lowercase();
@@ -24,7 +24,7 @@ pub fn run(term: String) -> Result<()> {
     // Fuzzy Match Strategy
     // 1. Exact contains match (Case Insensitive) -> Score 1.0
     // 2. Jaro-Winkler Similarity -> Score [0.0, 1.0]
-    
+
     let mut matches: Vec<(&WixProperty, f64)> = properties
         .iter()
         .map(|p| {
@@ -51,23 +51,27 @@ pub fn run(term: String) -> Result<()> {
 
     // Limit output to top 10 to avoid flooding
     let display_count = matches.len().min(10);
-    println!("Found {} matches (showing top {}):", matches.len(), display_count);
-    
+    println!(
+        "Found {} matches (showing top {}):",
+        matches.len(),
+        display_count
+    );
+
     for (p, score) in matches.iter().take(display_count) {
         let confidence = if *score >= 1.0 { "Exact" } else { "Fuzzy" };
         println!("\n--- {} ({}) [{}] ---", p.name, p.kind, confidence);
         if !p.tags.is_empty() {
             println!("Tags: {}", p.tags.join(", "));
         }
-        
+
         // Wrap description nicely
         let desc = if p.description.len() > 300 {
-             format!("{}...", &p.description[0..300])
+            format!("{}...", &p.description[0..300])
         } else {
-             p.description.clone()
+            p.description.clone()
         };
         println!("{}", desc);
-        
+
         if let Some(url) = &p.docs_url {
             println!("Docs: {}", url);
         }

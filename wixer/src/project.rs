@@ -47,21 +47,27 @@ impl WixProject {
         let walker = WalkDir::new(root).into_iter().filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
             // Skip wixer source/build dirs and hidden dirs
-            !name.eq_ignore_ascii_case("wixer") 
-                && !name.eq_ignore_ascii_case("target") 
+            !name.eq_ignore_ascii_case("wixer")
+                && !name.eq_ignore_ascii_case("target")
                 && !name.starts_with('.')
         });
 
         for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-            
+
             let is_wix = matches!(ext, "wxs" | "wxi" | "wsi" | "wxl");
             let is_yaml = ext == "yaml" || ext == "yml";
             let is_template = ext == "in";
 
             // Load WiX XML files
-            if is_wix || (is_template && path.file_stem().and_then(|s| Path::new(s).extension()).is_some()) {
+            if is_wix
+                || (is_template
+                    && path
+                        .file_stem()
+                        .and_then(|s| Path::new(s).extension())
+                        .is_some())
+            {
                 self.add_file(path)?;
             }
             // Load YAML files that look like WiX YAML (e.g., Product.wxs.yaml)
@@ -76,23 +82,34 @@ impl WixProject {
     }
 
     pub fn add_file(&mut self, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-        
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+
         // Pre-process content (CPack variables)
         let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
-        let processed_content = re.replace_all(&content, |caps: &regex::Captures| {
-            let var = &caps[0];
-            if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" || var == "@CPACK_WIX_PATCH_XMLNS_EXPANDED@" {
-                 format!(" xmlns:ui=\"http://dummy\" xmlns:util=\"http://dummy\" {}=\"1\"", &var[1..var.len()-1])
-            } else {
-                var.to_string()
-            }
-        }).to_string();
+        let processed_content = re
+            .replace_all(&content, |caps: &regex::Captures| {
+                let var = &caps[0];
+                if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@"
+                    || var == "@CPACK_WIX_PATCH_XMLNS_EXPANDED@"
+                {
+                    format!(
+                        " xmlns:ui=\"http://dummy\" xmlns:util=\"http://dummy\" {}=\"1\"",
+                        &var[1..var.len() - 1]
+                    )
+                } else {
+                    var.to_string()
+                }
+            })
+            .to_string();
 
-        self.files.insert(path.to_path_buf(), WixFile {
-            path: path.to_path_buf(),
-            content: processed_content.clone(), // Store processed content for parsing
-        });
+        self.files.insert(
+            path.to_path_buf(),
+            WixFile {
+                path: path.to_path_buf(),
+                content: processed_content.clone(), // Store processed content for parsing
+            },
+        );
 
         // Parse and index symbols immediately
         if let Ok(doc) = Document::parse(&processed_content) {
@@ -105,11 +122,14 @@ impl WixProject {
     fn index_document(&mut self, doc: &Document, path: &Path) {
         for node in doc.descendants() {
             if let Some(id) = node.attribute("Id") {
-                self.symbols.insert(id.to_string(), Symbol {
-                    id: id.to_string(),
-                    kind: node.tag_name().name().to_string(),
-                    file_path: path.to_path_buf(),
-                });
+                self.symbols.insert(
+                    id.to_string(),
+                    Symbol {
+                        id: id.to_string(),
+                        kind: node.tag_name().name().to_string(),
+                        file_path: path.to_path_buf(),
+                    },
+                );
             }
         }
     }
@@ -121,10 +141,11 @@ impl WixProject {
                 for node in doc.descendants() {
                     if node.tag_name().name() == "File"
                         && let Some(source) = node.attribute("Source")
-                            && source.to_lowercase().ends_with(".exe")
-                                && let Some(filename) = Path::new(source).file_name() {
-                                    exes.push(filename.to_string_lossy().to_string());
-                                }
+                        && source.to_lowercase().ends_with(".exe")
+                        && let Some(filename) = Path::new(source).file_name()
+                    {
+                        exes.push(filename.to_string_lossy().to_string());
+                    }
                 }
             }
         }
@@ -137,16 +158,17 @@ impl WixProject {
             if let Ok(doc) = Document::parse(&file.content) {
                 for node in doc.descendants() {
                     if node.tag_name().name() == "Shortcut"
-                        && let Some(target) = node.attribute("Target") {
-                            // Heuristic: clean up [INSTALLFOLDER] or [INSTALL_ROOT] prefix
-                            let clean_target = target
-                                .replace("[INSTALL_ROOT]", "")
-                                .replace("[INSTALLFOLDER]", "");
-                            
-                            if clean_target.to_lowercase().ends_with(".exe") {
-                                targets.push(clean_target);
-                            }
+                        && let Some(target) = node.attribute("Target")
+                    {
+                        // Heuristic: clean up [INSTALLFOLDER] or [INSTALL_ROOT] prefix
+                        let clean_target = target
+                            .replace("[INSTALL_ROOT]", "")
+                            .replace("[INSTALLFOLDER]", "");
+
+                        if clean_target.to_lowercase().ends_with(".exe") {
+                            targets.push(clean_target);
                         }
+                    }
                 }
             }
         }
@@ -160,11 +182,20 @@ impl WixProject {
 
         for file in self.files.values() {
             if let Ok(doc) = Document::parse(&file.content)
-                && let Some(node) = doc.descendants().find(|n| n.tag_name().name() == "Product" || n.tag_name().name() == "Package") {
-                    if name.is_none() { name = node.attribute("Name").map(|s| s.to_string()); }
-                    if version.is_none() { version = node.attribute("Version").map(|s| s.to_string()); }
-                    if manufacturer.is_none() { manufacturer = node.attribute("Manufacturer").map(|s| s.to_string()); }
+                && let Some(node) = doc
+                    .descendants()
+                    .find(|n| n.tag_name().name() == "Product" || n.tag_name().name() == "Package")
+            {
+                if name.is_none() {
+                    name = node.attribute("Name").map(|s| s.to_string());
                 }
+                if version.is_none() {
+                    version = node.attribute("Version").map(|s| s.to_string());
+                }
+                if manufacturer.is_none() {
+                    manufacturer = node.attribute("Manufacturer").map(|s| s.to_string());
+                }
+            }
         }
         (name, version, manufacturer)
     }
@@ -178,13 +209,14 @@ impl WixProject {
                         let name = node.attribute("Id").unwrap_or("").to_string();
                         let description = node.attribute("Description").map(|s| s.to_string());
                         let icon = node.attribute("Icon").map(|s| s.to_string());
-                        
+
                         let mut extensions = Vec::new();
                         for child in node.children() {
                             if child.tag_name().name() == "Extension"
-                                && let Some(ext) = child.attribute("Id") {
-                                    extensions.push(ext.to_string());
-                                }
+                                && let Some(ext) = child.attribute("Id")
+                            {
+                                extensions.push(ext.to_string());
+                            }
                         }
 
                         if !extensions.is_empty() {
@@ -206,10 +238,14 @@ impl WixProject {
         for file in self.files.values() {
             if let Ok(doc) = Document::parse(&file.content) {
                 for node in doc.descendants() {
-                    if node.tag_name().name() == "File" && node.attribute("Id") == Some(id)
-                        && let Some(src) = node.attribute("Source").or_else(|| node.attribute("SourceFile")) {
-                            return Some(src.to_string());
-                        }
+                    if node.tag_name().name() == "File"
+                        && node.attribute("Id") == Some(id)
+                        && let Some(src) = node
+                            .attribute("Source")
+                            .or_else(|| node.attribute("SourceFile"))
+                    {
+                        return Some(src.to_string());
+                    }
                 }
             }
         }
@@ -222,9 +258,12 @@ impl WixProject {
             if let Ok(doc) = Document::parse(&file.content) {
                 for node in doc.descendants() {
                     if node.tag_name().name() == "Icon"
-                        && let Some(src) = node.attribute("SourceFile").or_else(|| node.attribute("Source")) {
-                            return Some(src.to_string());
-                        }
+                        && let Some(src) = node
+                            .attribute("SourceFile")
+                            .or_else(|| node.attribute("Source"))
+                    {
+                        return Some(src.to_string());
+                    }
                 }
             }
         }
@@ -236,7 +275,7 @@ impl WixProject {
     // ========================================================================
 
     /// Build an UpgradeContext from all files in the project
-    /// 
+    ///
     /// This enables cross-file transformations during v3→v4 upgrade,
     /// such as finding WIXUI_INSTALLDIR property in one file when
     /// UIRef is in another.
@@ -250,48 +289,51 @@ impl WixProject {
     }
 
     /// Upgrade all files in the project from WiX v3 to v4
-    /// 
+    ///
     /// Uses shared cross-file context for transformations that
     /// depend on information from other files.
-    /// 
+    ///
     /// Returns a map of original path → upgraded content
     pub fn upgrade_to_v4(&self) -> Result<HashMap<PathBuf, String>> {
         let ctx = self.build_upgrade_context();
         let mut results = HashMap::new();
-        
+
         for (path, file) in &self.files {
             let upgraded = upgrade_content_with_context(&file.content, &ctx)
                 .with_context(|| format!("Failed to upgrade {}", path.display()))?;
             results.insert(path.clone(), upgraded);
         }
-        
+
         Ok(results)
     }
 
     /// Upgrade all files and write to an output directory
-    /// 
+    ///
     /// Preserves the relative directory structure from the project root.
-    pub fn upgrade_to_v4_dir(&self, project_root: &Path, output_dir: &Path) -> Result<Vec<PathBuf>> {
+    pub fn upgrade_to_v4_dir(
+        &self,
+        project_root: &Path,
+        output_dir: &Path,
+    ) -> Result<Vec<PathBuf>> {
         let upgraded = self.upgrade_to_v4()?;
         let mut output_paths = Vec::new();
-        
+
         for (input_path, content) in upgraded {
             // Compute relative path from project root
-            let relative = input_path.strip_prefix(project_root)
-                .unwrap_or(&input_path);
+            let relative = input_path.strip_prefix(project_root).unwrap_or(&input_path);
             let output_path = output_dir.join(relative);
-            
+
             // Create parent directories
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            
+
             fs::write(&output_path, content)
                 .with_context(|| format!("Failed to write {}", output_path.display()))?;
-            
+
             output_paths.push(output_path);
         }
-        
+
         Ok(output_paths)
     }
 
@@ -299,7 +341,10 @@ impl WixProject {
     pub fn is_v3(&self) -> bool {
         for file in self.files.values() {
             // Check for v3 namespace
-            if file.content.contains("http://schemas.microsoft.com/wix/2006/wi") {
+            if file
+                .content
+                .contains("http://schemas.microsoft.com/wix/2006/wi")
+            {
                 return true;
             }
             // Check for Product element (v3) vs Package (v4)
@@ -313,7 +358,10 @@ impl WixProject {
     /// Check if the project appears to be WiX v4
     pub fn is_v4(&self) -> bool {
         for file in self.files.values() {
-            if file.content.contains("http://wixtoolset.org/schemas/v4/wxs") {
+            if file
+                .content
+                .contains("http://wixtoolset.org/schemas/v4/wxs")
+            {
                 return true;
             }
         }
@@ -381,7 +429,8 @@ mod tests {
   <Product>
     <Property Id="WIXUI_INSTALLDIR" Value="MY_INSTALL_LOCATION"/>
   </Product>
-</Wix>"#.to_string(),
+</Wix>"#
+                    .to_string(),
             },
         );
         project.files.insert(
@@ -393,14 +442,18 @@ mod tests {
   <Fragment>
     <UIRef Id="WixUI_InstallDir"/>
   </Fragment>
-</Wix>"#.to_string(),
+</Wix>"#
+                    .to_string(),
             },
         );
 
         let ctx = project.build_upgrade_context();
-        
+
         // Context should have property from Product.wxs
-        assert_eq!(ctx.get_wixui_install_directory(), Some("MY_INSTALL_LOCATION"));
+        assert_eq!(
+            ctx.get_wixui_install_directory(),
+            Some("MY_INSTALL_LOCATION")
+        );
         // Context should have UIRef from UI.wxs
         assert!(ctx.has_ui_ref("WixUI_InstallDir"));
         assert!(ctx.needs_ui_namespace);
@@ -424,7 +477,7 @@ mod tests {
 
         let upgraded = project.upgrade_to_v4().unwrap();
         let content = upgraded.get(&PathBuf::from("test.wxs")).unwrap();
-        
+
         // Should have v4 namespace
         assert!(content.contains("http://wixtoolset.org/schemas/v4/wxs"));
         // Should have Package instead of Product

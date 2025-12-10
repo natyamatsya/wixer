@@ -158,7 +158,9 @@ extensions:
     #[test]
     fn test_build_args() {
         let mut config = ExampleConfig::default();
-        config.defines.insert("Platform".to_string(), "x64".to_string());
+        config
+            .defines
+            .insert("Platform".to_string(), "x64".to_string());
         config.extensions.push("WixToolset.Util.wixext".to_string());
 
         let args = config.build_args();

@@ -9,8 +9,7 @@ use std::io::BufWriter;
 use tracing::{error, info};
 
 pub async fn run(fresh: bool) -> Result<()> {
-    let cache_base = dirs::get_cache_dir()
-        .context("Error determining cache directory")?;
+    let cache_base = dirs::get_cache_dir().context("Error determining cache directory")?;
 
     if !cache_base.exists() {
         std::fs::create_dir_all(&cache_base)?;
@@ -23,8 +22,7 @@ pub async fn run(fresh: bool) -> Result<()> {
 
     if fresh && cache_base.exists() {
         info!("Clearing cache...");
-        std::fs::remove_dir_all(&cache_base)
-            .with_context(|| "Error clearing cache")?;
+        std::fs::remove_dir_all(&cache_base).with_context(|| "Error clearing cache")?;
         std::fs::create_dir_all(&cache_base)?;
     }
 

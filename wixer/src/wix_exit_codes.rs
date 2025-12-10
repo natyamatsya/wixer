@@ -391,6 +391,6 @@ pub fn get_error_name(code: i32) -> Option<&'static str> {
         413 => Some("ExpectedAttributeOrElementWithOtherAttribute"),
         414 => Some("ExpectedAttributeOrElementWithoutOtherAttribute"),
         415 => Some("OverlengthTableNameInProductOrMergeModule"),
-        _ => None
+        _ => None,
     }
 }

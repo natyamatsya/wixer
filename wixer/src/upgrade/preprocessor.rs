@@ -45,16 +45,20 @@ impl PreprocessorPreserver {
         let re = Regex::new(r#"<\?(if|else|elseif|endif|define|undef|include|foreach|endforeach|error|warning|pragma)\b.*?\?>"#).unwrap();
 
         // Find the position of the root element (first < that isn't <? or <!)
-        let root_start = content.find("<Wix").or_else(|| content.find("<Include")).unwrap_or(0);
+        let root_start = content
+            .find("<Wix")
+            .or_else(|| content.find("<Include"))
+            .unwrap_or(0);
 
         // Find all matches and replace with placeholders
         let matches: Vec<_> = re.find_iter(content).collect();
-        
+
         // Process in reverse order to preserve positions
         for m in matches.into_iter().rev() {
             let directive = m.as_str();
             let placeholder = format!("{}{}", PLACEHOLDER_PREFIX, self.counter);
-            self.directives.insert(placeholder.clone(), directive.to_string());
+            self.directives
+                .insert(placeholder.clone(), directive.to_string());
             self.counter += 1;
 
             // For directives before the root element, use XML comment (will be in prolog)
@@ -66,7 +70,7 @@ impl PreprocessorPreserver {
                 // Inside document - use custom element
                 format!("<WixerPreprocessor id=\"{}\"/>", placeholder)
             };
-            
+
             result = format!(
                 "{}{}{}",
                 &result[..m.start()],
@@ -86,11 +90,11 @@ impl PreprocessorPreserver {
             // Restore from custom element format
             let element_form = format!("<WixerPreprocessor id=\"{}\"/>", placeholder);
             result = result.replace(&element_form, directive);
-            
+
             // Restore from comment format (used for prolog directives)
             let comment_form = format!("<!-- {} -->", placeholder);
             result = result.replace(&comment_form, directive);
-            
+
             // Also handle case where it might appear without wrapper
             result = result.replace(placeholder, directive);
         }
@@ -112,7 +116,9 @@ mod tests {
     fn test_has_directives() {
         assert!(PreprocessorPreserver::has_directives("<?if $(var.x)?>"));
         assert!(PreprocessorPreserver::has_directives("<?include foo.wxi?>"));
-        assert!(!PreprocessorPreserver::has_directives("<Wix xmlns=\"...\">"));
+        assert!(!PreprocessorPreserver::has_directives(
+            "<Wix xmlns=\"...\">"
+        ));
     }
 
     #[test]
@@ -127,15 +133,15 @@ mod tests {
 </Wix>"#;
 
         let extracted = pp.extract(input);
-        
+
         // Should not contain raw preprocessor directives
         assert!(!extracted.contains("<?if"));
         assert!(!extracted.contains("<?else"));
         assert!(!extracted.contains("<?endif"));
-        
+
         // Should contain placeholders in comments
         assert!(extracted.contains(PLACEHOLDER_PREFIX));
-        
+
         // Restore should give back original
         let restored = pp.restore(&extracted);
         assert_eq!(restored, input);
@@ -152,7 +158,7 @@ mod tests {
         let extracted = pp.extract(input);
         assert!(!extracted.contains("<?include"));
         assert_eq!(pp.directive_count(), 1);
-        
+
         let restored = pp.restore(&extracted);
         assert_eq!(restored, input);
     }

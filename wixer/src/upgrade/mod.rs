@@ -7,11 +7,11 @@
 //! (e.g., WIXUI_INSTALLDIR property in one file, UIRef in another).
 
 mod context;
+mod pipeline;
 mod preprocessor;
 mod transformations;
-mod pipeline;
 
 pub use context::{UpgradeContext, analyze_files};
-pub use pipeline::{upgrade_file, upgrade_files, upgrade_content_with_context};
+pub use pipeline::{upgrade_content_with_context, upgrade_file, upgrade_files};
 pub use preprocessor::PreprocessorPreserver;
 pub use transformations::Transformation;

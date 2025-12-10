@@ -12,12 +12,15 @@ pub struct WixActionData {
 
 pub fn parse_wix_action(id: &str, fields: &[Value]) -> WixActionData {
     let get_val = |idx: usize| fields.get(idx).and_then(|f| f.get("data"));
-    
+
     // Parse ID to get Table
     let parts: Vec<&str> = id.split('/').collect();
     let table = parts.first().unwrap_or(&"?").to_string();
 
-    let action = get_val(1).and_then(|v| v.as_str()).unwrap_or("?").to_string();
+    let action = get_val(1)
+        .and_then(|v| v.as_str())
+        .unwrap_or("?")
+        .to_string();
     let condition = get_val(2).and_then(|v| v.as_str()).map(|s| s.to_string());
     let sequence = get_val(3).and_then(|v| v.as_i64());
     let before = get_val(4).and_then(|v| v.as_str()).map(|s| s.to_string());
@@ -64,9 +67,9 @@ pub fn analyze_wix_action(id: &str, fields: &[Value]) -> String {
         } else if seq < 1500 {
             "Initialization / Costing"
         } else if seq < 6600 {
-             "File Transfer / System Change"
+            "File Transfer / System Change"
         } else {
-             "Finalization"
+            "Finalization"
         };
         report.push_str(&format!("Execution Phase: {}\n", phase));
     }

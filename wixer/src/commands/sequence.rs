@@ -1,9 +1,9 @@
+use crate::analysis::wix_action::parse_wix_action;
 use crate::wixpdb::WixPdb;
-use crate::analysis::wix_action::{parse_wix_action};
 use anyhow::Result;
 use std::path::PathBuf;
-use tracing::info;
 use tabled::{Table, Tabled, settings::Style};
+use tracing::info;
 
 #[derive(Tabled)]
 struct SequenceRow {
@@ -27,10 +27,13 @@ pub fn run(path: &PathBuf, table_filter: Option<String>) -> Result<()> {
         for symbol in &section.symbols {
             if symbol.symbol_type == "WixAction" {
                 // Determine ID (needed for table name)
-                let id_str = symbol.id.get("id").and_then(|v| v.as_str())
-                   .or_else(|| symbol.id.as_str())
-                   .unwrap_or("?");
-                
+                let id_str = symbol
+                    .id
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| symbol.id.as_str())
+                    .unwrap_or("?");
+
                 let data = parse_wix_action(id_str, &symbol.fields);
                 actions.push(data);
             }
@@ -53,14 +56,18 @@ pub fn run(path: &PathBuf, table_filter: Option<String>) -> Result<()> {
         seq_a.cmp(&seq_b)
     });
 
-    let rows: Vec<SequenceRow> = actions.into_iter().map(|a| {
-        SequenceRow {
+    let rows: Vec<SequenceRow> = actions
+        .into_iter()
+        .map(|a| SequenceRow {
             table: a.table,
-            sequence: a.sequence.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string()),
+            sequence: a
+                .sequence
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "-".to_string()),
             action: a.action,
             condition: a.condition.unwrap_or_default(),
-        }
-    }).collect();
+        })
+        .collect();
 
     if rows.is_empty() {
         println!("No actions found.");

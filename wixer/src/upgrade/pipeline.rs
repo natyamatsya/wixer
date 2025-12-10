@@ -12,8 +12,8 @@
 //! 2. Upgrades each file with that shared context
 
 use anyhow::{Context, Result};
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use roxmltree::{Document, Node};
 use std::fs;
 use std::io::Cursor;
@@ -22,18 +22,20 @@ use tracing::info;
 
 use super::context::UpgradeContext;
 use super::preprocessor::PreprocessorPreserver;
-use super::transformations::{standard_transformations, Transformation, V4_NAMESPACE, V4_UI_NAMESPACE};
+use super::transformations::{
+    Transformation, V4_NAMESPACE, V4_UI_NAMESPACE, standard_transformations,
+};
 use crate::schema_mapping_v3v4::is_standard_directory;
 
 /// Upgrade a WiX v3 file to v4 (single file, no cross-file context)
 pub fn upgrade_file(input: &Path, output: &Path) -> Result<()> {
-    let content = fs::read_to_string(input)
-        .with_context(|| format!("Failed to read {}", input.display()))?;
+    let content =
+        fs::read_to_string(input).with_context(|| format!("Failed to read {}", input.display()))?;
 
     // Build context from single file
     let mut ctx = UpgradeContext::new();
     ctx.analyze_content(&content)?;
-    
+
     let upgraded = upgrade_content_with_context(&content, &ctx)?;
 
     fs::write(output, &upgraded)
@@ -44,11 +46,11 @@ pub fn upgrade_file(input: &Path, output: &Path) -> Result<()> {
 }
 
 /// Upgrade multiple WiX v3 files to v4 with shared cross-file context
-/// 
+///
 /// This function:
 /// 1. Analyzes all input files to build a shared context
 /// 2. Upgrades each file using that context
-/// 
+///
 /// This enables cross-file transformations like:
 /// - WIXUI_INSTALLDIR property in one file, UIRef in another
 pub fn upgrade_files(files: &[(impl AsRef<Path>, impl AsRef<Path>)]) -> Result<()> {
@@ -59,20 +61,20 @@ pub fn upgrade_files(files: &[(impl AsRef<Path>, impl AsRef<Path>)]) -> Result<(
             .with_context(|| format!("Failed to read {}", input.as_ref().display()))?;
         ctx.analyze_content(&content)?;
     }
-    
+
     // Phase 2: Upgrade each file with shared context
     for (input, output) in files {
         let content = fs::read_to_string(input.as_ref())
             .with_context(|| format!("Failed to read {}", input.as_ref().display()))?;
-        
+
         let upgraded = upgrade_content_with_context(&content, &ctx)?;
-        
+
         fs::write(output.as_ref(), &upgraded)
             .with_context(|| format!("Failed to write {}", output.as_ref().display()))?;
-        
+
         info!("Upgraded {}", output.as_ref().display());
     }
-    
+
     Ok(())
 }
 
@@ -99,13 +101,12 @@ pub fn upgrade_content_with_context(content: &str, ctx: &UpgradeContext) -> Resu
     let prolog_content = extract_prolog(&clean_content);
 
     // Step 2: Parse XML
-    let doc = Document::parse(&clean_content)
-        .with_context(|| "Failed to parse XML")?;
+    let doc = Document::parse(&clean_content).with_context(|| "Failed to parse XML")?;
 
     // Step 3: Transform
     let transformations = standard_transformations();
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
-    
+
     // Write XML declaration
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
 
@@ -115,8 +116,7 @@ pub fn upgrade_content_with_context(content: &str, ctx: &UpgradeContext) -> Resu
 
     // Step 4: Serialize
     let result = writer.into_inner().into_inner();
-    let mut output = String::from_utf8(result)
-        .with_context(|| "Invalid UTF-8 in output")?;
+    let mut output = String::from_utf8(result).with_context(|| "Invalid UTF-8 in output")?;
 
     // Step 4b: Re-insert prolog content after XML declaration
     if !prolog_content.is_empty() {
@@ -144,7 +144,7 @@ fn extract_prolog(content: &str) -> String {
     } else {
         0
     };
-    
+
     // Find start of root element (<Wix or <Include)
     // Must be a tag start, not inside another tag
     let remaining = &content[decl_end..];
@@ -153,15 +153,15 @@ fn extract_prolog(content: &str) -> String {
         .or_else(|| remaining.find("<Include"))
         .map(|i| decl_end + i)
         .unwrap_or(content.len());
-    
+
     // Extract and trim the prolog content
     let prolog = content[decl_end..root_start].trim();
-    
+
     // Don't return anything that looks like an XML element (but allow comments)
     if prolog.starts_with('<') && !prolog.starts_with("<!--") {
         return String::new();
     }
-    
+
     prolog.to_string()
 }
 
@@ -193,18 +193,17 @@ fn process_wix_element(
     let needs_ui = ctx.needs_ui_namespace || {
         // Fallback: check this file for UIRef
         fn check_node(n: &Node) -> bool {
-            if n.tag_name().name() == "UIRef" {
-                if let Some(id) = n.attribute("Id") {
-                    if id.starts_with("WixUI_") {
-                        return true;
-                    }
-                }
+            if n.tag_name().name() == "UIRef"
+                && let Some(id) = n.attribute("Id")
+                && id.starts_with("WixUI_")
+            {
+                return true;
             }
             n.children().any(|c| c.is_element() && check_node(&c))
         }
         check_node(&node)
     };
-    
+
     if needs_ui {
         elem.push_attribute(("xmlns:ui", V4_UI_NAMESPACE));
     }
@@ -297,7 +296,11 @@ fn process_product_element(
             };
             // Don't duplicate
             let already_has = node.attributes().any(|a| {
-                let mapped = if a.name() == "Id" { "ProductCode" } else { a.name() };
+                let mapped = if a.name() == "Id" {
+                    "ProductCode"
+                } else {
+                    a.name()
+                };
                 mapped == name
             });
             if !already_has {
@@ -340,12 +343,11 @@ fn process_node(
             for child in node.children() {
                 if child.is_element() {
                     process_node(child, writer, transformations, ctx)?;
-                } else if child.is_text() {
-                    if let Some(text) = child.text() {
-                        if !text.trim().is_empty() {
-                            writer.write_event(Event::Text(BytesText::new(text)))?;
-                        }
-                    }
+                } else if child.is_text()
+                    && let Some(text) = child.text()
+                    && !text.trim().is_empty()
+                {
+                    writer.write_event(Event::Text(BytesText::new(text)))?;
                 }
             }
             writer.write_event(Event::End(BytesEnd::new(tag_name)))?;
@@ -364,27 +366,26 @@ fn process_node(
     }
 
     // Special handling for standard directories
-    if tag_name == "Directory" {
-        if let Some(id) = node.attribute("Id") {
-            if is_standard_directory(id) {
-                let mut elem = BytesStart::new("StandardDirectory");
-                elem.push_attribute(("Id", id));
+    if tag_name == "Directory"
+        && let Some(id) = node.attribute("Id")
+        && is_standard_directory(id)
+    {
+        let mut elem = BytesStart::new("StandardDirectory");
+        elem.push_attribute(("Id", id));
 
-                let has_children = node.children().any(|c| c.is_element());
-                if has_children {
-                    writer.write_event(Event::Start(elem))?;
-                    for child in node.children() {
-                        if child.is_element() {
-                            process_node(child, writer, transformations, ctx)?;
-                        }
-                    }
-                    writer.write_event(Event::End(BytesEnd::new("StandardDirectory")))?;
-                } else {
-                    writer.write_event(Event::Empty(elem))?;
+        let has_children = node.children().any(|c| c.is_element());
+        if has_children {
+            writer.write_event(Event::Start(elem))?;
+            for child in node.children() {
+                if child.is_element() {
+                    process_node(child, writer, transformations, ctx)?;
                 }
-                return Ok(());
             }
+            writer.write_event(Event::End(BytesEnd::new("StandardDirectory")))?;
+        } else {
+            writer.write_event(Event::Empty(elem))?;
         }
+        return Ok(());
     }
 
     // Default: copy element as-is
@@ -406,12 +407,11 @@ fn process_node(
         for child in node.children() {
             if child.is_element() {
                 process_node(child, writer, transformations, ctx)?;
-            } else if child.is_text() {
-                if let Some(text) = child.text() {
-                    if !text.trim().is_empty() {
-                        writer.write_event(Event::Text(BytesText::new(text)))?;
-                    }
-                }
+            } else if child.is_text()
+                && let Some(text) = child.text()
+                && !text.trim().is_empty()
+            {
+                writer.write_event(Event::Text(BytesText::new(text)))?;
             }
         }
 
@@ -435,7 +435,7 @@ mod tests {
 </Wix>"#;
 
         let result = upgrade_content(input).unwrap();
-        
+
         assert!(result.contains("http://wixtoolset.org/schemas/v4/wxs"));
         assert!(result.contains("<Package"));
         assert!(result.contains("ProductCode="));
@@ -455,7 +455,7 @@ mod tests {
 </Wix>"#;
 
         let result = upgrade_content(input).unwrap();
-        
+
         assert!(result.contains("<?include Variables.wxi?>"));
     }
 
@@ -470,12 +470,18 @@ mod tests {
 </Wix>"#;
 
         let result = upgrade_content(input).unwrap();
-        
+
         // Should have Launch element with properly escaped condition
         assert!(result.contains("<Launch"));
         // Should NOT have double-escaped entities like &gt; or &quot;
-        assert!(!result.contains("&amp;gt;"), "Should not have double-escaped &gt;");
-        assert!(!result.contains("&amp;quot;"), "Should not have double-escaped &quot;");
+        assert!(
+            !result.contains("&amp;gt;"),
+            "Should not have double-escaped &gt;"
+        );
+        assert!(
+            !result.contains("&amp;quot;"),
+            "Should not have double-escaped &quot;"
+        );
         // The >= should be escaped as &gt;= in the attribute (single escape)
         // and quotes should be &quot;
         println!("Result:\n{}", result);

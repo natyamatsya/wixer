@@ -1,9 +1,9 @@
-use crate::wixpdb::WixPdb;
 use crate::analysis::{custom_action, util_extension, wix_action};
+use crate::wixpdb::WixPdb;
 use anyhow::Result;
 use std::path::PathBuf;
-use tracing::info;
 use tabled::{Table, Tabled, settings::Style};
+use tracing::info;
 
 #[derive(Tabled)]
 struct SymbolRow {
@@ -32,26 +32,29 @@ pub fn run(path: &PathBuf, symbol: Option<String>) -> Result<()> {
                 println!("  ID: {}", id);
                 println!("  Type: {}", s.symbol_type);
                 if let Some(ln) = &s.ln {
-                    let line_str = ln.line.map(|l| l.to_string()).unwrap_or_else(|| "?".to_string());
+                    let line_str = ln
+                        .line
+                        .map(|l| l.to_string())
+                        .unwrap_or_else(|| "?".to_string());
                     println!("  Location: {}:{}", ln.file, line_str);
                 } else {
                     println!("  Location: <unknown>");
                 }
-                
+
                 // --- Semantic Analysis ---
                 match s.symbol_type.as_str() {
                     "CustomAction" => {
                         println!("\n[Analyzer Report]");
                         println!("{}", custom_action::analyze_launch_app(&s.fields));
-                    },
+                    }
                     "WixCloseApplication" => {
                         println!("\n[Analyzer Report]");
                         println!("{}", util_extension::analyze_close_app(&s.fields));
-                    },
+                    }
                     "WixAction" => {
                         println!("\n[Analyzer Report]");
                         println!("{}", wix_action::analyze_wix_action(&id, &s.fields));
-                    },
+                    }
                     _ => {}
                 }
                 // -------------------------
@@ -69,30 +72,36 @@ pub fn run(path: &PathBuf, symbol: Option<String>) -> Result<()> {
         let mut rows = Vec::new();
         for section in pdb.sections {
             for s in section.symbols {
-                 // Try to get ID string
-                 let id_str = s.id.get("id").and_then(|v| v.as_str())
-                    .or_else(|| s.id.as_str())
-                    .unwrap_or("?").to_string();
-                 
-                 let (file, line) = if let Some(ln) = &s.ln {
-                     (ln.file.clone(), ln.line.map(|l| l.to_string()).unwrap_or_else(|| "?".to_string()))
-                 } else {
-                     ("-".to_string(), "-".to_string())
-                 };
+                // Try to get ID string
+                let id_str =
+                    s.id.get("id")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| s.id.as_str())
+                        .unwrap_or("?")
+                        .to_string();
 
-                 rows.push(SymbolRow {
-                     symbol_type: s.symbol_type,
-                     id: id_str,
-                     file,
-                     line,
-                 });
+                let (file, line) = if let Some(ln) = &s.ln {
+                    (
+                        ln.file.clone(),
+                        ln.line
+                            .map(|l| l.to_string())
+                            .unwrap_or_else(|| "?".to_string()),
+                    )
+                } else {
+                    ("-".to_string(), "-".to_string())
+                };
+
+                rows.push(SymbolRow {
+                    symbol_type: s.symbol_type,
+                    id: id_str,
+                    file,
+                    line,
+                });
             }
         }
 
         // Sort by Type then ID
-        rows.sort_by(|a, b| {
-            a.symbol_type.cmp(&b.symbol_type).then(a.id.cmp(&b.id))
-        });
+        rows.sort_by(|a, b| a.symbol_type.cmp(&b.symbol_type).then(a.id.cmp(&b.id)));
 
         if !rows.is_empty() {
             let table = Table::new(rows).with(Style::modern()).to_string();

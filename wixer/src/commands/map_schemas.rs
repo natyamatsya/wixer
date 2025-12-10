@@ -16,10 +16,7 @@ pub fn run() -> Result<()> {
         println!("{:<30} | {:<40} | {:<20}", wix_name, match_name, source);
     }
 
-    println!(
-        "\nFound {} potential matches.",
-        matches.len()
-    );
+    println!("\nFound {} potential matches.", matches.len());
 
     Ok(())
 }

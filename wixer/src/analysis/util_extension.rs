@@ -27,7 +27,7 @@ pub fn analyze_close_app(fields: &[Value]) -> String {
 
     let target = get_val(0).and_then(|v| v.as_str()).unwrap_or("?");
     let attr_val = get_val(3).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-    
+
     let mut report = format!("Target Process: {}\nStrategy:\n", target);
 
     if (attr_val & CloseAppAttributes::PROMPT_TO_CONTINUE) != 0 {
@@ -43,18 +43,22 @@ pub fn analyze_close_app(fields: &[Value]) -> String {
     }
 
     // Deferred actions
-    if (attr_val & (CloseAppAttributes::ELEVATED_CLOSE_MESSAGE | CloseAppAttributes::ELEVATED_END_SESSION_MESSAGE | CloseAppAttributes::TERMINATE_PROCESS)) != 0 {
-        
+    if (attr_val
+        & (CloseAppAttributes::ELEVATED_CLOSE_MESSAGE
+            | CloseAppAttributes::ELEVATED_END_SESSION_MESSAGE
+            | CloseAppAttributes::TERMINATE_PROCESS))
+        != 0
+    {
         report.push_str("  3. Schedule DEFERRED action (System Context):\n");
-        
+
         if (attr_val & CloseAppAttributes::ELEVATED_CLOSE_MESSAGE) != 0 {
-             report.push_str("     - Retry closing via WM_CLOSE (Elevated).\n");
+            report.push_str("     - Retry closing via WM_CLOSE (Elevated).\n");
         }
         if (attr_val & CloseAppAttributes::ELEVATED_END_SESSION_MESSAGE) != 0 {
-             report.push_str("     - Retry closing via WM_QUERYENDSESSION (Elevated).\n");
+            report.push_str("     - Retry closing via WM_QUERYENDSESSION (Elevated).\n");
         }
         if (attr_val & CloseAppAttributes::TERMINATE_PROCESS) != 0 {
-             report.push_str("     - FORCE KILL process if still running.\n");
+            report.push_str("     - FORCE KILL process if still running.\n");
         }
     }
 

@@ -1,6 +1,4 @@
-use crate::constants::{
-    EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME,
-};
+use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
 use crate::dirs;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -181,10 +179,7 @@ impl WixerLsp {
             Ok(dir) => Some(dir),
             Err(_) => {
                 self.client
-                    .log_message(
-                        MessageType::WARNING,
-                        "Could not determine cache directory",
-                    )
+                    .log_message(MessageType::WARNING, "Could not determine cache directory")
                     .await;
                 None
             }
@@ -285,7 +280,8 @@ impl WixerLsp {
         symbols: &mut HashMap<String, SchemaSymbolInfo>,
     ) {
         if let Some(desc) = schema.get("description").and_then(|d| d.as_str()) {
-            docs.entry(name.to_string()).or_insert_with(|| desc.to_string());
+            docs.entry(name.to_string())
+                .or_insert_with(|| desc.to_string());
         }
 
         symbols
@@ -295,19 +291,20 @@ impl WixerLsp {
 
         let completion_kind = match kind {
             SchemaSymbolKind::Element => CompletionItemKind::CLASS,
-            SchemaSymbolKind::Attribute | SchemaSymbolKind::EnumValue => CompletionItemKind::PROPERTY,
+            SchemaSymbolKind::Attribute | SchemaSymbolKind::EnumValue => {
+                CompletionItemKind::PROPERTY
+            }
         };
 
         completions.push(CompletionItem {
             label: name.to_string(),
             kind: Some(completion_kind),
-            documentation: schema
-                .get("description")
-                .and_then(|d| d.as_str())
-                .map(|d| Documentation::MarkupContent(MarkupContent {
+            documentation: schema.get("description").and_then(|d| d.as_str()).map(|d| {
+                Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
                     value: d.to_string(),
-                })),
+                })
+            }),
             ..Default::default()
         });
     }
@@ -486,8 +483,11 @@ fn find_range(text: &str, instance_path: &str) -> Range {
 
             if let Some(col_idx) = line.find(*key) {
                 let after_key = &line[col_idx + key.len()..];
-                if (trimmed.starts_with('-') && after_key.starts_with(':') || after_key.starts_with(' '))
-                    || (trimmed.starts_with(*key) && (after_key.starts_with(':') || after_key.starts_with(' ')) && indent_depth >= expected_depth.saturating_sub(1))
+                if (trimmed.starts_with('-') && after_key.starts_with(':')
+                    || after_key.starts_with(' '))
+                    || (trimmed.starts_with(*key)
+                        && (after_key.starts_with(':') || after_key.starts_with(' '))
+                        && indent_depth >= expected_depth.saturating_sub(1))
                 {
                     let col_idx = line.find(*key).unwrap_or(0);
                     return Range {
@@ -529,7 +529,9 @@ fn determine_value_token(value: &str, symbol: Option<&SchemaSymbolInfo>) -> (u32
     let stripped = strip_quotes(value);
 
     if let Some(info) = symbol {
-        if let Some(enum_values) = &info.enum_values && enum_values.contains(stripped) {
+        if let Some(enum_values) = &info.enum_values
+            && enum_values.contains(stripped)
+        {
             return (3, if info.deprecated { 1 } else { 0 });
         }
 
@@ -587,7 +589,9 @@ fn is_numeric_literal(value: &str) -> bool {
     if value.starts_with("0x") || value.starts_with("0X") {
         return value[2..].chars().all(|c| c.is_ascii_hexdigit());
     }
-    value.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+')
+    value
+        .chars()
+        .all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+')
 }
 
 fn schema_indicates_id(name: &str, schema: &Value) -> bool {
@@ -623,25 +627,27 @@ impl LanguageServer for WixerLsp {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
-                semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
-                    SemanticTokensOptions {
-                        legend: SemanticTokensLegend {
-                            token_types: vec![
-                                SemanticTokenType::CLASS,    // 0: Elements
-                                SemanticTokenType::PROPERTY, // 1: Attributes
-                                SemanticTokenType::STRING,   // 2: Strings
-                                SemanticTokenType::ENUM_MEMBER, // 3: Enum values
-                                SemanticTokenType::NUMBER,   // 4: Numbers
-                                SemanticTokenType::KEYWORD,  // 5: Booleans
-                                SemanticTokenType::VARIABLE, // 6: Identifiers/IDs
-                            ],
-                            token_modifiers: vec![SemanticTokenModifier::DEPRECATED],
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: vec![
+                                    SemanticTokenType::CLASS,       // 0: Elements
+                                    SemanticTokenType::PROPERTY,    // 1: Attributes
+                                    SemanticTokenType::STRING,      // 2: Strings
+                                    SemanticTokenType::ENUM_MEMBER, // 3: Enum values
+                                    SemanticTokenType::NUMBER,      // 4: Numbers
+                                    SemanticTokenType::KEYWORD,     // 5: Booleans
+                                    SemanticTokenType::VARIABLE,    // 6: Identifiers/IDs
+                                ],
+                                token_modifiers: vec![SemanticTokenModifier::DEPRECATED],
+                            },
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            range: None,
+                            work_done_progress_options: WorkDoneProgressOptions::default(),
                         },
-                        full: Some(SemanticTokensFullOptions::Bool(true)),
-                        range: None,
-                        work_done_progress_options: WorkDoneProgressOptions::default(),
-                    },
-                )),
+                    ),
+                ),
                 ..Default::default()
             },
             ..Default::default()
@@ -680,7 +686,7 @@ impl LanguageServer for WixerLsp {
 
                     // Check if key is known Element (Class) or Property
                     let is_known = completions.iter().any(|c| c.label == key);
-                    
+
                     // Determine token type
                     let (token_type, modifier_bits) = if let Some(info) = symbol_map.get(key) {
                         let token_type = match info.kind {
@@ -723,22 +729,25 @@ impl LanguageServer for WixerLsp {
                     if colon_idx + 1 < line.len() {
                         let val_part = &line[colon_idx + 1..];
                         if !val_part.trim().is_empty() {
-                             let value_segment = extract_value_segment(val_part);
-                             if !value_segment.is_empty() {
-                                 let val_start_col = colon_idx + 1 + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
-                                 let (value_token_type, value_modifier_bits) = determine_value_token(value_segment, symbol_map.get(key));
-                                 let delta_line_val = 0; // Same line
-                                 let delta_start_val = val_start_col as u32 - prev_start;
+                            let value_segment = extract_value_segment(val_part);
+                            if !value_segment.is_empty() {
+                                let val_start_col = colon_idx
+                                    + 1
+                                    + val_part.find(|c: char| !c.is_whitespace()).unwrap_or(0);
+                                let (value_token_type, value_modifier_bits) =
+                                    determine_value_token(value_segment, symbol_map.get(key));
+                                let delta_line_val = 0; // Same line
+                                let delta_start_val = val_start_col as u32 - prev_start;
 
-                                 data.push(SemanticToken {
+                                data.push(SemanticToken {
                                     delta_line: delta_line_val,
                                     delta_start: delta_start_val,
                                     length: value_segment.len() as u32,
                                     token_type: value_token_type,
                                     token_modifiers_bitset: value_modifier_bits,
-                                 });
-                                 prev_start = val_start_col as u32;
-                             }
+                                });
+                                prev_start = val_start_col as u32;
+                            }
                         }
                     }
                 }
@@ -766,7 +775,10 @@ impl LanguageServer for WixerLsp {
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         {
             let mut docs = self.documents.write().await;
-            docs.insert(params.text_document.uri.clone(), params.text_document.text.clone());
+            docs.insert(
+                params.text_document.uri.clone(),
+                params.text_document.text.clone(),
+            );
         }
         self.validate_document(
             params.text_document.uri,
@@ -794,7 +806,7 @@ impl LanguageServer for WixerLsp {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let docs_map = self.docs.read().await;
         let documents = self.documents.read().await;
-        
+
         let uri = &params.text_document_position_params.text_document.uri;
         if let Some(text) = documents.get(uri) {
             let pos = params.text_document_position_params.position;
@@ -816,7 +828,7 @@ impl LanguageServer for WixerLsp {
                     .unwrap_or(line.len());
 
                 let word = &line[start..end];
-                
+
                 if let Some(desc) = docs_map.get(word) {
                     return Ok(Some(Hover {
                         contents: HoverContents::Markup(MarkupContent {
@@ -828,7 +840,7 @@ impl LanguageServer for WixerLsp {
                 }
             }
         }
-        Ok(None) 
+        Ok(None)
     }
 
     async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {

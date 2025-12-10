@@ -109,13 +109,12 @@ pub fn validate_directory(schema_dir: &Path, yaml_dir: &Path) -> Result<()> {
 
             let specific_schema = schema_dir.join(format!("{}.schema.json", filename));
 
-            let extension_schema_name = if filename.ends_with(EXT_WIXLOC_YAML)
-                || filename.ends_with(EXT_WXL_YAML)
-            {
-                "wixloc.schema.json"
-            } else {
-                "wix.schema.json"
-            };
+            let extension_schema_name =
+                if filename.ends_with(EXT_WIXLOC_YAML) || filename.ends_with(EXT_WXL_YAML) {
+                    "wixloc.schema.json"
+                } else {
+                    "wix.schema.json"
+                };
             let extension_schema = schema_dir.join(extension_schema_name);
 
             let schema_to_use = if specific_schema.exists() {

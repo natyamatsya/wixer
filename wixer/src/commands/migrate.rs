@@ -1,8 +1,8 @@
-use crate::project::WixProject;
-use crate::yaml_to_wix;
 use crate::common::AttributeStrategy;
-use crate::constants::{EXT_WXS_YAML, EXT_WXI_YAML, EXT_WXL_YAML};
+use crate::constants::{EXT_WXI_YAML, EXT_WXL_YAML, EXT_WXS_YAML};
+use crate::project::WixProject;
 use crate::utils::load_known_attributes;
+use crate::yaml_to_wix;
 use anyhow::{Context, Result};
 use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
@@ -26,13 +26,13 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     fs::create_dir_all(output_dir)?;
 
     let is_template = input.extension().is_some_and(|e| e == "in");
-    
+
     // Check if input is YAML - if so, convert to temp XML first
     let input_str = input.to_string_lossy();
-    let is_yaml = input_str.ends_with(EXT_WXS_YAML) 
-        || input_str.ends_with(EXT_WXI_YAML) 
+    let is_yaml = input_str.ends_with(EXT_WXS_YAML)
+        || input_str.ends_with(EXT_WXI_YAML)
         || input_str.ends_with(EXT_WXL_YAML);
-    
+
     let temp_dir = if is_yaml {
         let temp = output_dir.join("wixer_temp");
         fs::create_dir_all(&temp)?;
@@ -40,48 +40,52 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     } else {
         None
     };
-    
+
     // Load Project - either from converted YAML or directly from XML
     let mut project = WixProject::new();
-    
+
     if is_yaml {
         // Convert YAML to XML in temp directory
         let temp_dir = temp_dir.as_ref().unwrap();
         let known_attributes = load_known_attributes(None, true);
-        
+
         // Convert the input file
-        let xml_filename = input.file_name()
+        let xml_filename = input
+            .file_name()
             .map(|n| n.to_string_lossy().replace(".yaml", ""))
             .unwrap_or_else(|| "converted.wxs".to_string());
         let xml_path = temp_dir.join(&xml_filename);
-        
+
         yaml_to_wix::convert_file(
             input,
             &xml_path,
             AttributeStrategy::Inline,
             &known_attributes,
-        ).with_context(|| format!("Failed to convert YAML file: {}", input.display()))?;
-        
+        )
+        .with_context(|| format!("Failed to convert YAML file: {}", input.display()))?;
+
         info!("Converted YAML to XML: {}", xml_path.display());
-        
+
         // Also convert any other YAML files in the same directory
-        if let Some(parent) = input.parent() 
-            && parent.exists() 
+        if let Some(parent) = input.parent()
+            && parent.exists()
         {
             for entry in fs::read_dir(parent)? {
                 let entry = entry?;
                 let path = entry.path();
                 let path_str = path.to_string_lossy();
-                
-                if path != input && (path_str.ends_with(EXT_WXS_YAML) 
-                    || path_str.ends_with(EXT_WXI_YAML) 
-                    || path_str.ends_with(EXT_WXL_YAML)) 
+
+                if path != input
+                    && (path_str.ends_with(EXT_WXS_YAML)
+                        || path_str.ends_with(EXT_WXI_YAML)
+                        || path_str.ends_with(EXT_WXL_YAML))
                 {
-                    let xml_name = path.file_name()
+                    let xml_name = path
+                        .file_name()
                         .map(|n| n.to_string_lossy().replace(".yaml", ""))
                         .unwrap_or_default();
                     let xml_out = temp_dir.join(&xml_name);
-                    
+
                     if let Err(e) = yaml_to_wix::convert_file(
                         &path,
                         &xml_out,
@@ -93,18 +97,21 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
                 }
             }
         }
-        
+
         // Load from temp directory
         project.load_from_directory(temp_dir)?;
     } else {
         // Load from input directory (original behavior)
-        let root_dir = input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+        let root_dir = input
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
         project.load_from_directory(&root_dir)?;
     }
 
     // Extract Info
     let (p_name, p_ver, p_man) = project.find_product_info();
-    
+
     // Use defaults if missing
     let name = p_name.unwrap_or_else(|| "MyApplication".to_string());
     let version = p_ver.unwrap_or_else(|| "1.0.0.0".to_string());
@@ -118,7 +125,10 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     let executables = project.get_executables();
     let shortcuts = project.get_shortcut_targets();
 
-    let executable = if let Some(exact) = executables.iter().find(|e| e.eq_ignore_ascii_case(&format!("{}.exe", name))) {
+    let executable = if let Some(exact) = executables
+        .iter()
+        .find(|e| e.eq_ignore_ascii_case(&format!("{}.exe", name)))
+    {
         exact.clone()
     } else if let Some(first) = executables.first() {
         first.clone()
@@ -133,19 +143,23 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     let version_quad = clean_version(&version);
 
     // Generate AppxManifest
-    let manifest_filename = if is_template { "AppxManifest.xml.in" } else { "AppxManifest.xml" };
+    let manifest_filename = if is_template {
+        "AppxManifest.xml.in"
+    } else {
+        "AppxManifest.xml"
+    };
     let manifest_path = output_dir.join(manifest_filename);
-    
+
     let app_icon = project.get_app_icon();
 
     let mut msix = MsixManifest::new();
-    
+
     msix.start_package()?;
     msix.map_identity(&name, &manufacturer, &version_quad)?;
     msix.map_properties(&name, &manufacturer, app_icon.as_deref())?;
     msix.map_dependencies()?;
     msix.map_resources()?;
-    
+
     msix.start_applications()?;
     msix.start_application("App", &executable)?;
     msix.map_visual_elements(&name, app_icon.as_deref())?;
@@ -182,27 +196,32 @@ impl MsixManifest {
     }
 
     fn start_package(&mut self) -> Result<()> {
-        self.writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
+        self.writer
+            .write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
         let mut pkg = BytesStart::new("Package");
-        pkg.push_attribute(("xmlns", "http://schemas.microsoft.com/appx/manifest/foundation/windows10"));
-        pkg.push_attribute(("xmlns:uap", "http://schemas.microsoft.com/appx/manifest/uap/windows10"));
+        pkg.push_attribute((
+            "xmlns",
+            "http://schemas.microsoft.com/appx/manifest/foundation/windows10",
+        ));
+        pkg.push_attribute((
+            "xmlns:uap",
+            "http://schemas.microsoft.com/appx/manifest/uap/windows10",
+        ));
         pkg.push_attribute(("xmlns:rescap", "http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"));
         self.writer.write_event(Event::Start(pkg))?;
         Ok(())
     }
 
     fn end_package(&mut self) -> Result<()> {
-        self.writer.write_event(Event::End(BytesEnd::new("Package")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Package")))?;
         Ok(())
     }
 
     fn map_identity(&mut self, name: &str, publisher: &str, version: &str) -> Result<()> {
         let publisher_dn = format!("CN={}", publisher);
         // Create package identity name: Publisher.ProductName (no spaces, alphanumeric)
-        let safe_name = format!("{}.{}", 
-            publisher.replace(' ', ""),
-            name.replace(' ', "")
-        );
+        let safe_name = format!("{}.{}", publisher.replace(' ', ""), name.replace(' ', ""));
         let mut identity = BytesStart::new("Identity");
         identity.push_attribute(("Name", safe_name.as_str()));
         identity.push_attribute(("Publisher", publisher_dn.as_str()));
@@ -213,51 +232,59 @@ impl MsixManifest {
     }
 
     fn map_properties(&mut self, name: &str, publisher: &str, icon: Option<&str>) -> Result<()> {
-        self.writer.write_event(Event::Start(BytesStart::new("Properties")))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new("Properties")))?;
         self.write_simple("DisplayName", name)?;
         self.write_simple("PublisherDisplayName", publisher)?;
-        
+
         let logo = if let Some(_src) = icon {
             // Ideally we copy/convert the icon. For now, point to a standard name.
-            // If src is a var like $(var...), we might want to use it? 
+            // If src is a var like $(var...), we might want to use it?
             // MSIX requires file paths.
-            "Assets\\StoreLogo.png" 
+            "Assets\\StoreLogo.png"
         } else {
             "Assets\\StoreLogo.png"
         };
         self.write_simple("Logo", logo)?;
-        
-        self.writer.write_event(Event::End(BytesEnd::new("Properties")))?;
+
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Properties")))?;
         Ok(())
     }
 
     fn map_dependencies(&mut self) -> Result<()> {
-        self.writer.write_event(Event::Start(BytesStart::new("Dependencies")))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new("Dependencies")))?;
         let mut target = BytesStart::new("TargetDeviceFamily");
         target.push_attribute(("Name", "Windows.Desktop"));
         target.push_attribute(("MinVersion", "10.0.17763.0"));
         target.push_attribute(("MaxVersionTested", "10.0.19041.0"));
         self.writer.write_event(Event::Empty(target))?;
-        self.writer.write_event(Event::End(BytesEnd::new("Dependencies")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Dependencies")))?;
         Ok(())
     }
 
     fn map_resources(&mut self) -> Result<()> {
-        self.writer.write_event(Event::Start(BytesStart::new("Resources")))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new("Resources")))?;
         let mut res = BytesStart::new("Resource");
         res.push_attribute(("Language", "x-generate"));
         self.writer.write_event(Event::Empty(res))?;
-        self.writer.write_event(Event::End(BytesEnd::new("Resources")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Resources")))?;
         Ok(())
     }
 
     fn start_applications(&mut self) -> Result<()> {
-        self.writer.write_event(Event::Start(BytesStart::new("Applications")))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new("Applications")))?;
         Ok(())
     }
 
     fn end_applications(&mut self) -> Result<()> {
-        self.writer.write_event(Event::End(BytesEnd::new("Applications")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Applications")))?;
         Ok(())
     }
 
@@ -271,7 +298,8 @@ impl MsixManifest {
     }
 
     fn end_application(&mut self) -> Result<()> {
-        self.writer.write_event(Event::End(BytesEnd::new("Application")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Application")))?;
         Ok(())
     }
 
@@ -280,7 +308,7 @@ impl MsixManifest {
         visual.push_attribute(("DisplayName", name));
         visual.push_attribute(("Description", name));
         visual.push_attribute(("BackgroundColor", "transparent"));
-        
+
         let logo = if let Some(src) = icon {
             if src.contains('@') || src.contains("$(") {
                 src
@@ -303,7 +331,8 @@ impl MsixManifest {
             return Ok(());
         }
 
-        self.writer.write_event(Event::Start(BytesStart::new("Extensions")))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new("Extensions")))?;
 
         for assoc in associations {
             let mut ext = BytesStart::new("uap:Extension");
@@ -312,16 +341,17 @@ impl MsixManifest {
 
             let mut fta = BytesStart::new("uap:FileTypeAssociation");
             fta.push_attribute(("Name", assoc.name.as_str()));
-            
+
             // Resolve Logo
             if let Some(icon_id) = &assoc.icon
-                && let Some(src) = project.get_file_source(icon_id) {
-                    if src.contains('@') || src.contains("$(") {
-                        fta.push_attribute(("Logo", src.as_str()));
-                    } else {
-                        fta.push_attribute(("Logo", "Assets\\FileIcon.png"));
-                    }
+                && let Some(src) = project.get_file_source(icon_id)
+            {
+                if src.contains('@') || src.contains("$(") {
+                    fta.push_attribute(("Logo", src.as_str()));
+                } else {
+                    fta.push_attribute(("Logo", "Assets\\FileIcon.png"));
                 }
+            }
 
             self.writer.write_event(Event::Start(fta))?;
 
@@ -333,30 +363,41 @@ impl MsixManifest {
             self.writer.write_event(Event::Start(supported))?;
 
             for file_ext in assoc.extensions {
-                let dot_ext = if file_ext.starts_with('.') { file_ext } else { format!(".{}", file_ext) };
+                let dot_ext = if file_ext.starts_with('.') {
+                    file_ext
+                } else {
+                    format!(".{}", file_ext)
+                };
                 self.write_simple("uap:FileType", &dot_ext)?;
             }
 
-            self.writer.write_event(Event::End(BytesEnd::new("uap:SupportedFileTypes")))?;
-            self.writer.write_event(Event::End(BytesEnd::new("uap:FileTypeAssociation")))?;
-            self.writer.write_event(Event::End(BytesEnd::new("uap:Extension")))?;
+            self.writer
+                .write_event(Event::End(BytesEnd::new("uap:SupportedFileTypes")))?;
+            self.writer
+                .write_event(Event::End(BytesEnd::new("uap:FileTypeAssociation")))?;
+            self.writer
+                .write_event(Event::End(BytesEnd::new("uap:Extension")))?;
         }
 
-        self.writer.write_event(Event::End(BytesEnd::new("Extensions")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Extensions")))?;
         Ok(())
     }
 
     fn map_capabilities(&mut self) -> Result<()> {
-        self.writer.write_event(Event::Start(BytesStart::new("Capabilities")))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new("Capabilities")))?;
         let mut cap = BytesStart::new("rescap:Capability");
         cap.push_attribute(("Name", "runFullTrust"));
         self.writer.write_event(Event::Empty(cap))?;
-        self.writer.write_event(Event::End(BytesEnd::new("Capabilities")))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::new("Capabilities")))?;
         Ok(())
     }
 
     fn write_simple(&mut self, name: &str, text: &str) -> Result<()> {
-        self.writer.write_event(Event::Start(BytesStart::new(name)))?;
+        self.writer
+            .write_event(Event::Start(BytesStart::new(name)))?;
         self.writer.write_event(Event::Text(BytesText::new(text)))?;
         self.writer.write_event(Event::End(BytesEnd::new(name)))?;
         Ok(())
