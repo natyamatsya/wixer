@@ -1,3 +1,6 @@
 [submodule "wixer/examples/WiXInstallerExamples"]
 	path = wixer/examples/WiXInstallerExamples
 	url = https://github.com/kurtanr/WiXInstallerExamples
+[submodule "submodules/wix"]
+	path = submodules/wix
+	url = https://github.com/wixtoolset/wix.git
