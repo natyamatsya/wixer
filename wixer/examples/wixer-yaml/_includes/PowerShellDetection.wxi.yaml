@@ -1,0 +1,28 @@
+# PowerShellDetection.wxi.yaml
+# Reusable include file for detecting PowerShell installation.
+# Provides two properties:
+# - POWERSHELLVERSION: The installed PowerShell version (e.g., "5.1")
+# - POWERSHELLEXE: Full path to powershell.exe
+#
+# Usage: !include ../_includes/PowerShellDetection.wxi.yaml
+#
+# Can be combined with a Launch condition to require a minimum PowerShell version:
+#   Launch:
+#     Condition: Installed OR (POWERSHELLEXE AND POWERSHELLVERSION >= "3.0")
+#     Message: You must have PowerShell 3.0 or higher.
+
+Property:
+  - Id: POWERSHELLVERSION
+    RegistrySearch:
+      Id: POWERSHELLVERSION
+      Type: raw
+      Root: HKLM
+      Key: SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine
+      Name: PowerShellVersion
+  - Id: POWERSHELLEXE
+    RegistrySearch:
+      Id: POWERSHELLEXE
+      Type: raw
+      Root: HKLM
+      Key: SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell
+      Name: Path

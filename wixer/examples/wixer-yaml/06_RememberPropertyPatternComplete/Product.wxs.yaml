@@ -1,3 +1,14 @@
+# 06_RememberPropertyPatternComplete
+# Complete implementation of the "Remember Property" pattern with command-line override.
+#
+# This example extends 05_RememberPropertyPattern by adding:
+# - Command-line property override support (CMDLINE_MY_PROPERTY)
+# - Full UI and Execute sequence integration
+#
+# Uses wixer's !include directive for reusable modules:
+# - InstallationStages.wxi.yaml: Defines FirstInstall, Upgrading, etc. properties
+# - PowerShellDetection.wxi.yaml: Detects PowerShell installation
+
 Wix:
   xmlns: http://wixtoolset.org/schemas/v4/wxs
   Package:
@@ -13,28 +24,13 @@ Wix:
       DowngradeErrorMessage: A later version of [ProductName] is already installed. Setup will now exit.
     MediaTemplate:
       EmbedCab: yes
+
+    # Include reusable modules (equivalent to <?include ...?> in WiX XML)
+    !include ../_includes/InstallationStages.wxi.yaml
+    !include ../_includes/PowerShellDetection.wxi.yaml
+
+    # Project-specific SetProperty for PowerShell custom actions
     SetProperty:
-    - Id: FirstInstall
-      After: FindRelatedProducts
-      Value: 'true'
-      Condition: NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT WIX_DOWNGRADE_DETECTED
-    - Id: Upgrading
-      After: SetFirstInstall
-      Value: 'true'
-      Condition: 'WIX_UPGRADE_DETECTED AND NOT (REMOVE="ALL")'
-    - Id: RemovingForUpgrade
-      After: RemoveExistingProducts
-      Sequence: execute
-      Value: 'true'
-      Condition: '(REMOVE="ALL") AND UPGRADINGPRODUCTCODE'
-    - Id: Uninstalling
-      After: SetUpgrading
-      Value: 'true'
-      Condition: 'Installed AND (REMOVE="ALL") AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE)'
-    - Id: Maintenance
-      After: SetUninstalling
-      Value: 'true'
-      Condition: Installed AND NOT Upgrading AND NOT Uninstalling AND NOT UPGRADINGPRODUCTCODE
     - Id: CA_AppendTextUsingPowerShell_FirstInstall
       Before: CA_AppendTextUsingPowerShell_FirstInstall
       Sequence: execute
@@ -51,21 +47,9 @@ Wix:
       Before: CA_AppendTextUsingPowerShell_Maintenance
       Sequence: execute
       Value: '"[POWERSHELLEXE]" -ep Bypass -f "[MY_INSTALL_LOCATION]MyAppendScript.ps1" -s Maintenance -p "[MY_PROPERTY]" -v "[ProductVersion]" -l "[MY_INSTALL_LOCATION]"'
+
+    # Project-specific properties (remember property pattern with command-line override)
     Property:
-    - Id: POWERSHELLVERSION
-      RegistrySearch:
-        Id: POWERSHELLVERSION
-        Type: raw
-        Root: HKLM
-        Key: SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine
-        Name: PowerShellVersion
-    - Id: POWERSHELLEXE
-      RegistrySearch:
-        Id: POWERSHELLEXE
-        Type: raw
-        Root: HKLM
-        Key: SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell
-        Name: Path
     - Id: MY_PROPERTY
       Value: default value
       Secure: yes
