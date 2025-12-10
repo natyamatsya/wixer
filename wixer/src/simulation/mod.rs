@@ -7,6 +7,7 @@
 //! - **Actions**: Standard and custom actions with conditions
 //! - **Properties**: Installer state that conditions evaluate against
 //! - **Installation Modes**: FirstInstall, Upgrade, Uninstall, Maintenance, Repair
+//! - **Extensions**: WiX extension actions loaded from bundled JSON data
 //!
 //! # Example
 //!
@@ -22,11 +23,13 @@
 //! ```
 
 mod condition;
+mod extensions;
 mod model;
 mod simulator;
 mod standard_actions;
 
 pub use condition::*;
+pub use extensions::*;
 pub use model::*;
 pub use simulator::*;
 pub use standard_actions::*;

@@ -1,0 +1,146 @@
+{
+  "id": "WixToolset.UI.wixext",
+  "namespace": "http://wixtoolset.org/schemas/v4/wxs/ui",
+  "custom_actions": [
+    {
+      "id": "WixSetDefaultPerUserFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetDefaultPerMachineFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetDefaultPerMachine64Folder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetPerUserFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetPerMachineFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    }
+  ],
+  "sequence_entries": [
+    {
+      "action": "WixSetDefaultPerUserFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "CostFinalize",
+      "after": null,
+      "condition": null
+    },
+    {
+      "action": "WixSetDefaultPerMachineFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetDefaultPerUserFolder",
+      "condition": null
+    },
+    {
+      "action": "WixSetDefaultPerMachine64Folder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachineFolder",
+      "condition": null
+    },
+    {
+      "action": "WixSetPerUserFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachine64Folder",
+      "condition": null
+    },
+    {
+      "action": "WixSetPerMachineFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetPerUserFolder",
+      "condition": null
+    },
+    {
+      "action": "WixSetDefaultPerUserFolder",
+      "sequence_table": "InstallUISequence",
+      "before": "CostFinalize",
+      "after": null,
+      "condition": null
+    },
+    {
+      "action": "WixSetDefaultPerMachineFolder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetDefaultPerUserFolder",
+      "condition": null
+    },
+    {
+      "action": "WixSetDefaultPerMachine64Folder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachineFolder",
+      "condition": null
+    },
+    {
+      "action": "WixSetPerUserFolder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachine64Folder",
+      "condition": null
+    },
+    {
+      "action": "WixSetPerMachineFolder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetPerUserFolder",
+      "condition": null
+    }
+  ],
+  "properties": [
+    "DefaultUIFont",
+    "BURNMSIMODIFY",
+    "BURNMSIREPAIR",
+    "BURNMSIUNINSTALL",
+    "WixUIRMOption",
+    "ARPNOMODIFY",
+    "ErrorDialog",
+    "WIXUI_INSTALLDIR"
+  ],
+  "binaries": [
+    "WixUI_Bmp_Banner",
+    "WixUI_Bmp_Dialog",
+    "WixUI_Ico_Exclam",
+    "WixUI_Ico_Info",
+    "WixUI_Bmp_New",
+    "WixUI_Bmp_Up"
+  ]
+}

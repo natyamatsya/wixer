@@ -1,0 +1,8 @@
+{
+  "id": "WixToolset.Firewall.wixext",
+  "namespace": "http://wixtoolset.org/schemas/v4/wxs/firewall",
+  "custom_actions": [],
+  "sequence_entries": [],
+  "properties": [],
+  "binaries": []
+}

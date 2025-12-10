@@ -1,0 +1,246 @@
+{
+  "id": "WixToolset.Iis.wixext",
+  "namespace": "http://wixtoolset.org/schemas/v4/wxs/iis",
+  "custom_actions": [
+    {
+      "id": "Wix4ConfigureIIs_X64",
+      "dll_entry": "ConfigureIIs",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigureIIsExec_X64",
+      "dll_entry": "ConfigureIIsExec",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4StartMetabaseTransaction_X64",
+      "dll_entry": "StartMetabaseTransaction",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackMetabaseTransaction_X64",
+      "dll_entry": "RollbackMetabaseTransaction",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4CommitMetabaseTransaction_X64",
+      "dll_entry": "CommitMetabaseTransaction",
+      "execute": "commit",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4WriteMetabaseChanges_X64",
+      "dll_entry": "WriteMetabaseChanges",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ConfigureIIs7Exec_X64",
+      "dll_entry": "ConfigureIIs7Exec",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4StartIIS7ConfigTransaction_X64",
+      "dll_entry": "StartIIS7ConfigTransaction",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackIIS7ConfigTransaction_X64",
+      "dll_entry": "RollbackIIS7ConfigTransaction",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4CommitIIS7ConfigTransaction_X64",
+      "dll_entry": "CommitIIS7ConfigTransaction",
+      "execute": "commit",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4WriteIIS7ConfigChanges_X64",
+      "dll_entry": "WriteIIS7ConfigChanges",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4InstallCertificates_X64",
+      "dll_entry": "InstallCertificates",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UninstallCertificates_X64",
+      "dll_entry": "UninstallCertificates",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4AddUserCertificate_X64",
+      "dll_entry": "AddUserCertificate",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4AddMachineCertificate_X64",
+      "dll_entry": "AddMachineCertificate",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4DeleteUserCertificate_X64",
+      "dll_entry": "DeleteUserCertificate",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4DeleteMachineCertificate_X64",
+      "dll_entry": "DeleteMachineCertificate",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackAddUserCertificate_X64",
+      "dll_entry": "DeleteUserCertificate",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackAddMachineCertificate_X64",
+      "dll_entry": "DeleteMachineCertificate",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackDeleteUserCertificate_X64",
+      "dll_entry": "AddUserCertificate",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackDeleteMachineCertificate_X64",
+      "dll_entry": "AddMachineCertificate",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "IisCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    }
+  ],
+  "sequence_entries": [
+    {
+      "action": "Wix4ConfigureIIs_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RegisterUser",
+      "after": null,
+      "condition": null
+    },
+    {
+      "action": "Wix4UninstallCertificates_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveFiles",
+      "after": null,
+      "condition": null
+    },
+    {
+      "action": "Wix4InstallCertificates_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFiles",
+      "condition": null
+    }
+  ],
+  "properties": [
+    "IISMAJORVERSION",
+    "IISMINORVERSION"
+  ],
+  "binaries": [
+    "IisCA_X64"
+  ]
+}
