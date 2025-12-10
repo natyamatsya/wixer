@@ -1,7 +1,8 @@
 use crate::analysis::orphan_detection;
 use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
+use crate::describe_db;
 use crate::dirs;
-use crate::simulation::extensions::ExtensionRegistry;
+use crate::includes;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -19,6 +20,8 @@ pub struct WixerLsp {
     completions: Arc<RwLock<Vec<CompletionItem>>>,
     symbols: Arc<RwLock<HashMap<String, HashMap<String, SchemaSymbolInfo>>>>,
     documents: Arc<RwLock<HashMap<Url, String>>>,
+    /// Cache for resolved YAML (with includes merged)
+    resolved_cache: Arc<RwLock<HashMap<PathBuf, serde_yaml::Value>>>,
 }
 
 #[derive(Clone, Copy)]
@@ -109,6 +112,42 @@ impl WixerLsp {
             completions: Arc::new(RwLock::new(Vec::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             documents: Arc::new(RwLock::new(HashMap::new())),
+            resolved_cache: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Get resolved YAML with includes, using cache if available
+    async fn get_resolved_yaml(&self, path: &Path) -> Option<serde_yaml::Value> {
+        // Check cache first
+        {
+            let cache = self.resolved_cache.read().await;
+            if let Some(cached) = cache.get(path) {
+                return Some(cached.clone());
+            }
+        }
+
+        // Not in cache, resolve includes
+        if path.exists()
+            && let Ok(resolved) = includes::load_and_process_yaml(path)
+        {
+            // Store in cache
+            let mut cache = self.resolved_cache.write().await;
+            cache.insert(path.to_path_buf(), resolved.clone());
+            return Some(resolved);
+        }
+
+        None
+    }
+
+    /// Invalidate cache for a file and any files that might include it
+    async fn invalidate_cache(&self, path: &Path) {
+        let mut cache = self.resolved_cache.write().await;
+        // Remove the changed file
+        cache.remove(path);
+        // Also clear any parent files that might include this one
+        // (conservative approach: clear all for now)
+        if path.extension().is_some_and(|e| e == "yaml") {
+            cache.clear();
         }
     }
 
@@ -161,8 +200,8 @@ impl WixerLsp {
             symbols.insert(name, schema_symbols);
         }
 
-        // Load extension metadata (custom actions, properties, etc.)
-        let ext_count = Self::load_extension_metadata(&mut docs, &mut completions);
+        // Load from unified describe_db (knowledge base + schemas + extensions)
+        let db_count = Self::load_from_describe_db(&mut docs, &mut completions);
 
         completions.sort_by(|a, b| a.label.cmp(&b.label));
         completions.dedup_by(|a, b| a.label == b.label);
@@ -171,124 +210,58 @@ impl WixerLsp {
             .log_message(
                 MessageType::INFO,
                 format!(
-                    "Loaded {} schemas, {} extension items, {} total completions",
+                    "Loaded {} schemas, {} describe_db entries, {} total completions",
                     schemas.len(),
-                    ext_count,
+                    db_count,
                     completions.len()
                 ),
             )
             .await;
     }
 
-    fn load_extension_metadata(
+    fn load_from_describe_db(
         docs: &mut HashMap<String, String>,
         completions: &mut Vec<CompletionItem>,
     ) -> usize {
-        let registry = ExtensionRegistry::load_bundled();
-        let mut count = 0;
+        let properties = match describe_db::load() {
+            Ok(props) => props,
+            Err(_) => return 0,
+        };
 
-        for ext_name in registry.available() {
-            let Some(ext) = registry.get(ext_name) else {
+        let mut count = 0;
+        for prop in properties {
+            // Skip if already loaded from schema
+            if docs.contains_key(&prop.name) {
                 continue;
+            }
+
+            docs.insert(prop.name.clone(), prop.description.clone());
+
+            let kind = match prop.kind.as_str() {
+                "CustomAction" | "SequenceEntry" => CompletionItemKind::FUNCTION,
+                "Property" => CompletionItemKind::VARIABLE,
+                "Element" => CompletionItemKind::CLASS,
+                "Attribute" => CompletionItemKind::PROPERTY,
+                _ => CompletionItemKind::TEXT,
             };
 
-            // Extract short name (e.g., "Util" from "WixToolset.Util.wixext")
-            let ext_short = ext
-                .id
-                .strip_prefix("WixToolset.")
-                .and_then(|s: &str| s.strip_suffix(".wixext"))
-                .unwrap_or(&ext.id);
+            let detail = if prop.tags.is_empty() {
+                None
+            } else {
+                Some(prop.tags.join(", "))
+            };
 
-            // Add custom actions with scheduling info
-            for ca in &ext.custom_actions {
-                let execute_type = ca.execute.as_deref().unwrap_or("immediate");
-                let return_type = ca.r#return.as_deref().unwrap_or("check");
-
-                // Find matching sequence entry for scheduling info
-                let seq_info = ext
-                    .sequence_entries
-                    .iter()
-                    .find(|s| s.action == ca.id)
-                    .map(|s| {
-                        let scheduling = match (&s.before, &s.after) {
-                            (Some(before), _) => format!("Before `{}`", before),
-                            (_, Some(after)) => format!("After `{}`", after),
-                            _ => "Default".to_string(),
-                        };
-                        let overridable_str = if s.overridable {
-                            " ⚡ **Overridable**"
-                        } else {
-                            ""
-                        };
-                        let condition_str = s
-                            .condition
-                            .as_ref()
-                            .map(|c| format!("\n- **Condition**: `{}`", c))
-                            .unwrap_or_default();
-                        format!(
-                            "\n\n**Scheduling** ({}){}\n- **Position**: {}{}",
-                            s.sequence_table, overridable_str, scheduling, condition_str
-                        )
-                    })
-                    .unwrap_or_default();
-
-                let description = format!(
-                    "**Custom Action** from `{}` extension\n\n\
-                     - **Execute**: {}\n\
-                     - **Return**: {}{}{}{}\n\n\
-                     *From WiX Toolset extension*",
-                    ext_short,
-                    execute_type,
-                    return_type,
-                    ca.dll_entry
-                        .as_ref()
-                        .map(|e| format!("\n- **DLL Entry**: `{}`", e))
-                        .unwrap_or_default(),
-                    if ca.suppress_modularization {
-                        "\n- **SuppressModularization**: yes"
-                    } else {
-                        ""
-                    },
-                    seq_info
-                );
-
-                docs.insert(ca.id.clone(), description.clone());
-
-                completions.push(CompletionItem {
-                    label: ca.id.clone(),
-                    kind: Some(CompletionItemKind::FUNCTION),
-                    detail: Some(format!("{} extension", ext_short)),
-                    documentation: Some(Documentation::MarkupContent(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: description,
-                    })),
-                    ..Default::default()
-                });
-                count += 1;
-            }
-
-            // Add properties defined by extensions
-            for prop in &ext.properties {
-                let description = format!(
-                    "**Property** defined by `{}` extension\n\n*From WiX Toolset extension*",
-                    ext_short
-                );
-
-                if !docs.contains_key(prop) {
-                    docs.insert(prop.clone(), description.clone());
-                    completions.push(CompletionItem {
-                        label: prop.clone(),
-                        kind: Some(CompletionItemKind::VARIABLE),
-                        detail: Some(format!("{} extension property", ext_short)),
-                        documentation: Some(Documentation::MarkupContent(MarkupContent {
-                            kind: MarkupKind::Markdown,
-                            value: description,
-                        })),
-                        ..Default::default()
-                    });
-                    count += 1;
-                }
-            }
+            completions.push(CompletionItem {
+                label: prop.name.clone(),
+                kind: Some(kind),
+                detail,
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: prop.description,
+                })),
+                ..Default::default()
+            });
+            count += 1;
         }
 
         count
@@ -491,10 +464,16 @@ impl WixerLsp {
                     }
                 }
 
-                // Orphan component detection
-                let orphans = orphan_detection::find_orphans(&yaml_val);
+                // Orphan component detection (with include resolution, cached)
+                let resolved_yaml = self
+                    .get_resolved_yaml(&path)
+                    .await
+                    .unwrap_or_else(|| yaml_val.clone());
+
+                let orphans = orphan_detection::find_orphans(&resolved_yaml);
                 for orphan in orphans {
-                    let range = find_range(&text, &orphan.path);
+                    // Try to find the orphan in original text for accurate range
+                    let range = find_orphan_range(&text, &orphan.id);
                     diags.push(Diagnostic {
                         range,
                         severity: Some(DiagnosticSeverity::WARNING),
@@ -639,6 +618,36 @@ fn find_range(text: &str, instance_path: &str) -> Range {
         }
     }
 
+    Range::default()
+}
+
+/// Find the range in the text where an orphan component/group Id is defined
+fn find_orphan_range(text: &str, id: &str) -> Range {
+    // Look for "Id: <id>" pattern in the text
+    for (line_idx, line) in text.lines().enumerate() {
+        // Check for Id: value pattern
+        if let Some(id_pos) = line.find("Id:") {
+            let after_id = &line[id_pos + 3..];
+            let trimmed = after_id.trim();
+            if trimmed == id || trimmed.trim_matches(|c| c == '"' || c == '\'') == id {
+                return Range {
+                    start: Position::new(line_idx as u32, id_pos as u32),
+                    end: Position::new(line_idx as u32, line.len() as u32),
+                };
+            }
+        }
+        // Check for - Id: value pattern (in sequences)
+        if let Some(dash_pos) = line.find("- Id:") {
+            let after_id = &line[dash_pos + 5..];
+            let trimmed = after_id.trim();
+            if trimmed == id || trimmed.trim_matches(|c| c == '"' || c == '\'') == id {
+                return Range {
+                    start: Position::new(line_idx as u32, dash_pos as u32),
+                    end: Position::new(line_idx as u32, line.len() as u32),
+                };
+            }
+        }
+    }
     Range::default()
 }
 
@@ -930,6 +939,10 @@ impl LanguageServer for WixerLsp {
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         if let Some(change) = params.content_changes.first() {
+            // Invalidate resolved include cache for this file
+            let path = PathBuf::from(params.text_document.uri.path());
+            self.invalidate_cache(&path).await;
+
             {
                 let mut docs = self.documents.write().await;
                 docs.insert(params.text_document.uri.clone(), change.text.clone());
