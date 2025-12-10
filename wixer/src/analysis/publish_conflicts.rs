@@ -14,7 +14,25 @@ pub struct PublishConflict {
     pub order: i32,
     pub user_event: String,
     pub extension_event: String,
+    pub extension_value: Option<String>,
     pub extension_name: String,
+    pub suggestion: ConflictSuggestion,
+}
+
+#[derive(Debug, Clone)]
+pub enum ConflictSuggestion {
+    /// User wants same behavior - use override to replace extension's
+    UseOverride {
+        event: String,
+        target_dialog: String,
+    },
+    /// User wants different behavior - change Order to run before/after
+    ChangeOrder {
+        suggested_order: i32,
+        reason: String,
+    },
+    /// User wants to add to behavior - just change order
+    AddWithOrder { suggested_order: i32 },
 }
 
 #[derive(Debug, Clone)]
@@ -35,15 +53,30 @@ pub fn find_conflicts(yaml: &Value) -> Vec<PublishConflict> {
         return conflicts;
     };
 
-    // Build a map of (dialog, control, order) -> extension events
-    let mut ext_publish_map: HashMap<(String, String, i32), Vec<(String, String)>> = HashMap::new();
+    // Build a map of (dialog, control, order) -> extension entries with full info
+    #[derive(Clone)]
+    struct ExtEntry {
+        event: String,
+        value: Option<String>,
+    }
+    let mut ext_publish_map: HashMap<(String, String, i32), Vec<ExtEntry>> = HashMap::new();
     for entry in &ui_ext.publish_entries {
         let order = entry.order.unwrap_or(1); // Default order is 1
         let key = (entry.dialog.clone(), entry.control.clone(), order);
-        ext_publish_map
+        ext_publish_map.entry(key).or_default().push(ExtEntry {
+            event: entry.event.clone().unwrap_or_default(),
+            value: entry.value.clone(),
+        });
+    }
+
+    // Find max order used by extension for each dialog/control pair
+    let mut max_orders: HashMap<(String, String), i32> = HashMap::new();
+    for (dialog, control, order) in ext_publish_map.keys() {
+        let key = (dialog.clone(), control.clone());
+        max_orders
             .entry(key)
-            .or_default()
-            .push((entry.event.clone().unwrap_or_default(), "UI".to_string()));
+            .and_modify(|max| *max = (*max).max(*order))
+            .or_insert(*order);
     }
 
     // Collect user-defined Publish entries from YAML
@@ -54,36 +87,95 @@ pub fn find_conflicts(yaml: &Value) -> Vec<PublishConflict> {
         let order = user_entry.order.unwrap_or(1);
         let key = (user_entry.dialog.clone(), user_entry.control.clone(), order);
 
-        if let Some(ext_events) = ext_publish_map.get(&key) {
-            for (ext_event, ext_name) in ext_events {
+        if let Some(ext_entries) = ext_publish_map.get(&key) {
+            for ext_entry in ext_entries {
+                let suggestion = generate_suggestion(
+                    &user_entry.event,
+                    &ext_entry.event,
+                    &ext_entry.value,
+                    order,
+                    max_orders
+                        .get(&(user_entry.dialog.clone(), user_entry.control.clone()))
+                        .copied()
+                        .unwrap_or(1),
+                );
+
                 conflicts.push(PublishConflict {
                     dialog: user_entry.dialog.clone(),
                     control: user_entry.control.clone(),
                     order,
                     user_event: user_entry.event.clone().unwrap_or_default(),
-                    extension_event: ext_event.clone(),
-                    extension_name: ext_name.clone(),
+                    extension_event: ext_entry.event.clone(),
+                    extension_value: ext_entry.value.clone(),
+                    extension_name: "UI".to_string(),
+                    suggestion,
                 });
             }
         }
     }
 
-    // Also warn about user entries without explicit Order that might conflict
-    for user_entry in &user_entries {
-        if user_entry.order.is_none() {
-            // Check if there are any extension entries for this dialog/control
-            let has_ext_entries = ext_publish_map
-                .keys()
-                .any(|(d, c, _)| d == &user_entry.dialog && c == &user_entry.control);
+    conflicts
+}
 
-            if has_ext_entries {
-                // Already added as conflict with order=1, but we can add a hint
-                // that the user should specify an explicit Order
-            }
-        }
+/// Generate intelligent suggestion based on event types
+fn generate_suggestion(
+    user_event: &Option<String>,
+    ext_event: &str,
+    ext_value: &Option<String>,
+    current_order: i32,
+    max_ext_order: i32,
+) -> ConflictSuggestion {
+    let user_ev = user_event.as_deref().unwrap_or("");
+
+    // If user is doing the same type of event (e.g., both NewDialog), suggest override
+    if user_ev == ext_event
+        && let Some(target) = ext_value
+    {
+        return ConflictSuggestion::UseOverride {
+            event: ext_event.to_string(),
+            target_dialog: target.clone(),
+        };
     }
 
-    conflicts
+    // If user wants to navigate (NewDialog, SpawnDialog) and extension does too,
+    // they probably want to replace the navigation
+    if is_navigation_event(user_ev)
+        && is_navigation_event(ext_event)
+        && let Some(target) = ext_value
+    {
+        return ConflictSuggestion::UseOverride {
+            event: ext_event.to_string(),
+            target_dialog: target.clone(),
+        };
+    }
+
+    // If user is doing validation (DoAction, SetProperty) before navigation,
+    // suggest running before
+    if is_action_event(user_ev) && is_navigation_event(ext_event) {
+        return ConflictSuggestion::ChangeOrder {
+            suggested_order: current_order.saturating_sub(1).max(1),
+            reason: format!("Run your {} before the navigation event", user_ev),
+        };
+    }
+
+    // Default: suggest adding after all extension events
+    ConflictSuggestion::AddWithOrder {
+        suggested_order: max_ext_order + 10,
+    }
+}
+
+fn is_navigation_event(event: &str) -> bool {
+    matches!(
+        event,
+        "NewDialog" | "SpawnDialog" | "SpawnWaitDialog" | "EndDialog"
+    )
+}
+
+fn is_action_event(event: &str) -> bool {
+    matches!(
+        event,
+        "DoAction" | "SetProperty" | "SetTargetPath" | "CheckTargetPath"
+    )
 }
 
 fn collect_user_publish_entries(yaml: &Value) -> Vec<PublishEntry> {

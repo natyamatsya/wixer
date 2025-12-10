@@ -1,4 +1,7 @@
-use crate::analysis::{orphan_detection, publish_conflicts};
+use crate::analysis::{
+    orphan_detection,
+    publish_conflicts::{self, ConflictSuggestion},
+};
 use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
 use crate::describe_db;
 use crate::dirs;
@@ -494,6 +497,7 @@ impl WixerLsp {
                 let conflicts = publish_conflicts::find_conflicts(&resolved_yaml);
                 for conflict in conflicts {
                     let range = find_publish_range(&text, &conflict.dialog, &conflict.control);
+                    let suggestion = format_suggestion(&conflict);
                     diags.push(Diagnostic {
                         range,
                         severity: Some(DiagnosticSeverity::WARNING),
@@ -501,9 +505,9 @@ impl WixerLsp {
                         code_description: None,
                         source: Some("wixer".to_string()),
                         message: format!(
-                            "Publish Order conflict: Dialog '{}' Control '{}' Order {} conflicts with {} extension event '{}'. Consider using a different Order value.",
+                            "Publish Order conflict: Dialog '{}' Control '{}' Order {} conflicts with {} extension event '{}'. {}",
                             conflict.dialog, conflict.control, conflict.order,
-                            conflict.extension_name, conflict.extension_event
+                            conflict.extension_name, conflict.extension_event, suggestion
                         ),
                         related_information: None,
                         tags: None,
@@ -670,6 +674,33 @@ fn find_orphan_range(text: &str, id: &str) -> Range {
         }
     }
     Range::default()
+}
+
+/// Format a conflict suggestion into a human-readable string
+fn format_suggestion(conflict: &publish_conflicts::PublishConflict) -> String {
+    match &conflict.suggestion {
+        ConflictSuggestion::UseOverride {
+            event,
+            target_dialog,
+        } => {
+            format!(
+                "Since you're replacing the '{}' to '{}', use `Event: override {}` in your Publish element.",
+                event, target_dialog, target_dialog
+            )
+        }
+        ConflictSuggestion::ChangeOrder {
+            suggested_order,
+            reason,
+        } => {
+            format!("{}. Try `Order: {}`.", reason, suggested_order)
+        }
+        ConflictSuggestion::AddWithOrder { suggested_order } => {
+            format!(
+                "To add your event after the extension's, use `Order: {}`.",
+                suggested_order
+            )
+        }
+    }
 }
 
 /// Find the range in text where a Publish element with given Dialog/Control is defined
