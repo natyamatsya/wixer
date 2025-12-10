@@ -36,6 +36,7 @@ pub mod includes;
 pub mod project;
 pub mod schema_mapping;
 pub mod schema_mapping_v3v4;
+pub mod simulation;
 pub mod upgrade;
 pub mod utils;
 pub mod validate;
