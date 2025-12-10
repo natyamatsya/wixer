@@ -75,7 +75,7 @@ pub fn run(
                     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
                     // Remove .{ext}.in and add .{target_ext}.in
                     let suffix = format!("{}.in", ext);
-                    let stem = file_name.trim_end_matches(&suffix);
+                    let stem = file_name.trim_end_matches(&suffix).trim_end_matches('.');
                     parent.join(format!("{}.{}.in", stem, target_ext))
                 } else {
                     // Remove .{ext} and add .{target_ext}

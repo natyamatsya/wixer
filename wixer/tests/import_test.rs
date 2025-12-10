@@ -15,6 +15,8 @@ fn test_recursive_import() {
     let status = Command::new("cargo")
         .args(&[
             "run",
+            "--bin",
+            "wixer",
             "--",
             "import",
             input_dir.to_str().unwrap(),
@@ -26,30 +28,30 @@ fn test_recursive_import() {
     assert!(status.success(), "Import command failed");
 
     // Verify outputs
-    let frag1_wys = output_dir.join("fragment1.wys");
-    assert!(frag1_wys.exists(), "fragment1.wys should exist");
+    let frag1_yaml = output_dir.join("fragment1.wxs.yaml");
+    assert!(frag1_yaml.exists(), "fragment1.wxs.yaml should exist");
 
-    let template_wys_in = output_dir.join("subdir/template.wys.in");
+    let template_yaml_in = output_dir.join("subdir/template.wxs.yaml.in");
     assert!(
-        template_wys_in.exists(),
-        "subdir/template.wys.in should exist"
+        template_yaml_in.exists(),
+        "subdir/template.wxs.yaml.in should exist"
     );
 
-    let config_wyi = output_dir.join("config.wyi");
-    assert!(config_wyi.exists(), "config.wyi should exist");
+    let config_yaml = output_dir.join("config.wxi.yaml");
+    assert!(config_yaml.exists(), "config.wxi.yaml should exist");
 
-    let localization_wyl = output_dir.join("en-us.wyl");
-    assert!(localization_wyl.exists(), "en-us.wyl should exist");
+    let localization_yaml = output_dir.join("en-us.wxl.yaml");
+    assert!(localization_yaml.exists(), "en-us.wxl.yaml should exist");
 
     // Check content of template to ensure @VAR@ syntax is preserved/handled
-    let content = fs::read_to_string(template_wys_in).unwrap();
+    let content = fs::read_to_string(template_yaml_in).unwrap();
     assert!(
         content.contains("@PRODUCT_NAME@"),
         "Should preserve CMake variables"
     );
 
-    // Check config.wyi
-    let config_content = fs::read_to_string(config_wyi).unwrap();
+    // Check config.wxi.yaml
+    let config_content = fs::read_to_string(config_yaml).unwrap();
     assert!(
         config_content.contains("Include"),
         "Should import Include element"
@@ -60,7 +62,7 @@ fn test_recursive_import() {
     );
 
     // Check localization
-    let wxl_content = fs::read_to_string(localization_wyl).unwrap();
+    let wxl_content = fs::read_to_string(localization_yaml).unwrap();
     assert!(
         wxl_content.contains("WixLocalization"),
         "Should import WixLocalization element"
@@ -71,9 +73,9 @@ fn test_recursive_import() {
     );
 
     // Check comments
-    let comment_wys = output_dir.join("comment.wys");
-    assert!(comment_wys.exists(), "comment.wys should exist");
-    let comment_content = fs::read_to_string(comment_wys).unwrap();
+    let comment_yaml = output_dir.join("comment.wxs.yaml");
+    assert!(comment_yaml.exists(), "comment.wxs.yaml should exist");
+    let comment_content = fs::read_to_string(comment_yaml).unwrap();
     assert!(
         comment_content.contains("_comment: ' This is a test comment '"),
         "Should preserve XML comments"

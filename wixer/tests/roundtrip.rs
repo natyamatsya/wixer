@@ -18,6 +18,8 @@ fn test_roundtrip() {
     let status = Command::new("cargo")
         .args(&[
             "run",
+            "--bin",
+            "wixer",
             "--",
             "wix-to-yaml",
             original_wxs,
@@ -31,6 +33,8 @@ fn test_roundtrip() {
     let status = Command::new("cargo")
         .args(&[
             "run",
+            "--bin",
+            "wixer",
             "--",
             "yaml-to-wix",
             generated_yaml.to_str().unwrap(),
