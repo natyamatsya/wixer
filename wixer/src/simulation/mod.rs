@@ -23,7 +23,7 @@
 //! ```
 
 mod condition;
-mod extensions;
+pub mod extensions;
 mod model;
 mod simulator;
 mod standard_actions;

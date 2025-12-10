@@ -1,4 +1,5 @@
 use crate::dirs;
+use crate::simulation::extensions::{ExtensionRegistry, ExtractedExtension};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,7 +9,7 @@ use tracing::info;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WixProperty {
     pub name: String,
-    pub kind: String, // "Property", "Directory", "Preprocessor", "CPack", "Element", "Attribute"
+    pub kind: String, // "Property", "Directory", "Preprocessor", "CPack", "Element", "Attribute", "CustomAction"
     pub description: String,
     pub docs_url: Option<String>,
     #[serde(default)]
@@ -59,7 +60,15 @@ pub fn generate() -> Result<()> {
         }
     }
 
-    // 3. Save to cache
+    // 3. Load extension data from bundled JSON
+    let registry = ExtensionRegistry::load_bundled();
+    for ext_name in registry.available() {
+        if let Some(ext) = registry.get(ext_name) {
+            add_extension_entries(ext, &mut properties);
+        }
+    }
+
+    // 4. Save to cache
     let output_path = cache_dir.join("describe.json");
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)?;
@@ -69,6 +78,93 @@ pub fn generate() -> Result<()> {
 
     info!(count = properties.len(), file = %output_path.display(), "Description database generated");
     Ok(())
+}
+
+fn add_extension_entries(ext: &ExtractedExtension, properties: &mut Vec<WixProperty>) {
+    // Extract short extension name (e.g., "Util" from "WixToolset.Util.wixext")
+    let ext_short = ext
+        .id
+        .strip_prefix("WixToolset.")
+        .and_then(|s: &str| s.strip_suffix(".wixext"))
+        .unwrap_or(&ext.id);
+
+    // Add custom actions
+    for ca in &ext.custom_actions {
+        let execute_type = ca.execute.as_deref().unwrap_or("immediate");
+        let return_type = ca.r#return.as_deref().unwrap_or("check");
+
+        let description = format!(
+            "Custom action from {} extension. Execute: {}, Return: {}{}{}",
+            ext_short,
+            execute_type,
+            return_type,
+            ca.dll_entry
+                .as_ref()
+                .map(|e| format!(", DLL Entry: {}", e))
+                .unwrap_or_default(),
+            if ca.suppress_modularization {
+                ", SuppressModularization"
+            } else {
+                ""
+            }
+        );
+
+        properties.push(WixProperty {
+            name: ca.id.clone(),
+            kind: "CustomAction".to_string(),
+            description,
+            docs_url: None,
+            tags: vec![ext_short.to_string(), "Extension".to_string()],
+        });
+    }
+
+    // Add sequence entries with scheduling info
+    for seq in &ext.sequence_entries {
+        let scheduling = match (&seq.before, &seq.after) {
+            (Some(before), _) => format!("Before {}", before),
+            (_, Some(after)) => format!("After {}", after),
+            _ => "Default sequence".to_string(),
+        };
+
+        let description = format!(
+            "Scheduled in {} ({}){}{}",
+            seq.sequence_table,
+            scheduling,
+            seq.condition
+                .as_ref()
+                .map(|c| format!(", Condition: {}", c))
+                .unwrap_or_default(),
+            if seq.overridable {
+                " [Overridable]"
+            } else {
+                ""
+            }
+        );
+
+        // Only add if not already present as CustomAction
+        if !properties.iter().any(|p| p.name == seq.action) {
+            properties.push(WixProperty {
+                name: seq.action.clone(),
+                kind: "SequenceEntry".to_string(),
+                description,
+                docs_url: None,
+                tags: vec![ext_short.to_string(), "Extension".to_string()],
+            });
+        }
+    }
+
+    // Add properties defined by extensions
+    for prop in &ext.properties {
+        if !properties.iter().any(|p| p.name == *prop) {
+            properties.push(WixProperty {
+                name: prop.clone(),
+                kind: "Property".to_string(),
+                description: format!("Property defined by {} extension.", ext_short),
+                docs_url: None,
+                tags: vec![ext_short.to_string(), "Extension".to_string()],
+            });
+        }
+    }
 }
 
 pub fn load() -> Result<Vec<WixProperty>> {
