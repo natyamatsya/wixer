@@ -1,5 +1,6 @@
 use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
 use crate::dirs;
+use crate::simulation::extensions::ExtensionRegistry;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -159,6 +160,9 @@ impl WixerLsp {
             symbols.insert(name, schema_symbols);
         }
 
+        // Load extension metadata (custom actions, properties, etc.)
+        let ext_count = Self::load_extension_metadata(&mut docs, &mut completions);
+
         completions.sort_by(|a, b| a.label.cmp(&b.label));
         completions.dedup_by(|a, b| a.label == b.label);
 
@@ -166,12 +170,127 @@ impl WixerLsp {
             .log_message(
                 MessageType::INFO,
                 format!(
-                    "Loaded {} schemas and {} completions",
+                    "Loaded {} schemas, {} extension items, {} total completions",
                     schemas.len(),
+                    ext_count,
                     completions.len()
                 ),
             )
             .await;
+    }
+
+    fn load_extension_metadata(
+        docs: &mut HashMap<String, String>,
+        completions: &mut Vec<CompletionItem>,
+    ) -> usize {
+        let registry = ExtensionRegistry::load_bundled();
+        let mut count = 0;
+
+        for ext_name in registry.available() {
+            let Some(ext) = registry.get(ext_name) else {
+                continue;
+            };
+
+            // Extract short name (e.g., "Util" from "WixToolset.Util.wixext")
+            let ext_short = ext
+                .id
+                .strip_prefix("WixToolset.")
+                .and_then(|s: &str| s.strip_suffix(".wixext"))
+                .unwrap_or(&ext.id);
+
+            // Add custom actions with scheduling info
+            for ca in &ext.custom_actions {
+                let execute_type = ca.execute.as_deref().unwrap_or("immediate");
+                let return_type = ca.r#return.as_deref().unwrap_or("check");
+
+                // Find matching sequence entry for scheduling info
+                let seq_info = ext
+                    .sequence_entries
+                    .iter()
+                    .find(|s| s.action == ca.id)
+                    .map(|s| {
+                        let scheduling = match (&s.before, &s.after) {
+                            (Some(before), _) => format!("Before `{}`", before),
+                            (_, Some(after)) => format!("After `{}`", after),
+                            _ => "Default".to_string(),
+                        };
+                        let overridable_str = if s.overridable {
+                            " ⚡ **Overridable**"
+                        } else {
+                            ""
+                        };
+                        let condition_str = s
+                            .condition
+                            .as_ref()
+                            .map(|c| format!("\n- **Condition**: `{}`", c))
+                            .unwrap_or_default();
+                        format!(
+                            "\n\n**Scheduling** ({}){}\n- **Position**: {}{}",
+                            s.sequence_table, overridable_str, scheduling, condition_str
+                        )
+                    })
+                    .unwrap_or_default();
+
+                let description = format!(
+                    "**Custom Action** from `{}` extension\n\n\
+                     - **Execute**: {}\n\
+                     - **Return**: {}{}{}{}\n\n\
+                     *From WiX Toolset extension*",
+                    ext_short,
+                    execute_type,
+                    return_type,
+                    ca.dll_entry
+                        .as_ref()
+                        .map(|e| format!("\n- **DLL Entry**: `{}`", e))
+                        .unwrap_or_default(),
+                    if ca.suppress_modularization {
+                        "\n- **SuppressModularization**: yes"
+                    } else {
+                        ""
+                    },
+                    seq_info
+                );
+
+                docs.insert(ca.id.clone(), description.clone());
+
+                completions.push(CompletionItem {
+                    label: ca.id.clone(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    detail: Some(format!("{} extension", ext_short)),
+                    documentation: Some(Documentation::MarkupContent(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: description,
+                    })),
+                    ..Default::default()
+                });
+                count += 1;
+            }
+
+            // Add properties defined by extensions
+            for prop in &ext.properties {
+                let description = format!(
+                    "**Property** defined by `{}` extension\n\n*From WiX Toolset extension*",
+                    ext_short
+                );
+
+                if !docs.contains_key(prop) {
+                    docs.insert(prop.clone(), description.clone());
+                    completions.push(CompletionItem {
+                        label: prop.clone(),
+                        kind: Some(CompletionItemKind::VARIABLE),
+                        detail: Some(format!("{} extension property", ext_short)),
+                        documentation: Some(Documentation::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: description,
+                        })),
+                        ..Default::default()
+                    });
+                    count += 1;
+                }
+            }
+        }
+
+        count
     }
 
     async fn resolve_cache_dir(&self) -> Option<PathBuf> {
