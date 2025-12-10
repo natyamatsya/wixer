@@ -1,4 +1,4 @@
-use crate::analysis::orphan_detection;
+use crate::analysis::{orphan_detection, publish_conflicts};
 use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
 use crate::describe_db;
 use crate::dirs;
@@ -490,6 +490,27 @@ impl WixerLsp {
                     });
                 }
 
+                // Publish order conflict detection (UI extension)
+                let conflicts = publish_conflicts::find_conflicts(&resolved_yaml);
+                for conflict in conflicts {
+                    let range = find_publish_range(&text, &conflict.dialog, &conflict.control);
+                    diags.push(Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        code: Some(NumberOrString::String("publish-order-conflict".to_string())),
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: format!(
+                            "Publish Order conflict: Dialog '{}' Control '{}' Order {} conflicts with {} extension event '{}'. Consider using a different Order value.",
+                            conflict.dialog, conflict.control, conflict.order,
+                            conflict.extension_name, conflict.extension_event
+                        ),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
+
                 diags
             }
             Err(e) => {
@@ -645,6 +666,58 @@ fn find_orphan_range(text: &str, id: &str) -> Range {
                     start: Position::new(line_idx as u32, dash_pos as u32),
                     end: Position::new(line_idx as u32, line.len() as u32),
                 };
+            }
+        }
+    }
+    Range::default()
+}
+
+/// Find the range in text where a Publish element with given Dialog/Control is defined
+fn find_publish_range(text: &str, dialog: &str, control: &str) -> Range {
+    let mut in_publish_block = false;
+    let mut found_dialog = false;
+    let mut publish_line: Option<usize> = None;
+
+    for (line_idx, line) in text.lines().enumerate() {
+        let trimmed = line.trim();
+
+        // Look for Publish: key
+        if trimmed.starts_with("Publish:") || trimmed.starts_with("- Publish:") {
+            in_publish_block = true;
+            publish_line = Some(line_idx);
+            found_dialog = false;
+            continue;
+        }
+
+        if in_publish_block {
+            // Check for Dialog match
+            if trimmed.starts_with("Dialog:") && trimmed.contains(dialog) {
+                found_dialog = true;
+            }
+            // Check for Control match after finding Dialog
+            if found_dialog && trimmed.starts_with("Control:") && trimmed.contains(control) {
+                // Found the matching Publish element
+                if let Some(pub_line) = publish_line {
+                    return Range {
+                        start: Position::new(pub_line as u32, 0),
+                        end: Position::new(line_idx as u32, line.len() as u32),
+                    };
+                }
+            }
+            // Reset if we hit a new top-level key
+            if !trimmed.is_empty()
+                && !trimmed.starts_with('-')
+                && !trimmed.starts_with('#')
+                && trimmed.chars().next().is_some_and(|c| c.is_alphabetic())
+                && !trimmed.starts_with("Dialog:")
+                && !trimmed.starts_with("Control:")
+                && !trimmed.starts_with("Event:")
+                && !trimmed.starts_with("Value:")
+                && !trimmed.starts_with("Order:")
+                && !trimmed.starts_with("Condition:")
+            {
+                in_publish_block = false;
+                found_dialog = false;
             }
         }
     }
