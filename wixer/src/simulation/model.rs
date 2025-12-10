@@ -204,6 +204,30 @@ pub struct ExecutionOptions {
     pub continue_on_error: bool,
 }
 
+/// How an action's position in the sequence is determined
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SequencePosition {
+    /// Explicit sequence number
+    Absolute(i32),
+    /// Run before another action (resolved at build time)
+    Before(String),
+    /// Run after another action (resolved at build time)
+    After(String),
+    /// Suppressed (will not run)
+    Suppressed,
+}
+
+/// Override behavior for actions
+#[derive(Debug, Clone, Default)]
+pub struct ActionOverride {
+    /// Override the sequence position of an existing action
+    pub sequence_position: Option<SequencePosition>,
+    /// Override the condition of an existing action
+    pub condition: Option<String>,
+    /// Suppress the action entirely
+    pub suppress: bool,
+}
+
 /// An action in a sequence
 #[derive(Debug, Clone)]
 pub struct Action {
@@ -211,14 +235,18 @@ pub struct Action {
     pub id: String,
     /// Action type
     pub action_type: ActionType,
-    /// Sequence number (determines order)
+    /// Sequence number (determines order) - for backwards compatibility
     pub sequence_number: Option<i32>,
+    /// Position in sequence (Before/After/Absolute)
+    pub position: Option<SequencePosition>,
     /// Condition expression (action runs if true or empty)
     pub condition: Option<String>,
     /// Execution options
     pub execution: ExecutionOptions,
     /// Description for logging
     pub description: Option<String>,
+    /// If true, this action overrides an existing action with the same ID
+    pub is_override: bool,
 }
 
 impl Action {
@@ -227,9 +255,11 @@ impl Action {
             id: id.into(),
             action_type: ActionType::Standard,
             sequence_number: Some(sequence),
+            position: Some(SequencePosition::Absolute(sequence)),
             condition: None,
             execution: ExecutionOptions::default(),
             description: None,
+            is_override: false,
         }
     }
 
@@ -238,10 +268,66 @@ impl Action {
             id: id.into(),
             action_type: ActionType::Custom(ca_type),
             sequence_number: None,
+            position: None,
             condition: None,
             execution: ExecutionOptions::default(),
             description: None,
+            is_override: false,
         }
+    }
+
+    /// Create an action that runs before another action
+    pub fn before(id: impl Into<String>, before_action: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            action_type: ActionType::Custom(CustomActionType::SetProperty {
+                property: String::new(),
+                value: String::new(),
+            }),
+            sequence_number: None,
+            position: Some(SequencePosition::Before(before_action.into())),
+            condition: None,
+            execution: ExecutionOptions::default(),
+            description: None,
+            is_override: false,
+        }
+    }
+
+    /// Create an action that runs after another action
+    pub fn after(id: impl Into<String>, after_action: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            action_type: ActionType::Custom(CustomActionType::SetProperty {
+                property: String::new(),
+                value: String::new(),
+            }),
+            sequence_number: None,
+            position: Some(SequencePosition::After(after_action.into())),
+            condition: None,
+            execution: ExecutionOptions::default(),
+            description: None,
+            is_override: false,
+        }
+    }
+
+    /// Create an override for an existing action
+    pub fn override_action(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            action_type: ActionType::Standard,
+            sequence_number: None,
+            position: None,
+            condition: None,
+            execution: ExecutionOptions::default(),
+            description: None,
+            is_override: true,
+        }
+    }
+
+    /// Suppress this action (prevent it from running)
+    pub fn suppressed(mut self) -> Self {
+        self.position = Some(SequencePosition::Suppressed);
+        self
     }
 
     pub fn with_condition(mut self, condition: impl Into<String>) -> Self {

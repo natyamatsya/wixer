@@ -166,13 +166,57 @@ impl Simulator {
         timestamp: &mut u64,
         options: &SimulationOptions,
     ) {
+        // Build sequence number lookup for Before/After resolution
+        let mut seq_lookup: HashMap<String, i32> = HashMap::new();
+        for action in &sequence.actions {
+            if let Some(seq) = action.sequence_number {
+                seq_lookup.insert(action.id.clone(), seq);
+            }
+        }
+
         // Collect all actions including SetProperty actions for this sequence
         let mut all_actions: Vec<(i32, ActionEntry)> = Vec::new();
 
-        // Add standard/custom actions from sequence
+        // Add standard/custom actions from sequence (handling overrides and Before/After)
+        let mut overrides: HashMap<String, &Action> = HashMap::new();
+        let mut suppressed: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        // First pass: collect overrides
         for action in &sequence.actions {
-            if let Some(seq) = action.sequence_number {
-                all_actions.push((seq, ActionEntry::Action(action)));
+            if action.is_override {
+                overrides.insert(action.id.clone(), action);
+                if matches!(action.position, Some(SequencePosition::Suppressed)) {
+                    suppressed.insert(action.id.clone());
+                }
+            }
+        }
+
+        // Second pass: add actions with resolved sequence numbers
+        for action in &sequence.actions {
+            // Skip overrides (they modify existing actions, not add new ones)
+            if action.is_override {
+                continue;
+            }
+
+            // Check if this action is suppressed by an override
+            if suppressed.contains(&action.id) {
+                continue;
+            }
+
+            // Apply any override for this action
+            let effective_condition = overrides
+                .get(&action.id)
+                .and_then(|o| o.condition.clone())
+                .or_else(|| action.condition.clone());
+
+            // Resolve sequence number
+            let seq_num = self.resolve_sequence_number(action, &overrides, &seq_lookup);
+
+            if let Some(seq) = seq_num {
+                let mut resolved_action = action.clone();
+                resolved_action.condition = effective_condition;
+                // Store resolved action (we need to own it for the entry)
+                all_actions.push((seq, ActionEntry::OwnedAction(resolved_action)));
             }
         }
 
@@ -192,6 +236,9 @@ impl Simulator {
                 ActionEntry::Action(action) => {
                     self.execute_action(action, seq_num, sequence.table, props, *timestamp)
                 }
+                ActionEntry::OwnedAction(ref action) => {
+                    self.execute_action(action, seq_num, sequence.table, props, *timestamp)
+                }
                 ActionEntry::SetProperty(spa) => self.execute_set_property(spa, props, *timestamp),
             };
 
@@ -203,6 +250,32 @@ impl Simulator {
             if failed && options.stop_on_error {
                 break;
             }
+        }
+    }
+
+    /// Resolve an action's sequence number, handling Before/After positioning
+    fn resolve_sequence_number(
+        &self,
+        action: &Action,
+        overrides: &HashMap<String, &Action>,
+        seq_lookup: &HashMap<String, i32>,
+    ) -> Option<i32> {
+        // Check if there's an override that changes the position
+        let position = overrides
+            .get(&action.id)
+            .and_then(|o| o.position.clone())
+            .or_else(|| action.position.clone());
+
+        match position {
+            Some(SequencePosition::Absolute(seq)) => Some(seq),
+            Some(SequencePosition::Before(ref target)) => {
+                seq_lookup.get(target).map(|target_seq| target_seq - 1)
+            }
+            Some(SequencePosition::After(ref target)) => {
+                seq_lookup.get(target).map(|target_seq| target_seq + 1)
+            }
+            Some(SequencePosition::Suppressed) => None,
+            None => action.sequence_number,
         }
     }
 
@@ -328,8 +401,10 @@ impl Simulator {
 }
 
 enum ActionEntry<'a> {
-    Action(&'a Action),
+    OwnedAction(Action),
     SetProperty(&'a SetPropertyAction),
+    #[allow(dead_code)]
+    Action(&'a Action),
 }
 
 /// Builder for creating simulators from parsed WiX data
@@ -509,5 +584,90 @@ mod tests {
             uninstall_event.unwrap().result,
             ActionResult::Success
         ));
+    }
+
+    #[test]
+    fn test_before_after_ordering() {
+        let mut sim = Simulator::new();
+
+        // Add action with absolute position
+        let mut base_action = Action::new_standard("BaseAction", 1000);
+        base_action.action_type = ActionType::Standard;
+        sim.add_to_execute_sequence(base_action);
+
+        // Add action that runs BEFORE BaseAction
+        let mut before_action = Action::before("BeforeAction", "BaseAction");
+        before_action.action_type = ActionType::Standard;
+        sim.add_to_execute_sequence(before_action);
+
+        // Add action that runs AFTER BaseAction
+        let mut after_action = Action::after("AfterAction", "BaseAction");
+        after_action.action_type = ActionType::Standard;
+        sim.add_to_execute_sequence(after_action);
+
+        let trace = sim.run(InstallMode::FirstInstall, &SimulationOptions::default());
+
+        // Find the sequence numbers in the trace
+        let before_seq = trace
+            .events
+            .iter()
+            .find(|e| e.action_id == "BeforeAction")
+            .map(|e| e.sequence_number);
+        let base_seq = trace
+            .events
+            .iter()
+            .find(|e| e.action_id == "BaseAction")
+            .map(|e| e.sequence_number);
+        let after_seq = trace
+            .events
+            .iter()
+            .find(|e| e.action_id == "AfterAction")
+            .map(|e| e.sequence_number);
+
+        // Verify ordering: Before < Base < After
+        assert!(before_seq.unwrap() < base_seq.unwrap());
+        assert!(base_seq.unwrap() < after_seq.unwrap());
+    }
+
+    #[test]
+    fn test_action_suppression() {
+        let mut sim = Simulator::new();
+
+        // Add a standard action
+        let action = Action::new_standard("SuppressMe", 1000);
+        sim.add_to_execute_sequence(action);
+
+        // Add an override that suppresses it
+        let suppress = Action::override_action("SuppressMe").suppressed();
+        sim.add_to_execute_sequence(suppress);
+
+        let trace = sim.run(InstallMode::FirstInstall, &SimulationOptions::default());
+
+        // The suppressed action should not appear in the trace
+        let suppressed_event = trace.events.iter().find(|e| e.action_id == "SuppressMe");
+        assert!(suppressed_event.is_none());
+    }
+
+    #[test]
+    fn test_condition_override() {
+        let mut sim = Simulator::new();
+
+        // Add an action that runs unconditionally
+        let action = Action::new_standard("ConditionalAction", 1000);
+        sim.add_to_execute_sequence(action);
+
+        // Override to add a condition that will be false
+        let mut override_action = Action::override_action("ConditionalAction");
+        override_action.condition = Some("FalseProperty".into());
+        sim.add_to_execute_sequence(override_action);
+
+        let trace = sim.run(InstallMode::FirstInstall, &SimulationOptions::default());
+
+        // The action should be skipped due to the overridden condition
+        let event = trace
+            .events
+            .iter()
+            .find(|e| e.action_id == "ConditionalAction");
+        assert!(matches!(event.unwrap().result, ActionResult::Skipped));
     }
 }
