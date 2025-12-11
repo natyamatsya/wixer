@@ -3,6 +3,7 @@
 //! Detects WiX components and component groups that are defined but never
 //! referenced by any Feature, meaning they won't be installed.
 
+use crate::constants::wix_elements::*;
 use serde_yaml::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -106,9 +107,9 @@ fn collect_definitions(value: &Value, tracker: &mut ReferenceTracker, path: &str
                 };
 
                 match key_str {
-                    "Component" => collect_components(val, tracker, &new_path, None),
-                    "ComponentGroup" => collect_component_groups(val, tracker, &new_path),
-                    "Feature" => collect_feature_refs(val, tracker),
+                    COMPONENT => collect_components(val, tracker, &new_path, None),
+                    COMPONENT_GROUP => collect_component_groups(val, tracker, &new_path),
+                    FEATURE => collect_feature_refs(val, tracker),
                     _ => collect_definitions(val, tracker, &new_path),
                 }
             }
@@ -131,7 +132,7 @@ fn collect_components(
 ) {
     match value {
         Value::Mapping(map) => {
-            if let Some(id) = map.get("Id").and_then(|v| v.as_str()) {
+            if let Some(id) = map.get(ID).and_then(|v| v.as_str()) {
                 tracker.components.insert(id.to_string(), path.to_string());
                 if let Some(group_id) = parent_group {
                     tracker
@@ -144,7 +145,7 @@ fn collect_components(
             // Also recurse into nested elements
             for (key, val) in map {
                 let key_str = key.as_str().unwrap_or("");
-                if key_str == "Component" {
+                if key_str == COMPONENT {
                     collect_components(
                         val,
                         tracker,
@@ -166,14 +167,14 @@ fn collect_components(
 fn collect_component_groups(value: &Value, tracker: &mut ReferenceTracker, path: &str) {
     match value {
         Value::Mapping(map) => {
-            let group_id = map.get("Id").and_then(|v| v.as_str());
+            let group_id = map.get(ID).and_then(|v| v.as_str());
             if let Some(id) = group_id {
                 tracker
                     .component_groups
                     .insert(id.to_string(), path.to_string());
             }
             // Collect components within this group
-            if let Some(components) = map.get("Component") {
+            if let Some(components) = map.get(COMPONENT) {
                 collect_components(
                     components,
                     tracker,
@@ -182,7 +183,7 @@ fn collect_component_groups(value: &Value, tracker: &mut ReferenceTracker, path:
                 );
             }
             // Handle ComponentRef within groups
-            if let Some(refs) = map.get("ComponentRef") {
+            if let Some(refs) = map.get(COMPONENT_REF) {
                 collect_component_refs_into_group(refs, tracker, group_id);
             }
         }
@@ -202,7 +203,7 @@ fn collect_component_refs_into_group(
 ) {
     match value {
         Value::Mapping(map) => {
-            if let Some(id) = map.get("Id").and_then(|v| v.as_str())
+            if let Some(id) = map.get(ID).and_then(|v| v.as_str())
                 && let Some(gid) = group_id
             {
                 tracker
@@ -225,15 +226,15 @@ fn collect_feature_refs(value: &Value, tracker: &mut ReferenceTracker) {
     match value {
         Value::Mapping(map) => {
             // Direct ComponentRef
-            if let Some(refs) = map.get("ComponentRef") {
+            if let Some(refs) = map.get(COMPONENT_REF) {
                 collect_ids_into_set(refs, &mut tracker.feature_component_refs);
             }
             // ComponentGroupRef
-            if let Some(refs) = map.get("ComponentGroupRef") {
+            if let Some(refs) = map.get(COMPONENT_GROUP_REF) {
                 collect_ids_into_set(refs, &mut tracker.feature_group_refs);
             }
             // Nested Features
-            if let Some(nested) = map.get("Feature") {
+            if let Some(nested) = map.get(FEATURE) {
                 collect_feature_refs(nested, tracker);
             }
             // Recurse into all values to find nested refs
@@ -255,7 +256,7 @@ fn collect_feature_refs(value: &Value, tracker: &mut ReferenceTracker) {
 fn collect_ids_into_set(value: &Value, set: &mut HashSet<String>) {
     match value {
         Value::Mapping(map) => {
-            if let Some(id) = map.get("Id").and_then(|v| v.as_str()) {
+            if let Some(id) = map.get(ID).and_then(|v| v.as_str()) {
                 set.insert(id.to_string());
             }
         }

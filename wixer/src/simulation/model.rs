@@ -1,5 +1,6 @@
 //! Core data model for MSI execution simulation
 
+use crate::constants::msi_properties::*;
 use std::collections::HashMap;
 
 /// Installation mode determines which actions run based on conditions
@@ -26,47 +27,47 @@ impl InstallMode {
 
         match self {
             InstallMode::FirstInstall => {
-                props.insert("Installed".into(), PropertyValue::Null);
-                props.insert("WIX_UPGRADE_DETECTED".into(), PropertyValue::Null);
-                props.insert("WIX_DOWNGRADE_DETECTED".into(), PropertyValue::Null);
-                props.insert("UPGRADINGPRODUCTCODE".into(), PropertyValue::Null);
-                props.insert("REMOVE".into(), PropertyValue::Null);
+                props.insert(INSTALLED.into(), PropertyValue::Null);
+                props.insert(WIX_UPGRADE_DETECTED.into(), PropertyValue::Null);
+                props.insert(WIX_DOWNGRADE_DETECTED.into(), PropertyValue::Null);
+                props.insert(UPGRADINGPRODUCTCODE.into(), PropertyValue::Null);
+                props.insert(REMOVE.into(), PropertyValue::Null);
             }
             InstallMode::Upgrade => {
-                props.insert("Installed".into(), PropertyValue::Null);
+                props.insert(INSTALLED.into(), PropertyValue::Null);
                 props.insert(
-                    "WIX_UPGRADE_DETECTED".into(),
+                    WIX_UPGRADE_DETECTED.into(),
                     PropertyValue::String("1".into()),
                 );
-                props.insert("WIX_DOWNGRADE_DETECTED".into(), PropertyValue::Null);
-                props.insert("UPGRADINGPRODUCTCODE".into(), PropertyValue::Null);
-                props.insert("REMOVE".into(), PropertyValue::Null);
+                props.insert(WIX_DOWNGRADE_DETECTED.into(), PropertyValue::Null);
+                props.insert(UPGRADINGPRODUCTCODE.into(), PropertyValue::Null);
+                props.insert(REMOVE.into(), PropertyValue::Null);
             }
             InstallMode::RemovingForUpgrade => {
-                props.insert("Installed".into(), PropertyValue::String("1".into()));
-                props.insert("WIX_UPGRADE_DETECTED".into(), PropertyValue::Null);
+                props.insert(INSTALLED.into(), PropertyValue::String("1".into()));
+                props.insert(WIX_UPGRADE_DETECTED.into(), PropertyValue::Null);
                 props.insert(
-                    "UPGRADINGPRODUCTCODE".into(),
+                    UPGRADINGPRODUCTCODE.into(),
                     PropertyValue::String("{GUID}".into()),
                 );
-                props.insert("REMOVE".into(), PropertyValue::String("ALL".into()));
+                props.insert(REMOVE.into(), PropertyValue::String(ALL.into()));
             }
             InstallMode::Uninstall => {
-                props.insert("Installed".into(), PropertyValue::String("1".into()));
-                props.insert("WIX_UPGRADE_DETECTED".into(), PropertyValue::Null);
-                props.insert("UPGRADINGPRODUCTCODE".into(), PropertyValue::Null);
-                props.insert("REMOVE".into(), PropertyValue::String("ALL".into()));
+                props.insert(INSTALLED.into(), PropertyValue::String("1".into()));
+                props.insert(WIX_UPGRADE_DETECTED.into(), PropertyValue::Null);
+                props.insert(UPGRADINGPRODUCTCODE.into(), PropertyValue::Null);
+                props.insert(REMOVE.into(), PropertyValue::String(ALL.into()));
             }
             InstallMode::Repair => {
-                props.insert("Installed".into(), PropertyValue::String("1".into()));
-                props.insert("WIX_UPGRADE_DETECTED".into(), PropertyValue::Null);
-                props.insert("REINSTALL".into(), PropertyValue::String("ALL".into()));
-                props.insert("REMOVE".into(), PropertyValue::Null);
+                props.insert(INSTALLED.into(), PropertyValue::String("1".into()));
+                props.insert(WIX_UPGRADE_DETECTED.into(), PropertyValue::Null);
+                props.insert(REINSTALL.into(), PropertyValue::String(ALL.into()));
+                props.insert(REMOVE.into(), PropertyValue::Null);
             }
             InstallMode::Maintenance => {
-                props.insert("Installed".into(), PropertyValue::String("1".into()));
-                props.insert("WIX_UPGRADE_DETECTED".into(), PropertyValue::Null);
-                props.insert("REMOVE".into(), PropertyValue::Null);
+                props.insert(INSTALLED.into(), PropertyValue::String("1".into()));
+                props.insert(WIX_UPGRADE_DETECTED.into(), PropertyValue::Null);
+                props.insert(REMOVE.into(), PropertyValue::Null);
             }
         }
 

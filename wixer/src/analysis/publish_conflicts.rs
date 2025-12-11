@@ -3,6 +3,7 @@
 //! Detects conflicts between user-defined Publish elements and WiX UI extension
 //! Publish entries that have the same Dialog/Control/Order combination.
 
+use crate::constants::ui_events::{ACTION_EVENTS, NAVIGATION_EVENTS};
 use crate::simulation::extensions::ExtensionRegistry;
 use serde_yaml::Value;
 use std::collections::HashMap;
@@ -165,17 +166,11 @@ fn generate_suggestion(
 }
 
 fn is_navigation_event(event: &str) -> bool {
-    matches!(
-        event,
-        "NewDialog" | "SpawnDialog" | "SpawnWaitDialog" | "EndDialog"
-    )
+    NAVIGATION_EVENTS.contains(&event)
 }
 
 fn is_action_event(event: &str) -> bool {
-    matches!(
-        event,
-        "DoAction" | "SetProperty" | "SetTargetPath" | "CheckTargetPath"
-    )
+    ACTION_EVENTS.contains(&event)
 }
 
 fn collect_user_publish_entries(yaml: &Value) -> Vec<PublishEntry> {
