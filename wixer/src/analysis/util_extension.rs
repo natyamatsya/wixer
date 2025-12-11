@@ -1,4 +1,9 @@
+//! Util Extension Analysis
+//!
+//! Utilities for interpreting WiX Util extension data from PDB files.
+
 use serde_json::Value;
+use tracing::debug;
 
 pub struct CloseAppAttributes;
 
@@ -12,7 +17,9 @@ impl CloseAppAttributes {
     pub const PROMPT_TO_CONTINUE: i32 = 0x40;
 }
 
+/// Analyze CloseApp extension data and return human-readable strategy report
 pub fn analyze_close_app(fields: &[Value]) -> String {
+    debug!(field_count = fields.len(), "Analyzing CloseApp action");
     // Fields from WixCloseApplicationSymbol.cs:
     // [0] Target (String)
     // [1] Description (String)

@@ -1,4 +1,9 @@
+//! Custom Action Type Analysis
+//!
+//! Utilities for interpreting MSI custom action type values from PDB data.
+
 use serde_json::Value;
+use tracing::debug;
 
 pub struct CustomActionType;
 
@@ -41,7 +46,9 @@ impl CustomActionType {
     pub const MASK_EXECUTION: i32 = 0x700;
 }
 
+/// Analyze custom action fields from PDB and return human-readable description
 pub fn analyze_launch_app(fields: &[Value]) -> String {
+    debug!(field_count = fields.len(), "Analyzing custom action");
     // Fields indices from CustomActionSymbol.cs:
     // [0] ExecutionType (Number)
     // [1] Source (String)

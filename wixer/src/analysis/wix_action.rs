@@ -1,4 +1,9 @@
+//! WiX Action Analysis
+//!
+//! Utilities for parsing and interpreting WiX action data from PDB files.
+
 use serde_json::Value;
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct WixActionData {
@@ -10,7 +15,9 @@ pub struct WixActionData {
     pub after: Option<String>,
 }
 
+/// Parse WiX action fields from PDB into structured data
 pub fn parse_wix_action(id: &str, fields: &[Value]) -> WixActionData {
+    debug!(id = %id, field_count = fields.len(), "Parsing WiX action");
     let get_val = |idx: usize| fields.get(idx).and_then(|f| f.get("data"));
 
     // Parse ID to get Table
@@ -36,8 +43,10 @@ pub fn parse_wix_action(id: &str, fields: &[Value]) -> WixActionData {
     }
 }
 
+/// Analyze WiX action and return human-readable report
 pub fn analyze_wix_action(id: &str, fields: &[Value]) -> String {
     let data = parse_wix_action(id, fields);
+    debug!(table = %data.table, action = %data.action, "Analyzed WiX action");
 
     let mut report = format!("Sequence Table: {}\nAction: {}\n", data.table, data.action);
 
