@@ -6,7 +6,7 @@
 
 ## Repository Structure
 
-```
+```text
 wixer/
 ├── wixer/                  # Main Rust crate (CLI binary)
 │   ├── src/
@@ -15,7 +15,8 @@ wixer/
 │   │   ├── lib.rs          # Library exports
 │   │   ├── commands/       # Subcommand implementations
 │   │   ├── upgrade/        # WiX v3→v4 upgrade pipeline
-│   │   ├── analysis/       # Code analysis utilities
+│   │   ├── simulation/     # MSI execution simulation
+│   │   ├── analysis/       # Code analysis (orphan detection, PDB validation)
 │   │   ├── yaml_to_wix.rs  # YAML → WiX XML conversion
 │   │   ├── wix_to_yaml.rs  # WiX XML → YAML conversion
 │   │   ├── xsd_to_json.rs  # XSD → JSON Schema conversion
@@ -57,13 +58,14 @@ wixer/
 | `wixer init [--fresh]` | Download WiX schemas to global cache |
 | `wixer import <dir> <out>` | Batch convert `.wxs` → `.wxs.yaml` |
 | `wixer export <dir> <out>` | Batch convert `.wxs.yaml` → `.wxs` |
-| `wixer describe <term>` | Lookup WiX properties/variables |
+| `wixer describe <term>` | Lookup WiX properties/variables/custom actions |
 | `wixer lsp` | Start Language Server Protocol server |
 | `wixer migrate --target msix` | Convert WiX project to MSIX manifest |
 | `wixer upgrade <file>` | Upgrade WiX v3 syntax to v4/v6 |
 | `wixer doc` | Generate documentation from XSD schemas |
 | `wixer inspect-pdb <file>` | Inspect WiX PDB file contents |
 | `wixer sequence <file>` | Visualize installer execution sequence |
+| `wixer simulate <file>` | Simulate MSI execution for different install modes |
 
 ## File Extensions
 
@@ -76,6 +78,7 @@ wixer/
 ## Configuration
 
 Wixer loads `wixer.yaml` from:
+
 1. Walking up from CWD (project-local)
 2. Global config directory (`%APPDATA%\natyamatsya\wixer\config` on Windows)
 
@@ -93,9 +96,12 @@ profiles:
 ## Cache & Schemas
 
 Global cache at `%LOCALAPPDATA%\natyamatsya\wixer\cache` (Windows) stores:
+
 - Downloaded WiX XSD schemas
 - Generated JSON schemas for validation
 - `describe.json` knowledge base
+- WiX extension metadata (custom actions, properties, sequence entries)
+- `LICENSE.txt` with attribution for WiX Toolset and MSIX schemas
 
 Run `wixer init` to populate the cache.
 
@@ -110,6 +116,7 @@ The `CMakeLists.txt` and `Makefile.toml` configurations serve as **dogfooding ex
 ### CMake Integration
 
 Wixer provides CMake modules for transparent YAML support:
+
 - **`WixerImpersonate.cmake`**: Intercepts CMake's WIX generator to convert YAML sources automatically
 - **`wixer_add_yaml_sources()`**: Pre-build hook for YAML→XML export
 - **`wixer_msix_package()`**: Auto-generate AppxManifest from WiX YAML sources
@@ -142,6 +149,8 @@ cargo make wix-installer           # Full MSI build task
 2. **Impersonation mode**: If the binary is renamed to `wix.exe`, it passes through non-wixer commands to the real WiX toolset.
 3. **Exit code mapping**: WiX error IDs are mapped to human-readable names via `wix_exit_codes.rs`.
 4. **Upgrade pipeline**: The `upgrade/` module uses a transformation pipeline pattern—`PreprocessorPreserver` extracts/restores `<?...?>` directives, and individual `Transformation` trait implementations handle v3→v4 changes.
+5. **MSI Simulation**: The `simulation/` module models MSI execution with condition evaluation, action sequencing, and install mode handling (FirstInstall, Upgrade, Uninstall, Repair, Maintenance).
+6. **LSP Diagnostics**: The LSP provides real-time diagnostics including orphan component detection, Publish order conflict warnings, and schema validation.
 
 ## Testing
 
