@@ -7,6 +7,7 @@ use crate::constants::ui_events::{ACTION_EVENTS, NAVIGATION_EVENTS};
 use crate::simulation::extensions::ExtensionRegistry;
 use serde_yaml::Value;
 use std::collections::HashMap;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone)]
 pub struct PublishConflict {
@@ -46,13 +47,20 @@ pub struct PublishEntry {
 
 /// Find Publish order conflicts between user YAML and UI extension
 pub fn find_conflicts(yaml: &Value) -> Vec<PublishConflict> {
+    debug!("Checking for Publish order conflicts with UI extension");
     let mut conflicts = Vec::new();
 
     // Load UI extension publish entries
     let registry = ExtensionRegistry::load_bundled();
     let Some(ui_ext) = registry.get("ui") else {
+        debug!("UI extension not loaded, skipping conflict detection");
         return conflicts;
     };
+
+    debug!(
+        extension_entries = ui_ext.publish_entries.len(),
+        "Loaded UI extension publish entries"
+    );
 
     // Build a map of (dialog, control, order) -> extension entries with full info
     #[derive(Clone)]
@@ -101,6 +109,14 @@ pub fn find_conflicts(yaml: &Value) -> Vec<PublishConflict> {
                         .unwrap_or(1),
                 );
 
+                warn!(
+                    dialog = %user_entry.dialog,
+                    control = %user_entry.control,
+                    order = order,
+                    user_event = %user_entry.event.as_deref().unwrap_or(""),
+                    ext_event = %ext_entry.event,
+                    "Publish order conflict with UI extension"
+                );
                 conflicts.push(PublishConflict {
                     dialog: user_entry.dialog.clone(),
                     control: user_entry.control.clone(),
@@ -113,6 +129,12 @@ pub fn find_conflicts(yaml: &Value) -> Vec<PublishConflict> {
                 });
             }
         }
+    }
+
+    if conflicts.is_empty() {
+        debug!("No Publish order conflicts found");
+    } else {
+        debug!(count = conflicts.len(), "Found Publish order conflicts");
     }
 
     conflicts

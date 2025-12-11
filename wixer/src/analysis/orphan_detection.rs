@@ -6,6 +6,7 @@
 use crate::constants::wix_elements::*;
 use serde_yaml::Value;
 use std::collections::{HashMap, HashSet};
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone)]
 pub struct OrphanWarning {
@@ -45,10 +46,19 @@ struct ReferenceTracker {
 
 /// Analyze a WiX YAML document for orphaned components
 pub fn find_orphans(yaml: &Value) -> Vec<OrphanWarning> {
+    debug!("Scanning for orphan components and component groups");
     let mut tracker = ReferenceTracker::default();
 
     // Traverse the YAML tree to collect all definitions and references
     collect_definitions(yaml, &mut tracker, "");
+
+    debug!(
+        components = tracker.components.len(),
+        groups = tracker.component_groups.len(),
+        feature_refs = tracker.feature_component_refs.len(),
+        group_refs = tracker.feature_group_refs.len(),
+        "Collected definitions and references"
+    );
 
     // Find orphans
     let mut warnings = Vec::new();
@@ -64,6 +74,11 @@ pub fn find_orphans(yaml: &Value) -> Vec<OrphanWarning> {
     // Check for orphaned ComponentGroups
     for (group_id, path) in &tracker.component_groups {
         if !tracker.feature_group_refs.contains(group_id) {
+            warn!(
+                id = %group_id,
+                path = %path,
+                "ComponentGroup is not referenced by any Feature"
+            );
             warnings.push(OrphanWarning {
                 kind: OrphanKind::ComponentGroup,
                 id: group_id.clone(),
@@ -83,6 +98,11 @@ pub fn find_orphans(yaml: &Value) -> Vec<OrphanWarning> {
 
             // Only warn if not in a referenced group
             if !in_any_group {
+                warn!(
+                    id = %comp_id,
+                    path = %path,
+                    "Component is not referenced by any Feature"
+                );
                 warnings.push(OrphanWarning {
                     kind: OrphanKind::Component,
                     id: comp_id.clone(),
@@ -90,6 +110,12 @@ pub fn find_orphans(yaml: &Value) -> Vec<OrphanWarning> {
                 });
             }
         }
+    }
+
+    if warnings.is_empty() {
+        debug!("No orphan components found");
+    } else {
+        debug!(count = warnings.len(), "Found orphan components/groups");
     }
 
     warnings

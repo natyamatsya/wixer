@@ -10,6 +10,7 @@
 use crate::simulation::{Action, Simulator};
 use crate::wixpdb::{Symbol, WixPdb};
 use std::collections::{HashMap, HashSet};
+use tracing::{debug, info, warn};
 
 /// A discrepancy between expected (simulator) and actual (PDB) state
 #[derive(Debug, Clone)]
@@ -62,6 +63,7 @@ struct PdbAction {
 
 /// Validate a PDB against simulator expectations
 pub fn validate(pdb: &WixPdb, simulator: &Simulator) -> Vec<ValidationWarning> {
+    info!("Validating PDB against simulator expectations");
     let mut warnings = Vec::new();
 
     // Extract actions from PDB
@@ -73,11 +75,18 @@ pub fn validate(pdb: &WixPdb, simulator: &Simulator) -> Vec<ValidationWarning> {
     let expected_action_ids: HashSet<String> =
         custom_actions.iter().map(|a| a.id.clone()).collect();
 
+    debug!(
+        pdb_actions = pdb_actions.len(),
+        expected_actions = custom_actions.len(),
+        "Comparing PDB actions with simulator"
+    );
+
     // Check for missing actions (in simulator but not in PDB)
     for action in &custom_actions {
         if !pdb_action_names.contains(&action.id) {
             // Skip standard actions - they're implicit
             if !is_standard_action(&action.id) {
+                warn!(action_id = %action.id, "Action defined in YAML but not found in PDB");
                 warnings.push(ValidationWarning {
                     kind: WarningKind::MissingAction,
                     message: format!(
@@ -100,6 +109,11 @@ pub fn validate(pdb: &WixPdb, simulator: &Simulator) -> Vec<ValidationWarning> {
                 continue; // Extension actions are expected to appear
             }
 
+            warn!(
+                action_id = %name,
+                action_type = %pdb_action.action_type,
+                "Extra action found in PDB but not in simulator"
+            );
             warnings.push(ValidationWarning {
                 kind: WarningKind::ExtraAction,
                 message: format!(
@@ -121,6 +135,12 @@ pub fn validate(pdb: &WixPdb, simulator: &Simulator) -> Vec<ValidationWarning> {
                 && let Some(pdb_cond) = &pdb_action.condition
                 && !conditions_equivalent(expected_cond, pdb_cond)
             {
+                warn!(
+                    action_id = %action.id,
+                    expected = %expected_cond,
+                    actual = %pdb_cond,
+                    "Condition mismatch between YAML and PDB"
+                );
                 warnings.push(ValidationWarning {
                     kind: WarningKind::ConditionMismatch,
                     message: format!(
@@ -137,6 +157,12 @@ pub fn validate(pdb: &WixPdb, simulator: &Simulator) -> Vec<ValidationWarning> {
             // Check scheduling (Before/After)
             check_scheduling_match(action, pdb_action, &mut warnings);
         }
+    }
+
+    if warnings.is_empty() {
+        info!("PDB validation passed - no discrepancies found");
+    } else {
+        info!(count = warnings.len(), "PDB validation found discrepancies");
     }
 
     warnings
