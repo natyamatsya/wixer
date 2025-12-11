@@ -8,4 +8,5 @@ retries = 0
 retries = 2
 fail-fast = false
 # Output JUnit XML for CI test reporting
-junit.path = "target/nextest/ci/junit.xml"
+[profile.ci.junit]
+path = "junit.xml"

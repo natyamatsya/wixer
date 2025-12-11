@@ -44,7 +44,7 @@ jobs:
         uses: mikepenz/action-junit-report@v4
         if: success() || failure()
         with:
-          report_paths: "target/nextest/ci/junit.xml"
+          report_paths: "junit.xml"
           require_tests: true
           include_passed: true
 #      - name: Test with coverage
