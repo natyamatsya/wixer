@@ -55,6 +55,29 @@ jobs:
           report_paths: "**/junit.xml"
           require_tests: true
           include_passed: true
+      # MSI Installer Build (Windows only)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build VS Code Extension
+        run: |
+          cd wixer-vscode
+          npm install
+          npm run compile
+          npx @vscode/vsce package --no-dependencies
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix
+      - name: Build Release
+        run: cargo build --release
+      - name: Build MSI Installer
+        run: cargo run --release --bin wixer -- build wixer.wxs.yaml -o target/wixer.msi
+      - name: Upload MSI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wixer-msi
+          path: target/wixer.msi
+          if-no-files-found: warn
 #      - name: Test with coverage
 #        run: cargo llvm-cov nextest --workspace --profile ci --lcov --output-path lcov.info
 #      - name: Upload coverage to Codecov

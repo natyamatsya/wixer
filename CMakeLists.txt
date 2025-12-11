@@ -11,7 +11,13 @@ add_custom_target(build_wixer ALL
 )
 
 # Define install location
-install(PROGRAMS target/release/wixer.exe DESTINATION bin)
+install(PROGRAMS target/release/wixer.exe DESTINATION bin COMPONENT cli)
+
+# VS Code Extension (optional component)
+install(FILES wixer-vscode/wixer-vscode-0.1.0.vsix
+    DESTINATION vscode
+    COMPONENT vscode_extension
+    OPTIONAL)
 
 # Configure and install AppxManifest for MSIX
 if(WIN32)
@@ -54,9 +60,19 @@ set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "Wixer")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE.txt")
 
+# Component configuration
+set(CPACK_COMPONENTS_ALL cli vscode_extension)
+set(CPACK_COMPONENT_CLI_DISPLAY_NAME "Wixer CLI")
+set(CPACK_COMPONENT_CLI_DESCRIPTION "Core wixer command-line tool")
+set(CPACK_COMPONENT_CLI_REQUIRED ON)
+set(CPACK_COMPONENT_VSCODE_EXTENSION_DISPLAY_NAME "VS Code Extension")
+set(CPACK_COMPONENT_VSCODE_EXTENSION_DESCRIPTION "Language support for WiX YAML files in Visual Studio Code")
+set(CPACK_COMPONENT_VSCODE_EXTENSION_DISABLED ON)
+
 # WIX Generator (MSI) - Use WiX v4+
 set(CPACK_WIX_VERSION "4")
 set(CPACK_WIX_UPGRADE_GUID "d0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a")
+set(CPACK_WIX_COMPONENT_INSTALL ON)
 
 # Package Generators
 if(WIN32)

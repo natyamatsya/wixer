@@ -13,24 +13,100 @@ Wix:
       DowngradeErrorMessage: 'A newer version of [ProductName] is already installed.'
     MediaTemplate:
       EmbedCab: 'yes'
+    # Detect VS Code installation via registry (covers installer, winget, portable)
+    Property:
+      - Id: 'VSCODE_PATH'
+        Secure: 'yes'
+    RegistrySearch:
+      # User install (traditional installer)
+      - Id: 'VSCodeUserSearch'
+        Root: 'HKCU'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{771FD6B0-FA20-440A-A002-3B3BAC16DC50}_is1'
+        Name: 'InstallLocation'
+        Type: 'raw'
+        Variable: 'VSCODE_PATH'
+      # System install (traditional installer)
+      - Id: 'VSCodeMachineSearch'
+        Root: 'HKLM'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1'
+        Name: 'InstallLocation'
+        Type: 'raw'
+        Variable: 'VSCODE_PATH'
+      # Winget/MSIX user install
+      - Id: 'VSCodeWingetUserSearch'
+        Root: 'HKCU'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft.VisualStudioCode'
+        Name: 'InstallLocation'
+        Type: 'raw'
+        Variable: 'VSCODE_PATH'
+      # Winget/MSIX machine install
+      - Id: 'VSCodeWingetMachineSearch'
+        Root: 'HKLM'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft.VisualStudioCode'
+        Name: 'InstallLocation'
+        Type: 'raw'
+        Variable: 'VSCODE_PATH'
+      # App Paths fallback (all install methods register here)
+      - Id: 'VSCodeAppPathSearch'
+        Root: 'HKLM'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\App Paths\Code.exe'
+        Name: 'Path'
+        Type: 'raw'
+        Variable: 'VSCODE_PATH'
+    # Custom action to install extension via 'code --install-extension'
+    CustomAction:
+      - Id: 'InstallVSCodeExtension'
+        Directory: 'INSTALLFOLDER'
+        ExeCommand: '"[VSCODE_PATH]bin\code.cmd" --install-extension "[VSCODEEXTDIR]wixer-vscode-0.1.0.vsix"'
+        Execute: 'deferred'
+        Impersonate: 'yes'
+        Return: 'ignore'
+    InstallExecuteSequence:
+      Custom:
+        Action: 'InstallVSCodeExtension'
+        After: 'InstallFiles'
+        Condition: 'VSCODE_PATH AND &amp;VSCodeExtension=3'
     Feature:
-      Id: 'ProductFeature'
-      Title: 'Wixer'
-      Level: '1'
-      ComponentGroupRef:
-        Id: 'ProductComponents'
+      - Id: 'ProductFeature'
+        Title: 'Wixer CLI'
+        Description: 'Core wixer command-line tool'
+        Level: '1'
+        ComponentGroupRef:
+          Id: 'ProductComponents'
+      - Id: 'VSCodeExtension'
+        Title: 'VS Code Extension'
+        Description: 'Language support for WiX YAML files in Visual Studio Code (requires VS Code)'
+        Level: '1000'
+        AllowAbsent: 'yes'
+        Condition:
+          Level: '1'
+          Content: 'VSCODE_PATH'
+        ComponentGroupRef:
+          Id: 'VSCodeComponents'
     StandardDirectory:
       Id: 'ProgramFiles64Folder'
       Directory:
         Id: 'INSTALLFOLDER'
         Name: 'Wixer'
+        Directory:
+          Id: 'VSCODEEXTDIR'
+          Name: 'vscode'
     ComponentGroup:
-      Id: 'ProductComponents'
-      Directory: 'INSTALLFOLDER'
-      Component:
-        Id: 'ProductComponent'
-        Guid: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
-        File:
-          Id: 'WixerExe'
-          Source: 'target/release/wixer.exe'
-          KeyPath: 'yes'
+      - Id: 'ProductComponents'
+        Directory: 'INSTALLFOLDER'
+        Component:
+          Id: 'ProductComponent'
+          Guid: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+          File:
+            Id: 'WixerExe'
+            Source: 'target/release/wixer.exe'
+            KeyPath: 'yes'
+      - Id: 'VSCodeComponents'
+        Directory: 'VSCODEEXTDIR'
+        Component:
+          Id: 'VSCodeExtComponent'
+          Guid: 'b2c3d4e5-f6a7-8901-2345-678901bcdef0'
+          File:
+            Id: 'VSCodeExtVsix'
+            Source: 'wixer-vscode/wixer-vscode-0.1.0.vsix'
+            KeyPath: 'yes'

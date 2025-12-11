@@ -12,6 +12,36 @@ command = "cargo"
 args = ["build", "--release"]
 
 # =============================================================================
+# VS Code Extension Tasks
+# =============================================================================
+
+[tasks.vscode-install-deps]
+description = "Install VS Code extension dependencies"
+script_runner = "@shell"
+script = '''
+cd wixer-vscode
+npm install
+'''
+
+[tasks.vscode-compile]
+description = "Compile VS Code extension TypeScript"
+dependencies = ["vscode-install-deps"]
+script_runner = "@shell"
+script = '''
+cd wixer-vscode
+npm run compile
+'''
+
+[tasks.vscode-package]
+description = "Package VS Code extension as .vsix"
+dependencies = ["vscode-compile"]
+script_runner = "@shell"
+script = '''
+cd wixer-vscode
+npx @vscode/vsce package --no-dependencies
+'''
+
+# =============================================================================
 # YAML Export Tasks
 # =============================================================================
 
@@ -27,9 +57,19 @@ args = ["run", "--release", "--bin", "wixer", "--", "export", ".", "target/wix"]
 
 [tasks.wix-installer]
 description = "Build MSI installer from YAML using wixer"
-dependencies = ["build-release"]
+dependencies = ["build-release", "vscode-package"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer", "--", "build", "wixer.wxs.yaml", "-o", "target/wixer.msi"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer",
+    "--",
+    "build",
+    "wixer.wxs.yaml",
+    "-o",
+    "target/wixer.msi",
+]
 
 # =============================================================================
 # MSIX Packaging Tasks
@@ -39,17 +79,31 @@ args = ["run", "--release", "--bin", "wixer", "--", "build", "wixer.wxs.yaml", "
 description = "Generate AppxManifest from WiX YAML using wixer migrate"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer", "--", "migrate", "--target", "msix", "./wixer.wxs.yaml", "target/msix"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer",
+    "--",
+    "migrate",
+    "--target",
+    "msix",
+    "./wixer.wxs.yaml",
+    "target/msix",
+]
 
 [tasks.msix-prepare]
 description = "Prepare MSIX staging directory"
-dependencies = ["msix-migrate"]
+dependencies = ["msix-migrate", "vscode-package"]
 script_runner = "@shell"
 script = '''
 # Copy executable to MSIX staging
 cp target/release/wixer.exe target/msix/
 # Copy assets
 cp -r assets target/msix/
+# Copy VS Code extension
+mkdir -p target/msix/vscode
+cp wixer-vscode/wixer-vscode-*.vsix target/msix/vscode/
 '''
 
 [tasks.msix-pack]
@@ -76,13 +130,13 @@ MakeAppx bundle /d target/msix-bundle /p target/wixer.msixbundle /bv 0.1.0.0 /o
 
 [tasks.cmake-configure]
 description = "Configure CMake build with wixer impersonation"
-dependencies = ["build-release"]
+dependencies = ["build-release", "vscode-package"]
 command = "cmake"
 args = ["--preset", "wixer-rel"]
 
 [tasks.cmake-configure-auto]
 description = "Configure CMake build with auto MSIX from YAML"
-dependencies = ["build-release"]
+dependencies = ["build-release", "vscode-package"]
 command = "cmake"
 args = ["--preset", "wixer-rel-auto"]
 
@@ -139,31 +193,112 @@ args = ["--workflow", "--preset", "wixer-rel-pkg"]
 description = "Regenerate wix-v4/ from submodule (does not modify curated yaml)"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--clean"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--clean",
+]
 
 [tasks.gallery-build]
 description = "Build MSI packages from curated wixer-yaml/ gallery"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--build", "--clean"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--build",
+    "--clean",
+]
 
 [tasks.gallery-refresh]
 description = "Refresh curated wixer-yaml/ from upgraded v4 files (review changes!)"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--refresh", "--clean"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--refresh",
+    "--clean",
+]
 
 [tasks.gallery-build-example]
 description = "Build a specific example (e.g., cargo make gallery-build-example 00)"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--build", "--only", "${@}"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--build",
+    "--only",
+    "${@}",
+]
 
 [tasks.gallery-verbose]
 description = "Build gallery with verbose output"
 dependencies = ["build-release"]
 command = "cargo"
-args = ["run", "--release", "--bin", "wixer-gallery", "--", "--source", "wixer/examples/WiXInstallerExamples", "--output", "wixer/examples/gallery", "--configs", "wixer/examples/configs", "--yaml-gallery", "wixer/examples/wixer-yaml", "--build", "--clean", "--verbose"]
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--build",
+    "--clean",
+    "--verbose",
+]
 
 # =============================================================================
 # Convenience Aliases
