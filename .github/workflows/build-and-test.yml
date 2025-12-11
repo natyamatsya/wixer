@@ -40,11 +40,19 @@ jobs:
         run: cargo nextest run --workspace --profile ci
       - name: Test docs
         run: cargo test --workspace --doc
+      - name: Debug - List junit files
+        if: always()
+        run: |
+          echo "Searching for junit*.xml files:"
+          find . -name "junit*.xml" -o -name "*.junit.xml" 2>/dev/null || dir /s /b junit*.xml 2>nul || echo "No files found"
+          echo "Listing target/nextest:"
+          ls -la target/nextest/ 2>/dev/null || dir target\nextest 2>nul || echo "Directory not found"
+        shell: bash
       - name: Upload Test Report
         uses: mikepenz/action-junit-report@v4
         if: success() || failure()
         with:
-          report_paths: "junit.xml"
+          report_paths: "**/junit.xml"
           require_tests: true
           include_passed: true
 #      - name: Test with coverage
