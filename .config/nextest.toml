@@ -7,6 +7,10 @@ retries = 0
 [profile.ci]
 retries = 2
 fail-fast = false
+
 # Output JUnit XML for CI test reporting
 [profile.ci.junit]
-path = "junit.xml"
+path = "target/nextest/ci/junit.xml"
+report-name = "wixer-tests"
+store-success-output = false
+store-failure-output = true

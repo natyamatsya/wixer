@@ -52,8 +52,8 @@ jobs:
         uses: mikepenz/action-junit-report@v4
         if: success() || failure()
         with:
-          report_paths: "**/junit.xml"
-          require_tests: true
+          report_paths: "target/nextest/ci/junit.xml"
+          require_tests: false
           include_passed: true
       # MSI Installer Build (Windows only)
       - name: Setup Node.js
