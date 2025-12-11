@@ -113,6 +113,16 @@ impl Simulator {
         self.properties.insert(name.into(), value);
     }
 
+    /// Get all custom actions defined in this simulator
+    pub fn get_custom_actions(&self) -> Vec<&Action> {
+        self.custom_actions.values().collect()
+    }
+
+    /// Get all actions in the execute sequence
+    pub fn get_execute_sequence_actions(&self) -> &[Action] {
+        &self.execute_sequence.actions
+    }
+
     /// Run the simulation
     pub fn run(&self, mode: InstallMode, options: &SimulationOptions) -> ExecutionTrace {
         let mut trace = ExecutionTrace::new(mode);
