@@ -9,10 +9,12 @@ wixer build <file.wxs.yaml> [options]
 ```
 
 **Options:**
+
 - `-o, --output <path>` — Output MSI file path
 - `--profile <name>` — Use a named profile from wixer.yaml
 
 **Example:**
+
 ```bash
 wixer build myproject.wxs.yaml -o dist/myproject.msi
 ```
@@ -30,9 +32,11 @@ wixer export <input_dir> <output_dir> [options]
 ```
 
 **Options:**
+
 - `--attribute-strategy <strategy>` — How to handle attributes: `inline` (default), `prefix`, or `separate`
 
 **Example:**
+
 ```bash
 wixer export ./src ./build/wix
 ```
@@ -50,6 +54,7 @@ wixer import <input_dir> <output_dir>
 ```
 
 **Example:**
+
 ```bash
 wixer import ./legacy-wix ./src
 ```
@@ -67,9 +72,11 @@ wixer migrate --target <target> <input> <output_dir>
 ```
 
 **Targets:**
+
 - `msix` — Generate AppxManifest.xml for MSIX packaging
 
 **Example:**
+
 ```bash
 wixer migrate --target msix ./myproject.wxs.yaml ./msix
 ```
@@ -87,6 +94,7 @@ wixer validate <file.wxs.yaml>
 ```
 
 **Example:**
+
 ```bash
 wixer validate myproject.wxs.yaml
 ```
@@ -97,19 +105,26 @@ Requires schemas to be initialized with `wixer init`.
 
 ## describe
 
-Look up WiX properties, variables, and concepts.
+Look up WiX properties, variables, custom actions, and concepts.
 
 ```bash
 wixer describe <term>
 ```
 
 **Example:**
+
 ```bash
 wixer describe INSTALLFOLDER
 wixer describe MajorUpgrade
+wixer describe WixQuietExec64      # Custom action from Util extension
+wixer describe POWERSHELLVERSION   # Property from Util extension
 ```
 
-Searches the WiX knowledge base for documentation on the given term.
+Searches the unified knowledge base including:
+
+- Standard MSI properties and actions
+- WiX schema elements and attributes
+- Extension-provided custom actions, properties, and sequence entries
 
 ---
 
@@ -122,6 +137,7 @@ wixer upgrade <file>
 ```
 
 **Example:**
+
 ```bash
 wixer upgrade legacy/Product.wxs
 ```
@@ -139,9 +155,11 @@ wixer init [options]
 ```
 
 **Options:**
+
 - `--fresh` — Clear existing cache and re-download
 
 **Example:**
+
 ```bash
 wixer init --fresh
 ```
@@ -158,7 +176,14 @@ Start the WiX Language Server Protocol server.
 wixer lsp
 ```
 
-Provides IDE integration features like completion, hover documentation, and diagnostics for `.wxs.yaml` files.
+Provides IDE integration features for `.wxs.yaml` files:
+
+- **Completions**: WiX elements, attributes, custom actions, and properties
+- **Hover documentation**: Descriptions from WiX schemas and extension metadata
+- **Diagnostics**:
+  - Schema validation errors
+  - Orphan component warnings (Components/ComponentGroups not referenced by Features)
+  - Publish order conflict warnings (collisions with UI extension events)
 
 ---
 
@@ -171,6 +196,7 @@ wixer inspect-pdb <file.wixpdb> [symbol]
 ```
 
 **Example:**
+
 ```bash
 wixer inspect-pdb myproject.wixpdb
 wixer inspect-pdb myproject.wixpdb INSTALLFOLDER
@@ -235,6 +261,30 @@ wixer doc <schema.xsd> <output_dir>
 ```
 
 Generates HTML or Markdown documentation from schema definitions.
+
+---
+
+## simulate
+
+Simulate MSI installer execution to preview what actions would run in different installation scenarios.
+
+```bash
+wixer simulate <file> [options]
+```
+
+**Options:**
+
+- `--mode <mode>` — Installation mode: `first-install`, `upgrade`, `uninstall`, `repair`, `maintenance`
+- `--verbose` — Show detailed action information
+
+**Example:**
+
+```bash
+wixer simulate myproject.wxs.yaml --mode upgrade
+wixer simulate myproject.wxs.yaml --mode uninstall --verbose
+```
+
+Parses the WiX project and simulates execution flow, showing which custom actions and standard actions would run based on conditions and install mode properties.
 
 ---
 
