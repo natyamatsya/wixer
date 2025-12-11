@@ -9,6 +9,7 @@ use serde_yaml::Value;
 use std::collections::HashMap;
 use tracing::{debug, warn};
 
+/// A conflict between user Publish and extension Publish at same order
 #[derive(Debug, Clone)]
 pub struct PublishConflict {
     pub dialog: String,
@@ -19,6 +20,15 @@ pub struct PublishConflict {
     pub extension_value: Option<String>,
     pub extension_name: String,
     pub suggestion: ConflictSuggestion,
+}
+
+/// An override that doesn't match any extension event
+#[derive(Debug, Clone)]
+pub struct InvalidOverride {
+    pub dialog: String,
+    pub control: String,
+    pub override_target: String,
+    pub available_targets: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -193,6 +203,127 @@ fn is_navigation_event(event: &str) -> bool {
 
 fn is_action_event(event: &str) -> bool {
     ACTION_EVENTS.contains(&event)
+}
+
+/// Find override targets that don't exist in UI extension
+pub fn find_invalid_overrides(yaml: &Value) -> Vec<InvalidOverride> {
+    debug!("Checking for invalid override targets");
+    let mut invalid = Vec::new();
+
+    // Load UI extension publish entries
+    let registry = ExtensionRegistry::load_bundled();
+    let Some(ui_ext) = registry.get("ui") else {
+        debug!("UI extension not loaded, skipping override validation");
+        return invalid;
+    };
+
+    // Build map of (dialog, control) -> available target values (for NewDialog etc)
+    let mut available_targets: HashMap<(String, String), Vec<String>> = HashMap::new();
+    for entry in &ui_ext.publish_entries {
+        let key = (entry.dialog.clone(), entry.control.clone());
+        if let Some(value) = &entry.value {
+            available_targets
+                .entry(key)
+                .or_default()
+                .push(value.clone());
+        }
+    }
+
+    // Collect user overrides from YAML
+    let overrides = collect_user_overrides(yaml);
+
+    for user_override in overrides {
+        let key = (user_override.dialog.clone(), user_override.control.clone());
+        let targets = available_targets.get(&key).cloned().unwrap_or_default();
+
+        if !targets.contains(&user_override.target) {
+            warn!(
+                dialog = %user_override.dialog,
+                control = %user_override.control,
+                target = %user_override.target,
+                "Override target not found in UI extension"
+            );
+            invalid.push(InvalidOverride {
+                dialog: user_override.dialog,
+                control: user_override.control,
+                override_target: user_override.target,
+                available_targets: targets,
+            });
+        }
+    }
+
+    if invalid.is_empty() {
+        debug!("No invalid overrides found");
+    } else {
+        debug!(count = invalid.len(), "Found invalid overrides");
+    }
+
+    invalid
+}
+
+#[derive(Debug)]
+struct UserOverride {
+    dialog: String,
+    control: String,
+    target: String,
+}
+
+fn collect_user_overrides(yaml: &Value) -> Vec<UserOverride> {
+    let mut overrides = Vec::new();
+    collect_overrides_recursive(yaml, &mut overrides);
+    overrides
+}
+
+fn collect_overrides_recursive(value: &Value, overrides: &mut Vec<UserOverride>) {
+    match value {
+        Value::Mapping(map) => {
+            for (key, val) in map {
+                let key_str = key.as_str().unwrap_or("");
+                if key_str == "Publish" {
+                    collect_override_elements(val, overrides);
+                } else {
+                    collect_overrides_recursive(val, overrides);
+                }
+            }
+        }
+        Value::Sequence(seq) => {
+            for item in seq {
+                collect_overrides_recursive(item, overrides);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_override_elements(value: &Value, overrides: &mut Vec<UserOverride>) {
+    match value {
+        Value::Mapping(map) => {
+            let dialog = map.get("Dialog").and_then(|v| v.as_str());
+            let control = map.get("Control").and_then(|v| v.as_str());
+            let event = map.get("Event").and_then(|v| v.as_str());
+
+            // Check if Event starts with "override " (case insensitive)
+            if let (Some(dialog), Some(control), Some(event)) = (dialog, control, event) {
+                let event_lower = event.to_lowercase();
+                if event_lower.starts_with("override ") {
+                    let target = event[9..].trim().to_string(); // Skip "override "
+                    if !target.is_empty() {
+                        overrides.push(UserOverride {
+                            dialog: dialog.to_string(),
+                            control: control.to_string(),
+                            target,
+                        });
+                    }
+                }
+            }
+        }
+        Value::Sequence(seq) => {
+            for item in seq {
+                collect_override_elements(item, overrides);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_user_publish_entries(yaml: &Value) -> Vec<PublishEntry> {

@@ -1,6 +1,7 @@
 use crate::analysis::{
-    orphan_detection,
+    condition_validation, orphan_detection,
     publish_conflicts::{self, ConflictSuggestion},
+    scheduling_warnings,
 };
 use crate::constants::{EXT_WIXLOC, EXT_WIXLOC_YAML, EXT_WXL_YAML, SCHEMA_DIR_NAME};
 use crate::describe_db;
@@ -515,6 +516,85 @@ impl WixerLsp {
                     });
                 }
 
+                // Invalid override target detection
+                let invalid_overrides = publish_conflicts::find_invalid_overrides(&resolved_yaml);
+                for invalid in invalid_overrides {
+                    let range = find_publish_range(&text, &invalid.dialog, &invalid.control);
+                    let suggestion = if invalid.available_targets.is_empty() {
+                        format!(
+                            "No override targets available for Dialog '{}' Control '{}'",
+                            invalid.dialog, invalid.control
+                        )
+                    } else {
+                        format!(
+                            "Available targets: {}",
+                            invalid.available_targets.join(", ")
+                        )
+                    };
+                    diags.push(Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        code: Some(NumberOrString::String("invalid-override".to_string())),
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: format!(
+                            "Override target '{}' not found in UI extension for Dialog '{}' Control '{}'. {}",
+                            invalid.override_target, invalid.dialog, invalid.control, suggestion
+                        ),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
+
+                // Deferred actions after InstallFinalize warning
+                let deferred_warnings =
+                    scheduling_warnings::find_deferred_after_finalize(&resolved_yaml);
+                for warning in deferred_warnings {
+                    let range = find_action_range(&text, &warning.action_id);
+                    diags.push(Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        code: Some(NumberOrString::String(
+                            "deferred-after-finalize".to_string(),
+                        )),
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: format!(
+                            "Deferred action '{}' scheduled {} runs outside the installation transaction. Failures will not trigger rollback.",
+                            warning.action_id, warning.scheduling
+                        ),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
+
+                // Undefined property references in conditions
+                let undefined_props =
+                    condition_validation::find_undefined_properties(&resolved_yaml);
+                for warning in undefined_props {
+                    let range = find_condition_range(&text, &warning.condition);
+                    let suggestion = warning
+                        .suggestion
+                        .map(|s| format!(" {}", s))
+                        .unwrap_or_default();
+                    diags.push(Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        code: Some(NumberOrString::String("undefined-property".to_string())),
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: format!(
+                            "Condition references undefined property '{}' in {}.{}",
+                            warning.property, warning.context, suggestion
+                        ),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    });
+                }
+
                 diags
             }
             Err(e) => {
@@ -643,6 +723,57 @@ fn find_range(text: &str, instance_path: &str) -> Range {
         }
     }
 
+    Range::default()
+}
+
+/// Find the range in the text where a condition is defined
+fn find_condition_range(text: &str, condition: &str) -> Range {
+    // Look for "Condition: <condition>" pattern
+    for (line_idx, line) in text.lines().enumerate() {
+        if let Some(cond_pos) = line.find("Condition:") {
+            let after_cond = &line[cond_pos + 10..];
+            let trimmed = after_cond.trim();
+            // Check if this line contains the condition (partial match ok)
+            if trimmed.contains(condition) || condition.contains(trimmed) {
+                return Range {
+                    start: Position::new(line_idx as u32, cond_pos as u32),
+                    end: Position::new(line_idx as u32, line.len() as u32),
+                };
+            }
+        }
+    }
+    Range::default()
+}
+
+/// Find the range in the text where a custom action is defined
+fn find_action_range(text: &str, action_id: &str) -> Range {
+    // Look for "Id: <action_id>" or "Action: <action_id>" pattern
+    for (line_idx, line) in text.lines().enumerate() {
+        // Check for Id: value pattern (CustomAction definition)
+        if let Some(id_pos) = line.find("Id:") {
+            let after_id = &line[id_pos + 3..];
+            let trimmed = after_id.trim();
+            if trimmed == action_id || trimmed.trim_matches(|c| c == '"' || c == '\'') == action_id
+            {
+                return Range {
+                    start: Position::new(line_idx as u32, id_pos as u32),
+                    end: Position::new(line_idx as u32, line.len() as u32),
+                };
+            }
+        }
+        // Check for Action: value pattern (InstallExecuteSequence)
+        if let Some(action_pos) = line.find("Action:") {
+            let after_action = &line[action_pos + 7..];
+            let trimmed = after_action.trim();
+            if trimmed == action_id || trimmed.trim_matches(|c| c == '"' || c == '\'') == action_id
+            {
+                return Range {
+                    start: Position::new(line_idx as u32, action_pos as u32),
+                    end: Position::new(line_idx as u32, line.len() as u32),
+                };
+            }
+        }
+    }
     Range::default()
 }
 
