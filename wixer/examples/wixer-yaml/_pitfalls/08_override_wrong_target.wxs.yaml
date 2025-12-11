@@ -1,0 +1,61 @@
+# Common Pitfall 08: Override Targeting Wrong Dialog
+#
+# PROBLEM: Override specifies wrong target dialog that doesn't exist in extension
+# SYMPTOM: Override has no effect - extension event still fires, user event ignored
+# DETECTION: Compare with `wixer describe` output for UI extension events
+#
+# This example tries to override navigation to "ReadyDlg" but the UI extension
+# actually uses "VerifyReadyDlg" - the override silently fails.
+#
+# FIX: Check the exact dialog name used by the extension with `wixer describe`
+#      or look at the UI extension's Publish entries
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  xmlns:ui: http://wixtoolset.org/schemas/v4/wxs/ui
+  Package:
+    Name: Pitfall_OverrideWrongTarget
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{88888888-8888-8888-8888-888888888888}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    UIRef:
+      Id: WixUI_InstallDir
+    Property:
+      Id: WIXUI_INSTALLDIR
+      Value: INSTALLFOLDER
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    # BUG: Override targets "ReadyDlg" but extension uses "VerifyReadyDlg"
+    # The override won't match, so extension's event still fires!
+    UI:
+      Publish:
+        Dialog: InstallDirDlg
+        Control: Next
+        Event: override ReadyDlg  # WRONG! Extension uses "VerifyReadyDlg"
+        Value: MyCustomDlg
+    # FIX: Use the correct target name:
+    # UI:
+    #   Publish:
+    #     Dialog: InstallDirDlg
+    #     Control: Next
+    #     Event: override VerifyReadyDlg  # Correct target
+    #     Value: MyCustomDlg
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

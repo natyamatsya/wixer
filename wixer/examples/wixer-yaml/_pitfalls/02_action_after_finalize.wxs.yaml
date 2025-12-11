@@ -1,0 +1,52 @@
+# Common Pitfall 02: Deferred Action Scheduled After InstallFinalize
+#
+# PROBLEM: Deferred custom action scheduled after InstallFinalize
+# SYMPTOM: The action runs but outside the installation transaction,
+#          which means it won't be rolled back on failure
+# DETECTION: `wixer simulate` shows action at sequence > 6600 (InstallFinalize)
+#
+# Run: wixer simulate 02_action_after_finalize.wxs.yaml --mode first-install
+# Expected: CA_TooLate appears AFTER InstallFinalize (seq 6600)
+#
+# FIX: Use "Before: InstallFinalize" instead of "After: InstallFinalize"
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    Name: Pitfall_ActionAfterFinalize
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{22222222-2222-2222-2222-222222222222}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    CustomAction:
+      Id: CA_TooLate
+      Directory: INSTALLFOLDER
+      ExeCommand: echo "This runs too late"
+      Execute: deferred
+      Impersonate: no
+    InstallExecuteSequence:
+      Custom:
+        Action: CA_TooLate
+        # BUG: Deferred actions should run BEFORE InstallFinalize
+        # Running after means no rollback protection on failure
+        After: InstallFinalize
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

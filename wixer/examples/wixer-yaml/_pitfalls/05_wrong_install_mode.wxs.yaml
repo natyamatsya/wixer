@@ -1,0 +1,58 @@
+# Common Pitfall 05: Action Condition Uses Wrong Install Mode
+#
+# PROBLEM: Cleanup action uses "FirstInstall" condition instead of uninstall condition
+# SYMPTOM: Cleanup runs on first install but NOT during uninstall (opposite of intent)
+# DETECTION: `wixer simulate` with different modes shows the action skipped when needed
+#
+# Run these to see the bug:
+#   wixer simulate 05_wrong_install_mode.wxs.yaml --mode first-install --verbose
+#   # Shows: CA_CleanupOnUninstall runs (wrong!)
+#   
+#   wixer simulate 05_wrong_install_mode.wxs.yaml --mode uninstall --verbose  
+#   # Shows: CA_CleanupOnUninstall is SKIPPED (should run!)
+#
+# FIX: Change condition from "FirstInstall" to "REMOVE~=\"ALL\"" or "Uninstalling"
+#      (if using InstallationStages.wxi.yaml include)
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    Name: Pitfall_WrongInstallMode
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{55555555-5555-5555-5555-555555555555}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    CustomAction:
+      Id: CA_CleanupOnUninstall
+      Directory: INSTALLFOLDER
+      ExeCommand: echo "Cleanup files"
+      Execute: deferred
+      Impersonate: no
+    InstallExecuteSequence:
+      Custom:
+        Action: CA_CleanupOnUninstall
+        Before: RemoveFiles
+        # BUG: "FirstInstall" means this runs on INSTALL, not UNINSTALL!
+        # This is likely a copy-paste error from another action.
+        # Should be: REMOVE~="ALL" or Uninstalling (with includes)
+        Condition: FirstInstall
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

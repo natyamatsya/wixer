@@ -1,0 +1,54 @@
+# Common Pitfall 04: Logically Impossible Condition
+#
+# PROBLEM: Condition that can never evaluate to true
+# SYMPTOM: Custom action never runs in any installation mode
+# DETECTION: `wixer simulate` shows action as "○ skip" in ALL modes
+#
+# Run these commands to verify it's always skipped:
+#   wixer simulate 04_impossible_condition.wxs.yaml --mode first-install --verbose
+#   wixer simulate 04_impossible_condition.wxs.yaml --mode upgrade --verbose
+#   wixer simulate 04_impossible_condition.wxs.yaml --mode uninstall --verbose
+#
+# FIX: Review condition logic - "Installed AND NOT Installed" is always false
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    Name: Pitfall_ImpossibleCondition
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{44444444-4444-4444-4444-444444444444}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    CustomAction:
+      Id: CA_ImpossibleCondition
+      Directory: INSTALLFOLDER
+      ExeCommand: echo "This can never run"
+      Execute: deferred
+      Impersonate: no
+    InstallExecuteSequence:
+      Custom:
+        Action: CA_ImpossibleCondition
+        Before: InstallFinalize
+        # BUG: This condition is logically impossible
+        # A product cannot be both Installed AND NOT Installed
+        Condition: Installed AND NOT Installed
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

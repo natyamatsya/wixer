@@ -1,0 +1,53 @@
+# Common Pitfall 09: Action Override with Typo in Action Name
+#
+# PROBLEM: Trying to override a standard action but with wrong capitalization
+# SYMPTOM: Creates a NEW action instead of overriding the existing one
+#          Both actions run (or neither works as expected)
+# DETECTION: `wixer simulate` shows both actions in sequence
+#
+# This example tries to suppress "RemoveExistingProducts" but uses wrong case,
+# creating a separate action that doesn't affect the original.
+#
+# FIX: Use exact action name with correct capitalization
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    Name: Pitfall_ActionOverrideTypo
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{99999999-9999-9999-9999-999999999999}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+      Schedule: afterInstallInitialize
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    # BUG: Trying to move RemoveExistingProducts but wrong capitalization
+    InstallExecuteSequence:
+      # Wrong: "Removeexistingproducts" (lowercase) doesn't match
+      # "RemoveExistingProducts" (PascalCase)
+      Custom:
+        Action: Removeexistingproducts  # WRONG CASE!
+        After: InstallFinalize
+        Suppress: yes
+    # FIX: Use exact capitalization:
+    # InstallExecuteSequence:
+    #   RemoveExistingProducts:
+    #     After: InstallFinalize
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

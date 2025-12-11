@@ -1,0 +1,62 @@
+# Common Pitfall 06: Publish Order Conflict with UI Extension
+#
+# PROBLEM: User-defined Publish element has same Dialog/Control/Order as UI extension
+# SYMPTOM: Both events fire at the same order, causing unpredictable behavior
+#          or one event overwriting the other
+# DETECTION: LSP shows "Publish Order conflict" warning
+#
+# This example shows a common case: trying to add validation before the
+# Next button navigates to the next dialog, but using the same Order (1)
+# as the UI extension's NewDialog event.
+#
+# FIX: Either use a different Order value, or use "override" to replace
+#      the extension's event entirely.
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  xmlns:ui: http://wixtoolset.org/schemas/v4/wxs/ui
+  Package:
+    Name: Pitfall_PublishOrderConflict
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{66666666-6666-6666-6666-666666666666}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    UIRef:
+      Id: WixUI_InstallDir
+    Property:
+      Id: WIXUI_INSTALLDIR
+      Value: INSTALLFOLDER
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    # BUG: This Publish has Order: 1, which conflicts with UI extension's
+    # NewDialog event that also has Order: 1 for the same Dialog/Control
+    UI:
+      Publish:
+        Dialog: InstallDirDlg
+        Control: Next
+        Event: DoAction
+        Value: ValidateInstallDir
+        Order: 1  # Same order as UI extension's NewDialog!
+        Condition: "1"
+    CustomAction:
+      Id: ValidateInstallDir
+      Property: INSTALLDIR_VALID
+      Value: "1"
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

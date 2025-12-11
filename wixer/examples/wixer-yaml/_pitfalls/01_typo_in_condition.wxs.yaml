@@ -1,0 +1,50 @@
+# Common Pitfall 01: Typo in Condition Property
+#
+# PROBLEM: Misspelled condition property name ("FistInstall" instead of "FirstInstall")
+# SYMPTOM: Custom action is always skipped, even during first install
+# DETECTION: `wixer simulate` shows action as "○ skip" with the typo'd condition
+#
+# Run: wixer simulate 01_typo_in_condition.wxs.yaml --mode first-install --verbose
+# Expected output: CA_FirstInstallOnly shows "○ skip" with condition "FistInstall"
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    Name: Pitfall_TypoInCondition
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{11111111-1111-1111-1111-111111111111}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    CustomAction:
+      Id: CA_FirstInstallOnly
+      Directory: INSTALLFOLDER
+      ExeCommand: echo "First install"
+      Execute: deferred
+      Impersonate: no
+    InstallExecuteSequence:
+      Custom:
+        Action: CA_FirstInstallOnly
+        Before: InstallFinalize
+        # BUG: "FistInstall" is a typo - should be "FirstInstall"
+        # Since "FistInstall" is undefined, it evaluates to empty/false
+        Condition: FistInstall
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent

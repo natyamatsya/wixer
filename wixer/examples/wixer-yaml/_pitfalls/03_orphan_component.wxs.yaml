@@ -1,0 +1,48 @@
+# Common Pitfall 03: Component Not Referenced by Any Feature (Orphan)
+#
+# PROBLEM: A Component is defined but not included in any Feature
+# SYMPTOM: The component's files/registry entries are never installed
+# DETECTION: LSP shows warning "Component is not referenced by any Feature"
+#
+# Note: This is detected by the LSP (wixer lsp), not by simulate command
+#
+# FIX: Add ComponentRef to a Feature, or add component to a ComponentGroup
+#      that is referenced by a Feature
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  Package:
+    Name: Pitfall_OrphanComponent
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{33333333-3333-3333-3333-333333333333}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+    - Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: main.txt
+        KeyPath: yes
+    # BUG: This component is never referenced by any Feature!
+    # It will be compiled into the MSI but never installed.
+    - Id: OrphanComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: OrphanFile
+        Source: orphan.txt
+        KeyPath: yes
+    Feature:
+      Id: MainFeature
+      # Only references MainComponent - OrphanComponent is forgotten!
+      ComponentRef:
+        Id: MainComponent

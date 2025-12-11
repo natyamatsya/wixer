@@ -1,0 +1,64 @@
+# Common Pitfall 07: Missing Override When Replacing Extension Event
+#
+# PROBLEM: User wants to replace UI extension's navigation but doesn't use override
+# SYMPTOM: Both the user's event AND the extension's event fire, causing
+#          navigation to wrong dialog or double navigation
+# DETECTION: LSP suggests using "override" for same-type events
+#
+# This example shows trying to change where the Next button goes, but
+# without using override, both NewDialog events will fire.
+#
+# FIX: Use "Event: override <target>" syntax to replace the extension event
+
+Wix:
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
+  xmlns:ui: http://wixtoolset.org/schemas/v4/wxs/ui
+  Package:
+    Name: Pitfall_MissingOverride
+    Manufacturer: Test
+    Version: 1.0.0
+    UpgradeCode: '{77777777-7777-7777-7777-777777777777}'
+    Scope: perMachine
+    MajorUpgrade:
+      DowngradeErrorMessage: Downgrade not allowed
+    MediaTemplate:
+      EmbedCab: yes
+    UIRef:
+      Id: WixUI_InstallDir
+    Property:
+      Id: WIXUI_INSTALLDIR
+      Value: INSTALLFOLDER
+    StandardDirectory:
+      Id: ProgramFilesFolder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: PitfallTest
+    Component:
+      Id: MainComponent
+      Directory: INSTALLFOLDER
+      File:
+        Id: MainFile
+        Source: dummy.txt
+        KeyPath: yes
+    # BUG: Trying to change navigation without override
+    # The UI extension already has NewDialog -> VerifyReadyDlg at Order 1
+    # This adds ANOTHER NewDialog event, so user may see both fire!
+    UI:
+      Publish:
+        Dialog: InstallDirDlg
+        Control: Next
+        Event: NewDialog
+        Value: MyCustomDlg  # Want to go here instead of VerifyReadyDlg
+        Order: 2  # Different order, but both events still fire!
+        Condition: "1"
+    # FIX: Should use override syntax:
+    # UI:
+    #   Publish:
+    #     Dialog: InstallDirDlg
+    #     Control: Next
+    #     Event: override VerifyReadyDlg  # Replaces extension's NewDialog
+    #     Value: MyCustomDlg
+    Feature:
+      Id: MainFeature
+      ComponentRef:
+        Id: MainComponent
