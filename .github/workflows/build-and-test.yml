@@ -28,25 +28,27 @@ jobs:
           components: rustfmt, clippy
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+#      - name: Install cargo-llvm-cov
+#        uses: taiki-e/install-action@cargo-llvm-cov
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Lint with Clippy
         run: cargo clippy --workspace -- -D warnings
       - name: Build
         run: cargo build --workspace
-      - name: Test with coverage
-        run: cargo llvm-cov nextest --workspace --profile ci --lcov --output-path lcov.info
+      - name: Run tests
+        run: cargo nextest run --workspace --profile ci
       - name: Test docs
         run: cargo test --workspace --doc
       - name: Upload Test Report
         uses: mikepenz/action-junit-report@v4
         if: success() || failure()
         with:
-          report_paths: "**/junit.xml"
+          report_paths: "target/nextest/ci/junit.xml"
           require_tests: true
           include_passed: true
+#      - name: Test with coverage
+#        run: cargo llvm-cov nextest --workspace --profile ci --lcov --output-path lcov.info
 #      - name: Upload coverage to Codecov
 #        uses: codecov/codecov-action@v4
 #        with:
