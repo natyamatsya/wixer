@@ -210,17 +210,24 @@ Wixer includes preset configurations for common workflows:
 | `wixer-rel-msix` | Build MSIX (legacy AppxManifest) |
 | `wixer-auto-msix` | Build MSIX (auto-generated from YAML) |
 
+### Build Presets
+
+| Preset | Description |
+|--------|-------------|
+| `wixer-yaml-export` | Export YAML WiX sources to XML |
+| `vscode-extension` | Build VS Code extension (.vsix) |
+
 ### Workflow Presets
 
 | Preset | Description |
 |--------|-------------|
-| `wixer-rel-pkg` | Full pipeline: configure → export YAML → build MSI |
+| `wixer-rel-pkg` | Full pipeline: configure → build VS Code extension → export YAML → build MSI |
 | `wixer-auto-msix` | Configure and build MSIX with auto AppxManifest |
 
 ### Usage
 
 ```bash
-# Full MSI build workflow
+# Full MSI build workflow (includes VS Code extension)
 cmake --workflow --preset wixer-rel-pkg
 
 # Auto-generated MSIX from YAML
@@ -228,8 +235,9 @@ cmake --workflow --preset wixer-auto-msix
 
 # Or step by step
 cmake --preset wixer-rel
-cmake --build --preset wixer-yaml-export
-cpack --preset wixer-rel-pkg
+cmake --build --preset vscode-extension    # Build VS Code extension
+cmake --build --preset wixer-yaml-export   # Export YAML to XML
+cpack --preset wixer-rel-pkg               # Build MSI
 ```
 
 ---

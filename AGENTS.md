@@ -38,10 +38,13 @@ wixer/
 │   │   └── configs/        # Example build configurations
 │   └── Cargo.toml
 ├── wixer-vscode/           # VS Code extension (TypeScript)
+│   ├── src/extension.ts    # Extension entry point (LSP client)
+│   ├── syntaxes/           # TextMate grammar for syntax highlighting
+│   └── package.json        # Extension manifest
 ├── wix/                    # Vendored WiX Toolset source (reference)
 ├── cmake/                  # CMake integration modules
 │   ├── WixerImpersonate.cmake  # Transparent YAML support for CMake WIX generator
-│   ├── MakeWixerMSI.cmake.in   # MSI packaging via wixer
+│   ├── MakeWixerMSIX.cmake.in  # MSIX packaging via wixer migrate
 │   └── MakeAppX.cmake.in       # MSIX packaging via MakeAppX
 ├── CMakeLists.txt          # CMake build for MSIX packaging
 ├── CMakePresets.json       # CMake presets for MSI/MSIX generation
@@ -126,8 +129,23 @@ Wixer provides CMake modules for transparent YAML support:
 ```bash
 cargo build --release              # Build CLI
 cargo run -- build wixer.wxs.yaml  # Build MSI from YAML
-cargo make wix-installer           # Full MSI build task
+cargo make msi                     # Build MSI installer (includes VS Code extension)
+cargo make msix                    # Build MSIX package
+cargo make all                     # Build all packages
 ```
+
+### VS Code Extension
+
+The `wixer-vscode/` directory contains a VS Code extension providing:
+- Syntax highlighting for `.wxs.yaml`, `.wxi.yaml`, `.wxl.yaml` files
+- LSP integration via `wixer lsp` command
+- Language configuration (comments, brackets, etc.)
+
+```bash
+cargo make vscode-package          # Build .vsix package
+```
+
+The extension is bundled with the MSI installer as an optional feature that auto-installs when VS Code is detected.
 
 ## Key Dependencies
 
@@ -151,6 +169,7 @@ cargo make wix-installer           # Full MSI build task
 4. **Upgrade pipeline**: The `upgrade/` module uses a transformation pipeline pattern—`PreprocessorPreserver` extracts/restores `<?...?>` directives, and individual `Transformation` trait implementations handle v3→v4 changes.
 5. **MSI Simulation**: The `simulation/` module models MSI execution with condition evaluation, action sequencing, and install mode handling (FirstInstall, Upgrade, Uninstall, Repair, Maintenance).
 6. **LSP Diagnostics**: The LSP provides real-time diagnostics including orphan component detection, Publish order conflict warnings, and schema validation.
+7. **Auto Extension Detection**: `schema_mapping_v3v4.rs` detects required WiX extensions (Util, UI, IIS, NetFx) based on namespace prefixes and element usage.
 
 ## Testing
 
@@ -178,3 +197,5 @@ Examples are configured via `wixer.example.yaml` files in `wixer/examples/config
 - **Update schema handling**: See `xsd_to_json.rs` and `schema_mapping.rs`.
 - **LSP features**: Edit `src/commands/lsp.rs`.
 - **Add upgrade transformation**: Create a new struct implementing `Transformation` trait in `src/upgrade/transformations.rs`.
+- **VS Code extension**: Edit `wixer-vscode/src/extension.ts` for LSP client, `syntaxes/wix-yaml.tmLanguage.json` for syntax highlighting.
+- **Add WiX extension detection**: Update `detect_required_extensions()` in `schema_mapping_v3v4.rs`.

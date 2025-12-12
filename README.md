@@ -12,7 +12,9 @@ Wixer is a Rust CLI tool that wraps the official WiX Toolset, enabling you to wr
 - **MSIX Migration** — Generate `AppxManifest.xml` from WiX sources
 - **CMake Integration** — Seamless integration with CMake/CPack workflows
 - **Language Server** — LSP support for IDE integration
+- **VS Code Extension** — Syntax highlighting and language support for WiX YAML files
 - **Schema Validation** — Validate YAML against WiX JSON schemas
+- **Auto Extension Detection** — Automatically detects required WiX extensions (Util, UI, etc.)
 
 ## Quick Start
 
@@ -134,18 +136,51 @@ logging:
 ## Building from Source
 
 ```bash
-# Build
+# Build CLI
 cargo build --release
 
 # Run tests
 cargo test --workspace
+```
 
-# Build MSI installer for wixer itself
+### Building Installers
+
+Wixer can build its own installers using cargo-make or CMake:
+
+**Using cargo-make:**
+```bash
+# Build MSI installer (includes VS Code extension)
 cargo make msi
 
-# Or use CMake presets
-cmake --workflow --preset wixer-rel-pkg
+# Build MSIX package
+cargo make msix
+
+# Build all packages (MSI + MSIX)
+cargo make all
 ```
+
+**Using CMake:**
+```bash
+# Full MSI build workflow
+cmake --workflow --preset wixer-rel-pkg
+
+# MSIX with auto-generated AppxManifest
+cmake --workflow --preset wixer-auto-msix
+```
+
+### VS Code Extension
+
+The VS Code extension provides syntax highlighting and LSP integration for WiX YAML files:
+
+```bash
+# Build the extension
+cargo make vscode-package
+
+# Install manually
+code --install-extension wixer-vscode/wixer-vscode-*.vsix
+```
+
+The extension is also bundled with the MSI installer as an optional feature.
 
 ## License
 
