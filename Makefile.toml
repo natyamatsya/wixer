@@ -101,9 +101,14 @@ script = '''
 cp target/release/wixer.exe target/msix/
 # Copy assets
 cp -r assets target/msix/
-# Copy VS Code extension
+# Copy VS Code extension (use glob to find any version)
 mkdir -p target/msix/vscode
-cp wixer-vscode/wixer-vscode-*.vsix target/msix/vscode/
+for vsix in wixer-vscode/wixer-vscode-*.vsix; do
+    if [ -f "$vsix" ]; then
+        cp "$vsix" target/msix/vscode/
+        echo "Copied VS Code extension: $vsix"
+    fi
+done
 '''
 
 [tasks.msix-pack]

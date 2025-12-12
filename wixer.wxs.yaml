@@ -3,7 +3,7 @@ Wix:
   Package:
     Name: 'Wixer'
     Language: '1033'
-    Version: '1.0.0.0'
+    Version: '0.1.0.0'
     Manufacturer: 'Natyamatsya'
     UpgradeCode: 'd0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a'
     InstallerVersion: '200'
@@ -54,10 +54,11 @@ Wix:
         Type: 'raw'
         Variable: 'VSCODE_PATH'
     # Custom action to install extension via 'code --install-extension'
+    # Note: Uses [#VSCodeExtVsix] to get the installed filename dynamically
     CustomAction:
       - Id: 'InstallVSCodeExtension'
         Directory: 'INSTALLFOLDER'
-        ExeCommand: '"[VSCODE_PATH]bin\code.cmd" --install-extension "[VSCODEEXTDIR]wixer-vscode-0.1.0.vsix"'
+        ExeCommand: '"[VSCODE_PATH]bin\code.cmd" --install-extension "[#VSCodeExtVsix]"'
         Execute: 'deferred'
         Impersonate: 'yes'
         Return: 'ignore'
@@ -65,7 +66,7 @@ Wix:
       Custom:
         Action: 'InstallVSCodeExtension'
         After: 'InstallFiles'
-        Condition: 'VSCODE_PATH AND &amp;VSCodeExtension=3'
+        Condition: 'VSCODE_PATH AND &VSCodeExtension=3'
     Feature:
       - Id: 'ProductFeature'
         Title: 'Wixer CLI'
@@ -108,5 +109,5 @@ Wix:
           Guid: 'b2c3d4e5-f6a7-8901-2345-678901bcdef0'
           File:
             Id: 'VSCodeExtVsix'
-            Source: 'wixer-vscode/wixer-vscode-0.1.0.vsix'
+            Source: 'wixer-vscode/wixer-vscode-*.vsix'
             KeyPath: 'yes'

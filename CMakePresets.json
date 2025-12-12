@@ -53,6 +53,12 @@
       "displayName": "Export YAML to WiX XML",
       "configurePreset": "wixer-rel",
       "targets": ["wixer_yaml_export"]
+    },
+    {
+      "name": "vscode-extension",
+      "displayName": "Build VS Code Extension",
+      "configurePreset": "wixer-rel",
+      "targets": ["build_vscode_extension"]
     }
   ],
   "packagePresets": [
@@ -87,11 +93,15 @@
     {
       "name": "wixer-rel-pkg",
       "displayName": "Build & Package MSI",
-      "description": "Configure, export YAML, and build MSI package",
+      "description": "Configure, build VS Code extension, export YAML, and build MSI package",
       "steps": [
         {
           "type": "configure",
           "name": "wixer-rel"
+        },
+        {
+          "type": "build",
+          "name": "vscode-extension"
         },
         {
           "type": "build",
