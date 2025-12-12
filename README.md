@@ -72,7 +72,7 @@ Wix:
 | `describe` | Lookup WiX properties and variables |
 | `upgrade` | Upgrade WiX v3 syntax to v4/v6 |
 | `lsp` | Start Language Server Protocol server |
-| `init` | Download WiX schemas to cache |
+| `init` | Initialize schemas (downloads or extracts embedded) |
 
 See [docs/commands.md](docs/commands.md) for detailed command documentation.
 
@@ -132,6 +132,10 @@ logging:
 | Windows | `%APPDATA%\natyamatsya\wixer\config` | `%LOCALAPPDATA%\natyamatsya\wixer\cache` |
 | Linux | `~/.config/wixer` | `~/.cache/wixer` |
 | macOS | `~/Library/Application Support/com.natyamatsya.wixer` | `~/Library/Caches/com.natyamatsya.wixer` |
+
+### CI / Offline Usage
+
+Wixer embeds all required schemas and extension metadata at compile time. In CI environments without network access, `wixer init` automatically extracts embedded assets instead of downloading them.
 
 ## Building from Source
 

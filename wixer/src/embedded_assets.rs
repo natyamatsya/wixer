@@ -1,0 +1,190 @@
+//! Embedded assets for offline/CI operation.
+//!
+//! This module embeds all wixer assets as a compressed zip archive at compile
+//! time so wixer can function without network access (e.g., in CI environments).
+//!
+//! Contents of assets.zip:
+//! - `xml-schema/` - WiX XSD schemas
+//! - `msix-xsd-schema/` - MSIX XSD schemas  
+//! - `extensions/` - WiX extension metadata (custom actions, sequences, etc.)
+//! - `knowledge_base.json` - MSI property/variable documentation
+
+use anyhow::{Context, Result};
+use std::io::{Cursor, Read};
+use std::path::{Path, PathBuf};
+use tracing::info;
+use zip::ZipArchive;
+
+/// Embedded assets.zip containing all wixer assets
+const ASSETS_ZIP: &[u8] = include_bytes!("../assets/assets.zip");
+
+/// Extract embedded WiX schemas (xml-schema/*) to the specified directory.
+/// Returns the list of extracted file paths.
+pub fn extract_wix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
+    extract_schemas_by_prefix(output_dir, "xml-schema/")
+}
+
+/// Extract embedded MSIX schemas (msix-xsd-schema/*) to the specified directory.
+/// Returns the list of extracted file paths.
+pub fn extract_msix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
+    extract_schemas_by_prefix(output_dir, "msix-xsd-schema/")
+}
+
+/// Extract files from the embedded zip matching a given prefix.
+fn extract_schemas_by_prefix(output_dir: &Path, prefix: &str) -> Result<Vec<PathBuf>> {
+    std::fs::create_dir_all(output_dir)?;
+
+    let cursor = Cursor::new(ASSETS_ZIP);
+    let mut archive =
+        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+
+    let mut extracted = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let name = file.name().to_string();
+
+        // Skip directories and files not matching our prefix
+        if file.is_dir() || !name.starts_with(prefix) {
+            continue;
+        }
+
+        // Strip the prefix to get the relative path
+        let relative_path = name.strip_prefix(prefix).unwrap_or(&name);
+        let output_path = output_dir.join(relative_path);
+
+        // Create parent directories if needed
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // Read and write file contents
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+        std::fs::write(&output_path, &contents)
+            .with_context(|| format!("Failed to write {}", output_path.display()))?;
+
+        extracted.push(output_path);
+    }
+
+    info!(
+        count = extracted.len(),
+        prefix = prefix,
+        "Extracted embedded schemas to {}",
+        output_dir.display()
+    );
+    Ok(extracted)
+}
+
+/// Check if embedded assets are available (non-empty zip).
+pub fn has_embedded_assets() -> bool {
+    !ASSETS_ZIP.is_empty()
+}
+
+/// List all files in the embedded assets archive.
+pub fn list_embedded_assets() -> Result<Vec<String>> {
+    let cursor = Cursor::new(ASSETS_ZIP);
+    let mut archive =
+        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+
+    let mut files = Vec::new();
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        if !file.is_dir() {
+            files.push(file.name().to_string());
+        }
+    }
+    Ok(files)
+}
+
+/// Get the contents of a single file from the embedded assets.
+pub fn get_asset(path: &str) -> Result<Vec<u8>> {
+    let cursor = Cursor::new(ASSETS_ZIP);
+    let mut archive =
+        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+
+    let mut file = archive
+        .by_name(path)
+        .with_context(|| format!("Asset not found: {}", path))?;
+
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)?;
+    Ok(contents)
+}
+
+/// Get the contents of a single file from the embedded assets as a string.
+pub fn get_asset_str(path: &str) -> Result<String> {
+    let bytes = get_asset(path)?;
+    String::from_utf8(bytes).context("Asset is not valid UTF-8")
+}
+
+/// Get the knowledge_base.json content.
+pub fn get_knowledge_base() -> Result<String> {
+    get_asset_str("knowledge_base.json")
+}
+
+/// Get an extension JSON file by name (e.g., "util", "ui").
+pub fn get_extension(name: &str) -> Result<String> {
+    get_asset_str(&format!("extensions/{}.json", name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_embedded_assets_available() {
+        assert!(has_embedded_assets(), "Embedded assets.zip should not be empty");
+
+        let files = list_embedded_assets().expect("Should list embedded assets");
+        println!("Embedded schema files: {}", files.len());
+
+        let wix_count = files.iter().filter(|f| f.starts_with("xml-schema/")).count();
+        let msix_count = files.iter().filter(|f| f.starts_with("msix-xsd-schema/")).count();
+
+        println!("  WiX schemas: {}", wix_count);
+        println!("  MSIX schemas: {}", msix_count);
+
+        assert!(wix_count > 0, "Should have WiX schemas embedded");
+        assert!(msix_count > 0, "Should have MSIX schemas embedded");
+
+        // Check extensions and knowledge_base
+        let ext_count = files.iter().filter(|f| f.starts_with("extensions/")).count();
+        let has_kb = files.iter().any(|f| f == "knowledge_base.json");
+
+        println!("  Extensions: {}", ext_count);
+        println!("  Knowledge base: {}", has_kb);
+
+        assert!(ext_count > 0, "Should have extension JSON files embedded");
+        assert!(has_kb, "Should have knowledge_base.json embedded");
+    }
+
+    #[test]
+    fn test_extract_wix_schemas() {
+        let temp_dir = std::env::temp_dir().join("wixer_test_extract_wix");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let files = extract_wix_schemas(&temp_dir).expect("Should extract WiX schemas");
+        assert!(!files.is_empty(), "Should extract at least one WiX schema");
+
+        // Verify wix.xsd exists
+        assert!(
+            files.iter().any(|f| f.file_name().map(|n| n == "wix.xsd").unwrap_or(false)),
+            "Should have wix.xsd"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_get_knowledge_base() {
+        let kb = get_knowledge_base().expect("Should get knowledge_base.json");
+        assert!(kb.contains("ACTION"), "Knowledge base should contain MSI properties");
+    }
+
+    #[test]
+    fn test_get_extension() {
+        let util = get_extension("util").expect("Should get util.json");
+        assert!(util.contains("WixToolset.Util"), "Util extension should have correct ID");
+    }
+}

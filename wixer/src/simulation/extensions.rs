@@ -3,6 +3,7 @@
 //! Loads extension definitions from bundled JSON files extracted from WiX source.
 
 use super::model::{Action, CustomActionType, SequencePosition, SequenceTable};
+use crate::embedded_assets;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -229,20 +230,12 @@ impl ExtensionRegistry {
     }
 }
 
-/// Load a bundled extension from embedded JSON
+/// Load a bundled extension from embedded assets.zip
 fn load_bundled_extension(name: &str) -> Result<ExtractedExtension> {
-    let json = match name {
-        "util" => include_str!("../../assets/extensions/util.json"),
-        "ui" => include_str!("../../assets/extensions/ui.json"),
-        "netfx" => include_str!("../../assets/extensions/netfx.json"),
-        "iis" => include_str!("../../assets/extensions/iis.json"),
-        "sql" => include_str!("../../assets/extensions/sql.json"),
-        "firewall" => include_str!("../../assets/extensions/firewall.json"),
-        "bal" => include_str!("../../assets/extensions/bal.json"),
-        _ => anyhow::bail!("Unknown bundled extension: {}", name),
-    };
+    let json = embedded_assets::get_extension(name)
+        .with_context(|| format!("Failed to load bundled extension: {}", name))?;
 
-    serde_json::from_str(json).context("Failed to parse extension JSON")
+    serde_json::from_str(&json).context("Failed to parse extension JSON")
 }
 
 #[cfg(test)]

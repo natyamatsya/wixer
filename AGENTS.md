@@ -23,12 +23,15 @@ wixer/
 │   │   ├── config.rs       # Configuration loading (wixer.yaml)
 │   │   ├── dirs.rs         # Platform-specific directories
 │   │   ├── utils.rs        # Utility functions (project root, attributes)
+│   │   ├── embedded_assets.rs # Compile-time embedded assets (schemas, extensions)
 │   │   ├── wix_exit_codes.rs # WiX error ID → name mapping
 │   │   ├── validate.rs     # YAML validation against JSON Schema
 │   │   ├── project.rs      # Project file handling
 │   │   ├── example_config.rs # Gallery example configuration schema
 │   │   ├── schema_mapping_v3v4.rs # WiX v3→v4 upgrade mappings
 │   │   └── constants.rs    # File extensions, namespaces
+│   ├── assets/
+│   │   └── assets.zip      # Embedded assets (store-only zip for zero-copy access)
 │   ├── src/bin/
 │   │   └── gallery.rs      # Gallery test runner binary
 │   ├── examples/           # WiX example gallery
@@ -100,13 +103,26 @@ profiles:
 
 Global cache at `%LOCALAPPDATA%\natyamatsya\wixer\cache` (Windows) stores:
 
-- Downloaded WiX XSD schemas
+- Downloaded WiX XSD schemas (or extracted from embedded assets)
 - Generated JSON schemas for validation
 - `describe.json` knowledge base
-- WiX extension metadata (custom actions, properties, sequence entries)
 - `LICENSE.txt` with attribution for WiX Toolset and MSIX schemas
 
-Run `wixer init` to populate the cache.
+Run `wixer init` to populate the cache. In CI environments without network access, wixer automatically extracts embedded assets as a fallback.
+
+## Embedded Assets
+
+Wixer embeds all required assets at compile time in `assets/assets.zip` (store-only, no compression for zero-copy memory access):
+
+- `xml-schema/` — WiX XSD schemas (14 files)
+- `msix-xsd-schema/` — MSIX XSD schemas (54 files across year subdirs)
+- `extensions/` — WiX extension metadata JSON (custom actions, sequences, properties)
+- `knowledge_base.json` — MSI property/variable documentation
+
+The `embedded_assets` module provides:
+- `extract_wix_schemas()` / `extract_msix_schemas()` — Extract to cache directory
+- `get_extension(name)` / `get_knowledge_base()` — Direct access without extraction
+- `has_embedded_assets()` — Check availability
 
 ## Build System
 
@@ -160,6 +176,7 @@ The extension is bundled with the MSI installer as an optional feature that auto
 - `tracing` / `tracing-subscriber` – Logging
 - `walkdir` – Directory traversal
 - `regex` – Pattern matching
+- `zip` – Embedded asset extraction (store-only zip)
 
 ## Architecture Notes
 
@@ -170,6 +187,7 @@ The extension is bundled with the MSI installer as an optional feature that auto
 5. **MSI Simulation**: The `simulation/` module models MSI execution with condition evaluation, action sequencing, and install mode handling (FirstInstall, Upgrade, Uninstall, Repair, Maintenance).
 6. **LSP Diagnostics**: The LSP provides real-time diagnostics including orphan component detection, Publish order conflict warnings, and schema validation.
 7. **Auto Extension Detection**: `schema_mapping_v3v4.rs` detects required WiX extensions (Util, UI, IIS, NetFx) based on namespace prefixes and element usage.
+8. **Embedded Assets**: All schemas and extension metadata are embedded in the binary via `include_bytes!` with a store-only zip for zero-copy access. This enables CI operation without network access.
 
 ## Testing
 

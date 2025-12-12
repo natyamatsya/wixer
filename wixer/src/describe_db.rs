@@ -1,4 +1,5 @@
 use crate::dirs;
+use crate::embedded_assets;
 use crate::simulation::extensions::{ExtensionRegistry, ExtractedExtension};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -19,10 +20,11 @@ pub struct WixProperty {
 pub fn generate() -> Result<()> {
     info!("Generating description database...");
 
-    // 1. Load embedded properties
-    let embedded_json = include_str!("../assets/knowledge_base.json");
+    // 1. Load embedded properties from assets.zip
+    let embedded_json = embedded_assets::get_knowledge_base()
+        .context("Failed to load embedded knowledge base")?;
     let mut properties: Vec<WixProperty> =
-        serde_json::from_str(embedded_json).context("Failed to parse embedded knowledge base")?;
+        serde_json::from_str(&embedded_json).context("Failed to parse embedded knowledge base")?;
 
     // 2. Load properties from JSON schemas
     let cache_dir = dirs::get_cache_dir()?;

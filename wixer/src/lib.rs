@@ -25,6 +25,7 @@
 //! ```
 
 pub mod analysis;
+pub mod embedded_assets;
 pub mod commands;
 pub mod common;
 pub mod config;

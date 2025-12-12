@@ -1,13 +1,14 @@
 use crate::common::AttributeStrategy;
 use crate::describe_db;
 use crate::dirs;
+use crate::embedded_assets;
 use crate::xsd_to_json;
 use anyhow::{Context, Result};
 use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const LICENSE_TEXT: &str = r#"This cache contains schema files from the following sources:
 
@@ -53,9 +54,19 @@ pub async fn run(fresh: bool) -> Result<()> {
     // Write license attribution for cached schemas
     write_license_file(&cache_base)?;
 
-    let files = xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh)
-        .await
-        .context("Error downloading WiX schemas")?;
+    // Try downloading WiX schemas, fall back to embedded assets if download fails
+    let files = match xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh).await {
+        Ok(files) => files,
+        Err(e) => {
+            if embedded_assets::has_embedded_assets() {
+                warn!("Download failed, using embedded WiX schemas: {}", e);
+                embedded_assets::extract_wix_schemas(&xml_schema_dir)
+                    .context("Failed to extract embedded WiX schemas")?
+            } else {
+                return Err(e).context("Error downloading WiX schemas (no embedded fallback)");
+            }
+        }
+    };
 
     let mut all_attributes = HashSet::new();
     info!("Generating JSON schemas...");
@@ -91,10 +102,16 @@ pub async fn run(fresh: bool) -> Result<()> {
 
     info!("✓ Initialization complete");
 
-    // Download MSIX schemas
-    xsd_to_json::download_msix_schemas(&msix_schema_dir, fresh)
-        .await
-        .context("Error downloading MSIX schemas")?;
+    // Try downloading MSIX schemas, fall back to embedded assets if download fails
+    if let Err(e) = xsd_to_json::download_msix_schemas(&msix_schema_dir, fresh).await {
+        if embedded_assets::has_embedded_assets() {
+            warn!("Download failed, using embedded MSIX schemas: {}", e);
+            embedded_assets::extract_msix_schemas(&msix_schema_dir)
+                .context("Failed to extract embedded MSIX schemas")?;
+        } else {
+            error!("Failed to download MSIX schemas (no embedded fallback): {}", e);
+        }
+    }
 
     // Generate description database
     match describe_db::generate() {
