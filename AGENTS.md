@@ -61,7 +61,8 @@ wixer/
 | Command | Purpose |
 |---------|---------|
 | `wixer build <file.wxs.yaml>` | Convert YAML and invoke `wix build` |
-| `wixer init [--fresh]` | Initialize wixer (no-op; assets are embedded) |
+| `wixer assets --info` | Show embedded asset versions and embedded schema list |
+| `wixer assets --extract <dir>` | Extract embedded assets.zip to a directory |
 | `wixer import <dir> <out>` | Batch convert `.wxs` → `.wxs.yaml` |
 | `wixer export <dir> <out>` | Batch convert `.wxs.yaml` → `.wxs` |
 | `wixer describe <term>` | Lookup WiX properties/variables/custom actions |
@@ -101,7 +102,7 @@ profiles:
 
 ## Embedded Assets
 
-Wixer is fully self-contained — all assets are embedded at compile time in `assets/assets.zip` (store-only, no compression for zero-copy memory access). **No `wixer init` or network access is required.**
+Wixer is fully self-contained — all assets are embedded at compile time in `assets/assets.zip` (store-only, no compression for zero-copy memory access). **No network access or initialization step is required.**
 
 Contents of `assets.zip`:
 - `wix-v4-xsd-schemas/` — WiX v4 XSD schemas (14 files)

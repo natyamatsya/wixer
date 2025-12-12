@@ -1,10 +1,10 @@
+pub mod assets;
 pub mod analyze;
 pub mod build;
 pub mod describe;
 pub mod doc;
 pub mod export;
 pub mod import;
-pub mod init;
 pub mod lsp;
 pub mod map_schemas;
 pub mod migrate;

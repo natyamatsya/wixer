@@ -155,8 +155,8 @@ pub async fn run() -> Result<()> {
         Commands::Lsp => {
             commands::lsp::run().await?;
         }
-        Commands::Init { fresh } => {
-            commands::init::run(fresh).await?;
+        Commands::Assets { info, extract } => {
+            run_blocking(move || commands::assets::run(info, extract)).await?;
         }
     }
 
@@ -533,11 +533,15 @@ enum Commands {
         #[arg(long)]
         yaml_dir: Option<PathBuf>,
     },
-    /// Initialize wixer (no-op; assets are embedded)
-    Init {
-        /// Ignored (kept for backwards compatibility)
+    /// Inspect or extract embedded assets
+    Assets {
+        /// Print embedded asset versions and a summary of embedded contents
         #[arg(long)]
-        fresh: bool,
+        info: bool,
+
+        /// Extract all embedded assets to the specified output directory
+        #[arg(long)]
+        extract: Option<PathBuf>,
     },
     /// Recursively import WiX files from a directory
     Import {

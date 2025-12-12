@@ -23,7 +23,7 @@ Wixer is a Rust CLI tool that wraps the official WiX Toolset, enabling you to wr
 cargo install --path wixer
 
 # Optional: show embedded assets information
-wixer init
+wixer assets --info
 
 # Build MSI from YAML
 wixer build myproject.wxs.yaml -o myproject.msi
@@ -72,7 +72,7 @@ Wix:
 | `describe` | Lookup WiX properties and variables |
 | `upgrade` | Upgrade WiX v3 syntax to v4/v6 |
 | `lsp` | Start Language Server Protocol server |
-| `init` | Initialize wixer (no-op; assets are embedded) |
+| `assets` | Inspect or extract embedded assets |
 
 See [docs/commands.md](docs/commands.md) for detailed command documentation.
 

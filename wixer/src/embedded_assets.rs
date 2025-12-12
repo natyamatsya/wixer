@@ -30,6 +30,44 @@ pub fn extract_msix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
     extract_schemas_by_prefix(output_dir, "ms-msix-xsd-schemas/")
 }
 
+pub fn extract_all(output_dir: &Path) -> Result<Vec<PathBuf>> {
+    std::fs::create_dir_all(output_dir)?;
+
+    let cursor = Cursor::new(ASSETS_ZIP);
+    let mut archive =
+        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+
+    let mut extracted = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        if file.is_dir() {
+            continue;
+        }
+
+        let name = file.name().to_string();
+        let output_path = output_dir.join(&name);
+
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+        std::fs::write(&output_path, &contents)
+            .with_context(|| format!("Failed to write {}", output_path.display()))?;
+
+        extracted.push(output_path);
+    }
+
+    info!(
+        count = extracted.len(),
+        "Extracted embedded assets to {}",
+        output_dir.display()
+    );
+    Ok(extracted)
+}
+
 /// Extract files from the embedded zip matching a given prefix.
 fn extract_schemas_by_prefix(output_dir: &Path, prefix: &str) -> Result<Vec<PathBuf>> {
     std::fs::create_dir_all(output_dir)?;

@@ -19,7 +19,7 @@ To support that, Wixer embeds the following assets into the binary at compile ti
 ## Runtime behavior
 
 - Normal CLI usage does **not** require any prior initialization.
-- `wixer init` is retained for backwards compatibility and to display embedded asset information, but it does not download anything.
+- Use `wixer assets --info` to display embedded asset information.
 
 ### Commands that use embedded assets
 

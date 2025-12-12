@@ -152,25 +152,19 @@ Applies transformations to update deprecated elements and attributes to modern W
 
 ---
 
-## init
+## assets
 
-Initialize wixer (no-op; assets are embedded).
+Inspect or extract embedded assets.
 
 ```bash
-wixer init [options]
+wixer assets --info
+wixer assets --extract <output_dir>
 ```
 
 **Options:**
 
-- `--fresh` — Ignored (kept for backwards compatibility)
-
-**Example:**
-
-```bash
-wixer init --fresh
-```
-
-Prints information about embedded asset versions and available embedded schemas.
+- `--info` — Print embedded asset versions and a summary of embedded contents
+- `--extract <output_dir>` — Extract all embedded assets to the specified output directory
 
 ---
 
