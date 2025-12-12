@@ -26,6 +26,7 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/wixer-knowledge-base.json");
     println!("cargo:rerun-if-changed=assets/wix-v4-xsd-schemas");
     println!("cargo:rerun-if-changed=assets/ms-msix-xsd-schemas");
+    println!("cargo:rerun-if-changed=assets/generated");
 
     // Check if we need to rebuild the zip
     let sources = [
@@ -33,6 +34,7 @@ fn main() {
         assets_dir.join("wixer-knowledge-base.json"),
         assets_dir.join("wix-v4-xsd-schemas"),
         assets_dir.join("ms-msix-xsd-schemas"),
+        assets_dir.join("generated"),
     ];
 
     // Get the newest source modification time
@@ -65,9 +67,9 @@ fn main() {
                      - assets/ms-msix-xsd-schemas/\n\
                      - assets/wix-v4-extensions-json/\n\
                      - assets/wixer-knowledge-base.json\n\
+                     - assets/generated/\n\
                      \n\
-                     Run 'wixer init' first to download schemas, or ensure the \n\
-                     assets directories are populated."
+                     Run 'cargo run --bin prebuild-assets' to generate derived assets."
                 );
             }
             false // zip exists with content, no sources to compare

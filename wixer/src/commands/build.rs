@@ -210,7 +210,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 
     // Load known attributes
-    let known_attributes = load_known_attributes(None, true);
+    let known_attributes = load_known_attributes();
 
     let mut new_args = Vec::new();
     new_args.push("build".to_string());

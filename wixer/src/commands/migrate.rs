@@ -47,7 +47,7 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     if is_yaml {
         // Convert YAML to XML in temp directory
         let temp_dir = temp_dir.as_ref().unwrap();
-        let known_attributes = load_known_attributes(None, true);
+        let known_attributes = load_known_attributes();
 
         // Convert the input file
         let xml_filename = input

@@ -1,12 +1,10 @@
 use std::collections::HashSet;
 use std::env;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use tracing::warn;
 
-use crate::dirs;
+use crate::embedded_assets;
 
 /// Finds the project root by looking for markers like .git, wixer.yaml, or .wixer
 pub fn find_project_root() -> std::io::Result<PathBuf> {
@@ -53,48 +51,21 @@ pub fn find_configuration_file() -> Option<PathBuf> {
     None
 }
 
-/// Returns candidate locations for the known_attributes.json file in priority order.
-pub fn known_attributes_candidates(explicit: Option<&Path>) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-
-    if let Some(path) = explicit {
-        candidates.push(path.to_path_buf());
-    }
-
-    if let Ok(cache_dir) = dirs::get_cache_dir() {
-        candidates.push(cache_dir.join("known_attributes.json"));
-    }
-
-    candidates
-}
-
-pub fn load_known_attributes(
-    explicit: Option<&Path>,
-    warn_on_missing_inline: bool,
-) -> HashSet<String> {
-    for candidate in known_attributes_candidates(explicit) {
-        if !candidate.exists() {
-            continue;
-        }
-
-        match File::open(&candidate) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                match serde_json::from_reader(reader) {
-                    Ok(attrs) => return attrs,
-                    Err(e) => {
-                        warn!(file = %candidate.display(), "Failed to parse attributes file: {}", e)
-                    }
-                }
+/// Load known attributes from embedded assets.
+pub fn load_known_attributes() -> HashSet<String> {
+    match embedded_assets::get_known_attributes() {
+        Ok(json) => match serde_json::from_str(&json) {
+            Ok(attrs) => return attrs,
+            Err(e) => {
+                warn!("Failed to parse embedded known_attributes.json: {}", e);
             }
-            Err(e) => warn!(file = %candidate.display(), "Failed to open attributes file: {}", e),
+        },
+        Err(e) => {
+            warn!("Failed to load embedded known_attributes.json: {}", e);
         }
     }
 
-    if warn_on_missing_inline {
-        warn!("No known_attributes.json found. Using default attribute list.");
-    }
-
+    // Fallback to defaults if embedded assets fail
     let defaults = [
         "Id",
         "Name",

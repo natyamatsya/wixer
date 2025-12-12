@@ -43,3 +43,6 @@ wixer/assets/assets.zip
 # Downloaded schemas (not tracked, downloaded by wixer init)
 wixer/assets/wix-v4-xsd-schemas/
 wixer/assets/ms-msix-xsd-schemas/
+
+# Generated assets (built by prebuild-assets utility)
+wixer/assets/generated/

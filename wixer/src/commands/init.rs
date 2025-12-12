@@ -1,125 +1,30 @@
-use crate::common::AttributeStrategy;
-use crate::describe_db;
-use crate::dirs;
+//! Init command - now a no-op since all assets are embedded.
+//!
+//! This command is kept for backwards compatibility but no longer does anything
+//! since all schemas, JSON schemas, and the describe database are pre-generated
+//! and embedded in the wixer binary at compile time.
+
 use crate::embedded_assets;
-use crate::xsd_to_json;
-use anyhow::{Context, Result};
-use std::collections::{BTreeSet, HashSet};
-use std::fs::File;
-use std::io::BufWriter;
-use std::path::Path;
-use tracing::{error, info, warn};
+use anyhow::Result;
+use tracing::info;
 
-const LICENSE_TEXT: &str = r#"This cache contains schema files from the following sources:
-
-## WiX Toolset Schemas (xml-schema/, json-schema/)
-
-Copyright (c) .NET Foundation and contributors.
-Licensed under the Microsoft Reciprocal License (MS-RL).
-Source: https://github.com/wixtoolset/wix
-License: https://opensource.org/licenses/ms-rl
-
-## MSIX Packaging Schemas (msix-xsd-schema/)
-
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT License.
-Source: https://github.com/microsoft/msix-packaging
-"#;
-
-fn write_license_file(cache_dir: &Path) -> Result<()> {
-    let license_path = cache_dir.join("LICENSE.txt");
-    std::fs::write(&license_path, LICENSE_TEXT)
-        .with_context(|| format!("Failed to write license file: {}", license_path.display()))?;
-    Ok(())
-}
-
-pub async fn run(fresh: bool) -> Result<()> {
-    let cache_base = dirs::get_cache_dir().context("Error determining cache directory")?;
-
-    if !cache_base.exists() {
-        std::fs::create_dir_all(&cache_base)?;
+/// Run the init command.
+/// 
+/// This is now a no-op since all assets are embedded at compile time.
+/// The command is kept for backwards compatibility.
+pub async fn run(_fresh: bool) -> Result<()> {
+    info!("All assets are embedded in the wixer binary - no initialization needed.");
+    
+    // Show embedded asset versions
+    if let Ok(versions) = embedded_assets::get_versions() {
+        info!("Embedded asset versions:\n{}", versions);
     }
-
-    let xml_schema_dir = cache_base.join("xml-schema");
-    let msix_schema_dir = cache_base.join("msix-xsd-schema");
-    let json_schema_dir = cache_base.join("json-schema");
-    info!(cache = %cache_base.display(), "Initializing wixer schemas");
-
-    if fresh && cache_base.exists() {
-        info!("Clearing cache...");
-        std::fs::remove_dir_all(&cache_base).with_context(|| "Error clearing cache")?;
-        std::fs::create_dir_all(&cache_base)?;
+    
+    // List available schemas
+    if let Ok(schemas) = embedded_assets::list_json_schemas() {
+        info!("Available JSON schemas: {:?}", schemas);
     }
-
-    // Write license attribution for cached schemas
-    write_license_file(&cache_base)?;
-
-    // Try downloading WiX schemas, fall back to embedded assets if download fails
-    let files = match xsd_to_json::download_wix_schemas(&xml_schema_dir, fresh).await {
-        Ok(files) => files,
-        Err(e) => {
-            if embedded_assets::has_embedded_assets() {
-                warn!("Download failed, using embedded WiX schemas: {}", e);
-                embedded_assets::extract_wix_schemas(&xml_schema_dir)
-                    .context("Failed to extract embedded WiX schemas")?
-            } else {
-                return Err(e).context("Error downloading WiX schemas (no embedded fallback)");
-            }
-        }
-    };
-
-    let mut all_attributes = HashSet::new();
-    info!("Generating JSON schemas...");
-
-    for file in files {
-        match xsd_to_json::convert_xsd(
-            file.to_str().unwrap(),
-            None,
-            &json_schema_dir,
-            AttributeStrategy::Inline,
-            true,  // include_descriptions
-            false, // strict_mode
-            None,  // root_element
-        ) {
-            Ok(attrs) => all_attributes.extend(attrs),
-            Err(e) => {
-                error!(file = %file.display(), "Error converting {}: {}", file.display(), e)
-            }
-        }
-    }
-
-    // Save known attributes
-    if !all_attributes.is_empty() {
-        let sorted_attributes: BTreeSet<_> = all_attributes.into_iter().collect();
-        let attr_file = cache_base.join("known_attributes.json");
-        let file = File::create(&attr_file)
-            .with_context(|| format!("Failed to create {}", attr_file.display()))?;
-        let writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(writer, &sorted_attributes)
-            .context("Failed to write attributes")?;
-        info!("✓ Generated attribute list: {}", attr_file.display());
-    }
-
-    info!("✓ Initialization complete");
-
-    // Try downloading MSIX schemas, fall back to embedded assets if download fails
-    if let Err(e) = xsd_to_json::download_msix_schemas(&msix_schema_dir, fresh).await {
-        if embedded_assets::has_embedded_assets() {
-            warn!("Download failed, using embedded MSIX schemas: {}", e);
-            embedded_assets::extract_msix_schemas(&msix_schema_dir)
-                .context("Failed to extract embedded MSIX schemas")?;
-        } else {
-            error!("Failed to download MSIX schemas (no embedded fallback): {}", e);
-        }
-    }
-
-    // Generate description database
-    match describe_db::generate() {
-        Ok(_) => info!("Generated description database"),
-        Err(e) => {
-            error!("Failed to generate description database: {}", e);
-        }
-    }
-
+    
+    info!("✓ Wixer is ready to use.");
     Ok(())
 }

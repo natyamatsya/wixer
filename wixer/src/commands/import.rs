@@ -20,8 +20,7 @@ pub fn run(
 
     fs::create_dir_all(output_dir)?;
 
-    let known_attributes =
-        load_known_attributes(None, attribute_strategy == AttributeStrategy::Inline);
+    let known_attributes = load_known_attributes();
 
     let mut count = 0;
     let mut errors = 0;

@@ -133,6 +133,37 @@ pub fn get_versions() -> Result<String> {
     get_asset_str("versions.json")
 }
 
+/// Get the pre-generated describe.json database.
+pub fn get_describe_db() -> Result<String> {
+    get_asset_str("generated/describe.json")
+}
+
+/// Get the pre-generated known_attributes.json.
+pub fn get_known_attributes() -> Result<String> {
+    get_asset_str("generated/known_attributes.json")
+}
+
+/// Get a pre-generated JSON schema by name (e.g., "wix", "util").
+pub fn get_json_schema(name: &str) -> Result<String> {
+    get_asset_str(&format!("generated/json-schema/{}.schema.json", name))
+}
+
+/// List all available pre-generated JSON schemas.
+pub fn list_json_schemas() -> Result<Vec<String>> {
+    let files = list_embedded_assets()?;
+    Ok(files
+        .into_iter()
+        .filter(|f| f.starts_with("generated/json-schema/") && f.ends_with(".schema.json"))
+        .map(|f| {
+            f.strip_prefix("generated/json-schema/")
+                .unwrap_or(&f)
+                .strip_suffix(".schema.json")
+                .unwrap_or(&f)
+                .to_string()
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,5 +231,34 @@ mod tests {
         assert!(versions.contains("git_commit"), "Versions should have git_commit");
         assert!(versions.contains("wix-v4-xsd-schemas"), "Versions should have WiX schemas info");
         println!("Versions manifest:\n{}", versions);
+    }
+
+    #[test]
+    fn test_get_describe_db() {
+        let db = get_describe_db().expect("Should get describe.json");
+        assert!(db.contains("ACTION"), "Describe DB should contain MSI properties");
+        assert!(db.contains("CustomAction"), "Describe DB should contain custom actions");
+    }
+
+    #[test]
+    fn test_get_known_attributes() {
+        let attrs = get_known_attributes().expect("Should get known_attributes.json");
+        assert!(attrs.contains("Id"), "Should contain Id attribute");
+        assert!(attrs.contains("Name"), "Should contain Name attribute");
+    }
+
+    #[test]
+    fn test_get_json_schema() {
+        let wix_schema = get_json_schema("wix").expect("Should get wix.schema.json");
+        assert!(wix_schema.contains("definitions"), "Schema should have definitions");
+        assert!(wix_schema.contains("Package"), "Schema should have Package element");
+    }
+
+    #[test]
+    fn test_list_json_schemas() {
+        let schemas = list_json_schemas().expect("Should list JSON schemas");
+        println!("Available schemas: {:?}", schemas);
+        assert!(schemas.contains(&"wix".to_string()), "Should have wix schema");
+        assert!(schemas.contains(&"util".to_string()), "Should have util schema");
     }
 }

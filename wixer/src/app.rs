@@ -313,12 +313,9 @@ fn handle_yaml_to_wix(
     input_dir: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     attribute_strategy: AttributeStrategy,
-    attributes_file: Option<PathBuf>,
+    _attributes_file: Option<PathBuf>,
 ) -> Result<()> {
-    let known_attributes = load_known_attributes(
-        attributes_file.as_deref(),
-        attribute_strategy == AttributeStrategy::Inline,
-    );
+    let known_attributes = load_known_attributes();
 
     if let (Some(in_dir), Some(out_dir)) = (input_dir, output_dir) {
         yaml_to_wix::convert_directory(&in_dir, &out_dir, attribute_strategy, &known_attributes)?;
