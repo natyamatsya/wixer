@@ -4,10 +4,10 @@
 //! time so wixer can function without network access (e.g., in CI environments).
 //!
 //! Contents of assets.zip:
-//! - `xml-schema/` - WiX XSD schemas
-//! - `msix-xsd-schema/` - MSIX XSD schemas  
-//! - `extensions/` - WiX extension metadata (custom actions, sequences, etc.)
-//! - `knowledge_base.json` - MSI property/variable documentation
+//! - `wix-v4-xsd-schemas/` - WiX v4 XSD schemas
+//! - `ms-msix-xsd-schemas/` - Microsoft MSIX XSD schemas  
+//! - `wix-v4-extensions-json/` - WiX v4 extension metadata (custom actions, sequences, etc.)
+//! - `wixer-knowledge-base.json` - MSI property/variable documentation
 
 use anyhow::{Context, Result};
 use std::io::{Cursor, Read};
@@ -18,16 +18,16 @@ use zip::ZipArchive;
 /// Embedded assets.zip containing all wixer assets
 const ASSETS_ZIP: &[u8] = include_bytes!("../assets/assets.zip");
 
-/// Extract embedded WiX schemas (xml-schema/*) to the specified directory.
+/// Extract embedded WiX schemas (wix-v4-xsd-schemas/*) to the specified directory.
 /// Returns the list of extracted file paths.
 pub fn extract_wix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
-    extract_schemas_by_prefix(output_dir, "xml-schema/")
+    extract_schemas_by_prefix(output_dir, "wix-v4-xsd-schemas/")
 }
 
-/// Extract embedded MSIX schemas (msix-xsd-schema/*) to the specified directory.
+/// Extract embedded MSIX schemas (ms-msix-xsd-schemas/*) to the specified directory.
 /// Returns the list of extracted file paths.
 pub fn extract_msix_schemas(output_dir: &Path) -> Result<Vec<PathBuf>> {
-    extract_schemas_by_prefix(output_dir, "msix-xsd-schema/")
+    extract_schemas_by_prefix(output_dir, "ms-msix-xsd-schemas/")
 }
 
 /// Extract files from the embedded zip matching a given prefix.
@@ -118,14 +118,14 @@ pub fn get_asset_str(path: &str) -> Result<String> {
     String::from_utf8(bytes).context("Asset is not valid UTF-8")
 }
 
-/// Get the knowledge_base.json content.
+/// Get the wixer-knowledge-base.json content.
 pub fn get_knowledge_base() -> Result<String> {
-    get_asset_str("knowledge_base.json")
+    get_asset_str("wixer-knowledge-base.json")
 }
 
 /// Get an extension JSON file by name (e.g., "util", "ui").
 pub fn get_extension(name: &str) -> Result<String> {
-    get_asset_str(&format!("extensions/{}.json", name))
+    get_asset_str(&format!("wix-v4-extensions-json/{}.json", name))
 }
 
 #[cfg(test)]
@@ -139,8 +139,8 @@ mod tests {
         let files = list_embedded_assets().expect("Should list embedded assets");
         println!("Embedded schema files: {}", files.len());
 
-        let wix_count = files.iter().filter(|f| f.starts_with("xml-schema/")).count();
-        let msix_count = files.iter().filter(|f| f.starts_with("msix-xsd-schema/")).count();
+        let wix_count = files.iter().filter(|f| f.starts_with("wix-v4-xsd-schemas/")).count();
+        let msix_count = files.iter().filter(|f| f.starts_with("ms-msix-xsd-schemas/")).count();
 
         println!("  WiX schemas: {}", wix_count);
         println!("  MSIX schemas: {}", msix_count);
@@ -149,8 +149,8 @@ mod tests {
         assert!(msix_count > 0, "Should have MSIX schemas embedded");
 
         // Check extensions and knowledge_base
-        let ext_count = files.iter().filter(|f| f.starts_with("extensions/")).count();
-        let has_kb = files.iter().any(|f| f == "knowledge_base.json");
+        let ext_count = files.iter().filter(|f| f.starts_with("wix-v4-extensions-json/")).count();
+        let has_kb = files.iter().any(|f| f == "wixer-knowledge-base.json");
 
         println!("  Extensions: {}", ext_count);
         println!("  Knowledge base: {}", has_kb);

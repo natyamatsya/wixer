@@ -1,0 +1,104 @@
+{
+  "license": {
+    "notice": "Copyright (c) .NET Foundation and contributors. Licensed under the Microsoft Reciprocal License (MS-RL).",
+    "source": "https://github.com/wixtoolset/wix",
+    "spdx_id": "MS-RL"
+  },
+  "id": "WixToolset.Sql.wixext",
+  "namespace": "http://wixtoolset.org/schemas/v4/wxs/sql",
+  "custom_actions": [
+    {
+      "id": "Wix4InstallSqlData_X64",
+      "dll_entry": "InstallSqlData",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UninstallSqlData_X64",
+      "dll_entry": "UninstallSqlData",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CreateDatabase_X64",
+      "dll_entry": "CreateDatabase",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackCreateDatabase_X64",
+      "dll_entry": "DropDatabase",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4DropDatabase_X64",
+      "dll_entry": "DropDatabase",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ExecuteSqlStrings_X64",
+      "dll_entry": "ExecuteSqlStrings",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackExecuteSqlStrings_X64",
+      "dll_entry": "ExecuteSqlStrings",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "SqlCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    }
+  ],
+  "sequence_entries": [
+    {
+      "action": "Wix4UninstallSqlData_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveFiles",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4InstallSqlData_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFiles",
+      "condition": null,
+      "overridable": true
+    }
+  ],
+  "publish_entries": [],
+  "properties": [],
+  "binaries": [
+    "SqlCA_X64"
+  ]
+}

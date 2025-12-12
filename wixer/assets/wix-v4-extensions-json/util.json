@@ -1,0 +1,1330 @@
+{
+  "license": {
+    "notice": "Copyright (c) .NET Foundation and contributors. Licensed under the Microsoft Reciprocal License (MS-RL).",
+    "source": "https://github.com/wixtoolset/wix",
+    "spdx_id": "MS-RL"
+  },
+  "id": "WixToolset.Util.wixext",
+  "namespace": "http://wixtoolset.org/schemas/v4/wxs/util",
+  "custom_actions": [
+    {
+      "id": "Wix4FailWhenDeferred_X64",
+      "dll_entry": "WixFailWhenDeferred",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4WaitForEvent_X64",
+      "dll_entry": "WixWaitForEvent",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4WaitForEventDeferred_X64",
+      "dll_entry": "WixWaitForEvent",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExitEarlyWithSuccess_X64",
+      "dll_entry": "WixExitEarlyWithSuccess",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RemoveFoldersEx_X64",
+      "dll_entry": "WixRemoveFoldersEx",
+      "execute": "immediate",
+      "return": "ignore",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RemoveRegistryKeysEx_X64",
+      "dll_entry": "WixRemoveRegistryKeysEx",
+      "execute": "immediate",
+      "return": "ignore",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4BroadcastSettingChange_X64",
+      "dll_entry": "WixBroadcastSettingChange",
+      "execute": "immediate",
+      "return": "ignore",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4BroadcastEnvironmentChange_X64",
+      "dll_entry": "WixBroadcastEnvironmentChange",
+      "execute": "immediate",
+      "return": "ignore",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ShellExecBinary_X64",
+      "dll_entry": "WixShellExecBinary",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ShellExec_X64",
+      "dll_entry": "WixShellExec",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UnelevatedShellExec_X64",
+      "dll_entry": "WixUnelevatedShellExec",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QuietExec_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QuietExec64_X64",
+      "dll_entry": "WixQuietExec64",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4SilentExec_X64",
+      "dll_entry": "WixSilentExec",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4SilentExec64_X64",
+      "dll_entry": "WixSilentExec64",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CheckRebootRequired_X64",
+      "dll_entry": "WixCheckRebootRequired",
+      "execute": "immediate",
+      "return": "ignore",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CloseApplications_X64",
+      "dll_entry": "WixCloseApplications",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CloseApplicationsDeferred_X64",
+      "dll_entry": "WixCloseApplicationsDeferred",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RegisterRestartResources_X64",
+      "dll_entry": "WixRegisterRestartResources",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6ConfigureGroups_X64",
+      "dll_entry": "ConfigureGroups",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6CreateGroup_X64",
+      "dll_entry": "CreateGroup",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6CreateGroupRollback_X64",
+      "dll_entry": "CreateGroupRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6RemoveGroup_X64",
+      "dll_entry": "RemoveGroup",
+      "execute": "commit",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6CreateDomainGroup_X64",
+      "dll_entry": "CreateGroup",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6CreateDomainGroupRollback_X64",
+      "dll_entry": "CreateGroupRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6RemoveDomainGroup_X64",
+      "dll_entry": "RemoveGroup",
+      "execute": "commit",
+      "return": "ignore",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6AddGroupMembership_X64",
+      "dll_entry": "AddGroupMembership",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6AddGroupMembershipRollback_X64",
+      "dll_entry": "AddGroupMembershipRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6RemoveGroupMembership_X64",
+      "dll_entry": "RemoveGroupMembership",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6RemoveGroupMembershipRollback_X64",
+      "dll_entry": "RemoveGroupMembershipRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6AddDomainGroupMembership_X64",
+      "dll_entry": "AddGroupMembership",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6AddDomainGroupMembershipRollback_X64",
+      "dll_entry": "AddGroupMembershipRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6RemoveDomainGroupMembership_X64",
+      "dll_entry": "RemoveGroupMembership",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix6RemoveDomainGroupMembershipRollback_X64",
+      "dll_entry": "RemoveGroupMembershipRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "yes",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigureUsers_X64",
+      "dll_entry": "ConfigureUsers",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CreateUser_X64",
+      "dll_entry": "CreateUser",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4CreateUserRollback_X64",
+      "dll_entry": "CreateUserRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RemoveUser_X64",
+      "dll_entry": "RemoveUser",
+      "execute": "commit",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ConfigureSmbInstall_X64",
+      "dll_entry": "ConfigureSmbInstall",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigureSmbUninstall_X64",
+      "dll_entry": "ConfigureSmbUninstall",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CreateSmb_X64",
+      "dll_entry": "CreateSmb",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4CreateSmbRollback_X64",
+      "dll_entry": "DropSmb",
+      "execute": "rollback",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4DropSmb_X64",
+      "dll_entry": "DropSmb",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4DropSmbRollback_X64",
+      "dll_entry": "CreateSmb",
+      "execute": "rollback",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4InstallPerfCounterData_X64",
+      "dll_entry": "InstallPerfCounterData",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UninstallPerfCounterData_X64",
+      "dll_entry": "UninstallPerfCounterData",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RegisterPerfCounterData_X64",
+      "dll_entry": "RegisterPerfCounterData",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4UnregisterPerfCounterData_X64",
+      "dll_entry": "UnregisterPerfCounterData",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackRegisterPerfCounterData_X64",
+      "dll_entry": "UnregisterPerfCounterData",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4RollbackUnregisterPerfCounterData_X64",
+      "dll_entry": "RegisterPerfCounterData",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ConfigurePerfmonInstall_X64",
+      "dll_entry": "ConfigurePerfmonInstall",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigurePerfmonUninstall_X64",
+      "dll_entry": "ConfigurePerfmonUninstall",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RegisterPerfmon_X64",
+      "dll_entry": "RegisterPerfmon",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UnregisterPerfmon_X64",
+      "dll_entry": "UnregisterPerfmon",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackRegisterPerfmon_X64",
+      "dll_entry": "UnregisterPerfmon",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackUnregisterPerfmon_X64",
+      "dll_entry": "RegisterPerfmon",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigurePerfmonManifestRegister_X64",
+      "dll_entry": "ConfigurePerfmonManifestRegister",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigurePerfmonManifestUnregister_X64",
+      "dll_entry": "ConfigurePerfmonManifestUnregister",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RegisterPerfmonManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UnregisterPerfmonManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "deferred",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackRegisterPerfmonManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "rollback",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackUnregisterPerfmonManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigureEventManifestRegister_X64",
+      "dll_entry": "ConfigureEventManifestRegister",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ConfigureEventManifestUnregister_X64",
+      "dll_entry": "ConfigureEventManifestUnregister",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RegisterEventManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4UnregisterEventManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "deferred",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackRegisterEventManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "rollback",
+      "return": "ignore",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackUnregisterEventManifest_X64",
+      "dll_entry": "WixQuietExec",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4SchedServiceConfig_X64",
+      "dll_entry": "SchedServiceConfig",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExecServiceConfig_X64",
+      "dll_entry": "ExecServiceConfig",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackServiceConfig_X64",
+      "dll_entry": "RollbackServiceConfig",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4TouchFileDuringInstall_X64",
+      "dll_entry": "WixTouchFileDuringInstall",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4TouchFileDuringUninstall_X64",
+      "dll_entry": "WixTouchFileDuringUninstall",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExecuteTouchFile_X64",
+      "dll_entry": "WixExecuteTouchFile",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackTouchFile_X64",
+      "dll_entry": "WixExecuteTouchFile",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4SchedXmlFile_X64",
+      "dll_entry": "SchedXmlFile",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExecXmlFile_X64",
+      "dll_entry": "ExecXmlFile",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ExecXmlFileRollback_X64",
+      "dll_entry": "ExecXmlFileRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4SchedXmlConfig_X64",
+      "dll_entry": "SchedXmlConfig",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExecXmlConfig_X64",
+      "dll_entry": "ExecXmlConfig",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ExecXmlConfigRollback_X64",
+      "dll_entry": "ExecXmlConfigRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4SchedInternetShortcuts_X64",
+      "dll_entry": "WixSchedInternetShortcuts",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackInternetShortcuts_X64",
+      "dll_entry": "WixRollbackInternetShortcuts",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4CreateInternetShortcuts_X64",
+      "dll_entry": "WixCreateInternetShortcuts",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4SchedSecureObjects_X64",
+      "dll_entry": "SchedSecureObjects",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4SchedSecureObjectsRollback_X64",
+      "dll_entry": "SchedSecureObjectsRollback",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExecSecureObjects_X64",
+      "dll_entry": "ExecSecureObjects",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4ExecSecureObjectsRollback_X64",
+      "dll_entry": "ExecSecureObjectsRollback",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": true
+    },
+    {
+      "id": "Wix4SchedFormatFiles_X64",
+      "dll_entry": "WixSchedFormatFiles",
+      "execute": "immediate",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4ExecFormatFiles_X64",
+      "dll_entry": "WixExecFormatFiles",
+      "execute": "deferred",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4RollbackFormatFiles_X64",
+      "dll_entry": "WixExecFormatFiles",
+      "execute": "rollback",
+      "return": "check",
+      "impersonate": "no",
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QueryOsInfo_X64",
+      "dll_entry": "WixQueryOsInfo",
+      "execute": "firstSequence",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QueryOsDirs_X64",
+      "dll_entry": "WixQueryOsDirs",
+      "execute": "firstSequence",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QueryOsWellKnownSID_X64",
+      "dll_entry": "WixQueryOsWellKnownSID",
+      "execute": "firstSequence",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QueryOsDriverInfo_X64",
+      "dll_entry": "WixQueryOsDriverInfo",
+      "execute": "firstSequence",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    },
+    {
+      "id": "Wix4QueryNativeMachine_X64",
+      "dll_entry": "WixQueryNativeMachine",
+      "execute": "firstSequence",
+      "return": "check",
+      "impersonate": null,
+      "binary_ref": "Wix4UtilCA_X64",
+      "suppress_modularization": true,
+      "hide_target": false
+    }
+  ],
+  "sequence_entries": [
+    {
+      "action": "Wix4FailWhenDeferred_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "InstallFinalize",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4WaitForEvent_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "InstallFinalize",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4WaitForEventDeferred_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallInitialize",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ExitEarlyWithSuccess_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "FindRelatedProducts",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4RemoveFoldersEx_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "CostInitialize",
+      "after": null,
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "Wix4RemoveRegistryKeysEx_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveRegistryValues",
+      "after": null,
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "Wix4BroadcastSettingChange_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFinalize",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4BroadcastEnvironmentChange_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFinalize",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4CheckRebootRequired_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFinalize",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4CloseApplications_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "InstallFiles",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4RegisterRestartResources_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "InstallValidate",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix6ConfigureGroups_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "InstallFiles",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigureUsers_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "InstallFiles",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigureSmbInstall_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFiles",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigureSmbUninstall_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "RemoveFiles",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4InstallPerfCounterData_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WriteRegistryValues",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4UninstallPerfCounterData_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveRegistryValues",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigurePerfmonInstall_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WriteRegistryValues",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigurePerfmonUninstall_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveRegistryValues",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigurePerfmonManifestRegister_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFiles",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigurePerfmonManifestUnregister_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "RemoveRegistryValues",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigureEventManifestRegister_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "Wix4SchedXmlFile_X64",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4ConfigureEventManifestUnregister_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "RemoveRegistryValues",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedServiceConfig_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallServices",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4TouchFileDuringUninstall_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveFiles",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4TouchFileDuringInstall_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFiles",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedXmlFile_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "DuplicateFiles",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedXmlConfig_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "DuplicateFiles",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedInternetShortcuts_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "RemoveFolders",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4RollbackInternetShortcuts_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "Wix4CreateInternetShortcuts_X64",
+      "after": null,
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4CreateInternetShortcuts_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "CreateShortcuts",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedSecureObjects_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallServices",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedSecureObjectsRollback_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "UnpublishFeatures",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4SchedFormatFiles_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "InstallFiles",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "Wix4QueryOsInfo_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsInfo_X64",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsDirs_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsDirs_X64",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsWellKnownSID_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsWellKnownSID_X64",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsDriverInfo_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryOsDriverInfo_X64",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryNativeMachine_X64",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    },
+    {
+      "action": "Wix4QueryNativeMachine_X64",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "AppSearch",
+      "condition": null,
+      "overridable": true
+    }
+  ],
+  "publish_entries": [],
+  "properties": [],
+  "binaries": [
+    "Wix4UtilCA_X64"
+  ]
+}

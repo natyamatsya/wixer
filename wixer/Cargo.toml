@@ -45,3 +45,6 @@ directories = "6.0.0"
 uuid = { version = "1.19.0", features = ["v4"] }
 which = "7.0"
 rayon = "1.11.0"
+
+[build-dependencies]
+zip = "6.0.0"

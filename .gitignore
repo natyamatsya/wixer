@@ -36,3 +36,10 @@ wixer/examples/gallery/msi/
 
 # wixer-yaml/ is the curated gallery - tracked in git
 # !wixer/examples/wixer-yaml/
+
+# Generated assets.zip (built by build.rs from source assets)
+wixer/assets/assets.zip
+
+# Downloaded schemas (not tracked, downloaded by wixer init)
+wixer/assets/wix-v4-xsd-schemas/
+wixer/assets/ms-msix-xsd-schemas/

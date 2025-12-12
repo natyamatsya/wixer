@@ -1,0 +1,1045 @@
+{
+  "license": {
+    "notice": "Copyright (c) .NET Foundation and contributors. Licensed under the Microsoft Reciprocal License (MS-RL).",
+    "source": "https://github.com/wixtoolset/wix",
+    "spdx_id": "MS-RL"
+  },
+  "id": "WixToolset.UI.wixext",
+  "namespace": "http://wixtoolset.org/schemas/v4/wxs/ui",
+  "custom_actions": [
+    {
+      "id": "WixSetDefaultPerUserFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetDefaultPerMachineFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetDefaultPerMachine64Folder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetPerUserFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    },
+    {
+      "id": "WixSetPerMachineFolder",
+      "dll_entry": null,
+      "execute": "immediate",
+      "return": null,
+      "impersonate": null,
+      "binary_ref": null,
+      "suppress_modularization": false,
+      "hide_target": false
+    }
+  ],
+  "sequence_entries": [
+    {
+      "action": "WixSetDefaultPerUserFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": "CostFinalize",
+      "after": null,
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetDefaultPerMachineFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetDefaultPerUserFolder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetDefaultPerMachine64Folder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachineFolder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetPerUserFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachine64Folder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetPerMachineFolder",
+      "sequence_table": "InstallExecuteSequence",
+      "before": null,
+      "after": "WixSetPerUserFolder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetDefaultPerUserFolder",
+      "sequence_table": "InstallUISequence",
+      "before": "CostFinalize",
+      "after": null,
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetDefaultPerMachineFolder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetDefaultPerUserFolder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetDefaultPerMachine64Folder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachineFolder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetPerUserFolder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetDefaultPerMachine64Folder",
+      "condition": null,
+      "overridable": false
+    },
+    {
+      "action": "WixSetPerMachineFolder",
+      "sequence_table": "InstallUISequence",
+      "before": null,
+      "after": "WixSetPerUserFolder",
+      "condition": null,
+      "overridable": false
+    }
+  ],
+  "publish_entries": [
+    {
+      "dialog": "ExitDialog",
+      "control": "Finish",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 999,
+      "condition": null
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "LicenseAgreementDlg",
+      "property": null,
+      "order": null,
+      "condition": "NOT Installed"
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "LicenseAgreementDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "LicenseAgreementDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": null,
+      "condition": "LicenseAccepted = \"1\""
+    },
+    {
+      "dialog": "CustomizeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": 1,
+      "condition": "Installed"
+    },
+    {
+      "dialog": "CustomizeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "LicenseAgreementDlg",
+      "property": null,
+      "order": 2,
+      "condition": "NOT Installed"
+    },
+    {
+      "dialog": "CustomizeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "SetTargetPath",
+      "value": "[_BrowseProperty]",
+      "property": null,
+      "order": 3,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 4,
+      "condition": null
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": 1,
+      "condition": "NOT Installed OR WixUI_InstallMode = \"Change\""
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "Installed AND NOT PATCH"
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": 3,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "MaintenanceWelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "ChangeButton",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RepairButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RemoveButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceWelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "ExitDialog",
+      "control": "Finish",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 999,
+      "condition": null
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "LicenseAgreementDlg",
+      "property": null,
+      "order": null,
+      "condition": "NOT Installed AND NOT PATCH"
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "LicenseAgreementDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "LicenseAgreementDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "SetupTypeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "LicenseAccepted = \"1\""
+    },
+    {
+      "dialog": "SetupTypeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "LicenseAgreementDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "SetupTypeDlg",
+      "control": "TypicalButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "SetupTypeDlg",
+      "control": "CustomButton",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "SetupTypeDlg",
+      "control": "CompleteButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "CustomizeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": 1,
+      "condition": "WixUI_InstallMode = \"Change\""
+    },
+    {
+      "dialog": "CustomizeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "SetupTypeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "WixUI_InstallMode = \"InstallCustom\""
+    },
+    {
+      "dialog": "CustomizeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "SetTargetPath",
+      "value": "[_BrowseProperty]",
+      "property": null,
+      "order": 3,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 4,
+      "condition": null
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": 1,
+      "condition": "WixUI_InstallMode = \"InstallCustom\""
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "SetupTypeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "WixUI_InstallMode = \"InstallTypical\" OR WixUI_InstallMode = \"InstallComplete\""
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": 3,
+      "condition": "WixUI_InstallMode = \"Change\""
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": 4,
+      "condition": "WixUI_InstallMode = \"Repair\" OR WixUI_InstallMode = \"Remove\""
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "WixUI_InstallMode = \"Update\""
+    },
+    {
+      "dialog": "MaintenanceWelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "ChangeButton",
+      "event": "NewDialog",
+      "value": "CustomizeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RepairButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RemoveButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceWelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "ExitDialog",
+      "control": "Finish",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 999,
+      "condition": null
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "LicenseAgreementDlg",
+      "property": null,
+      "order": null,
+      "condition": "NOT Installed"
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "LicenseAgreementDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "LicenseAgreementDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "InstallDirDlg",
+      "property": null,
+      "order": null,
+      "condition": "LicenseAccepted = \"1\""
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "LicenseAgreementDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "Next",
+      "event": "SetTargetPath",
+      "value": "[WIXUI_INSTALLDIR]",
+      "property": null,
+      "order": 3,
+      "condition": null
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "ChangeFolder",
+      "event": null,
+      "value": "[WIXUI_INSTALLDIR]",
+      "property": "_BrowseProperty",
+      "order": 1,
+      "condition": null
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "ChangeFolder",
+      "event": "SpawnDialog",
+      "value": "BrowseDlg",
+      "property": null,
+      "order": 2,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "SetTargetPath",
+      "value": "[_BrowseProperty]",
+      "property": null,
+      "order": 3,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 4,
+      "condition": null
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "InstallDirDlg",
+      "property": null,
+      "order": 1,
+      "condition": "NOT Installed"
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "Installed AND NOT PATCH"
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "MaintenanceWelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RepairButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RemoveButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceWelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "ExitDialog",
+      "control": "Finish",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 999,
+      "condition": null
+    },
+    {
+      "dialog": "AdvancedWelcomeEulaDlg",
+      "control": "Advanced",
+      "event": "NewDialog",
+      "value": "InstallScopeDlg",
+      "property": null,
+      "order": 1,
+      "condition": "!(wix.WixUISupportPerMachine) AND !(wix.WixUISupportPerUser)"
+    },
+    {
+      "dialog": "AdvancedWelcomeEulaDlg",
+      "control": "Advanced",
+      "event": "NewDialog",
+      "value": "FeaturesDlg",
+      "property": null,
+      "order": 2,
+      "condition": "NOT !(wix.WixUISupportPerMachine)"
+    },
+    {
+      "dialog": "AdvancedWelcomeEulaDlg",
+      "control": "Advanced",
+      "event": "NewDialog",
+      "value": "InstallDirDlg",
+      "property": null,
+      "order": 3,
+      "condition": "!(wix.WixUISupportPerMachine) AND NOT !(wix.WixUISupportPerUser)"
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "AdvancedWelcomeEulaDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": null,
+      "value": "WixPerUserFolder",
+      "property": "WixAppFolder",
+      "order": 1,
+      "condition": "!(wix.WixUISupportPerUser) AND NOT Privileged"
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": null,
+      "value": "{}",
+      "property": "ALLUSERS",
+      "order": 2,
+      "condition": "WixAppFolder = \"WixPerUserFolder\""
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": null,
+      "value": "1",
+      "property": "ALLUSERS",
+      "order": 3,
+      "condition": "WixAppFolder = \"WixPerMachineFolder\""
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": null,
+      "value": "[WixPerUserFolder]",
+      "property": "APPLICATIONFOLDER",
+      "order": 4,
+      "condition": "WixAppFolder = \"WixPerUserFolder\""
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": null,
+      "value": "[WixPerMachineFolder]",
+      "property": "APPLICATIONFOLDER",
+      "order": 5,
+      "condition": "WixAppFolder = \"WixPerMachineFolder\""
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "FeaturesDlg",
+      "property": null,
+      "order": 6,
+      "condition": "WixAppFolder = \"WixPerUserFolder\""
+    },
+    {
+      "dialog": "InstallScopeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "InstallDirDlg",
+      "property": null,
+      "order": 7,
+      "condition": "WixAppFolder = \"WixPerMachineFolder\""
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "InstallScopeDlg",
+      "property": null,
+      "order": null,
+      "condition": "!(wix.WixUISupportPerUser)"
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "AdvancedWelcomeEulaDlg",
+      "property": null,
+      "order": null,
+      "condition": "NOT !(wix.WixUISupportPerUser)"
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "Next",
+      "event": "SetTargetPath",
+      "value": "[WIXUI_INSTALLDIR]",
+      "property": null,
+      "order": 3,
+      "condition": null
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "ChangeFolder",
+      "event": null,
+      "value": "[WIXUI_INSTALLDIR]",
+      "property": "_BrowseProperty",
+      "order": 1,
+      "condition": null
+    },
+    {
+      "dialog": "InstallDirDlg",
+      "control": "ChangeFolder",
+      "event": "SpawnDialog",
+      "value": "BrowseDlg",
+      "property": null,
+      "order": 2,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "SetTargetPath",
+      "value": "[_BrowseProperty]",
+      "property": null,
+      "order": 3,
+      "condition": null
+    },
+    {
+      "dialog": "BrowseDlg",
+      "control": "OK",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 4,
+      "condition": null
+    },
+    {
+      "dialog": "FeaturesDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "InstallScopeDlg",
+      "property": null,
+      "order": null,
+      "condition": "NOT Installed AND WixAppFolder = \"WixPerUserFolder\""
+    },
+    {
+      "dialog": "FeaturesDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "InstallDirDlg",
+      "property": null,
+      "order": null,
+      "condition": "NOT Installed AND WixAppFolder = \"WixPerMachineFolder\""
+    },
+    {
+      "dialog": "FeaturesDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": "Installed"
+    },
+    {
+      "dialog": "MaintenanceWelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "ChangeButton",
+      "event": "NewDialog",
+      "value": "FeaturesDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RepairButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RemoveButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceWelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "Installed AND NOT PATCH"
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": 3,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "ExitDialog",
+      "control": "Finish",
+      "event": "EndDialog",
+      "value": "Return",
+      "property": null,
+      "order": 999,
+      "condition": null
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceWelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "MaintenanceTypeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RepairButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "RemoveButton",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "MaintenanceTypeDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "MaintenanceWelcomeDlg",
+      "property": null,
+      "order": null,
+      "condition": null
+    },
+    {
+      "dialog": "WelcomeDlg",
+      "control": "Next",
+      "event": "NewDialog",
+      "value": "VerifyReadyDlg",
+      "property": null,
+      "order": null,
+      "condition": "Installed AND PATCH"
+    },
+    {
+      "dialog": "VerifyReadyDlg",
+      "control": "Back",
+      "event": "NewDialog",
+      "value": "WelcomeDlg",
+      "property": null,
+      "order": 2,
+      "condition": "Installed AND PATCH"
+    }
+  ],
+  "properties": [
+    "DefaultUIFont",
+    "BURNMSIMODIFY",
+    "BURNMSIREPAIR",
+    "BURNMSIUNINSTALL",
+    "WixUIRMOption",
+    "ARPNOMODIFY",
+    "ErrorDialog",
+    "WIXUI_INSTALLDIR"
+  ],
+  "binaries": [
+    "WixUI_Bmp_Banner",
+    "WixUI_Bmp_Dialog",
+    "WixUI_Ico_Exclam",
+    "WixUI_Ico_Info",
+    "WixUI_Bmp_New",
+    "WixUI_Bmp_Up"
+  ]
+}
