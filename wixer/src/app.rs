@@ -86,12 +86,13 @@ pub async fn run() -> Result<()> {
             run_blocking(move || handle_wix_to_yaml(input, output, attribute_strategy)).await?;
         }
         Commands::Validate {
-            schema,
+            input,
             yaml,
+            schema,
             schema_dir,
             yaml_dir,
         } => {
-            run_blocking(move || handle_validate(schema, yaml, schema_dir, yaml_dir)).await?;
+            run_blocking(move || handle_validate(input, yaml, schema, schema_dir, yaml_dir)).await?;
         }
         Commands::Import {
             input_dir,
@@ -347,8 +348,9 @@ fn handle_wix_to_yaml(
 }
 
 fn handle_validate(
-    schema: Option<PathBuf>,
+    input: Option<PathBuf>,
     yaml: Option<PathBuf>,
+    schema: Option<PathBuf>,
     schema_dir: Option<PathBuf>,
     yaml_dir: Option<PathBuf>,
 ) -> Result<()> {
@@ -356,11 +358,67 @@ fn handle_validate(
         return validate::validate_directory(&s_dir, &y_dir).context("Error validating directory");
     }
 
-    if let (Some(schema_path), Some(yaml_path)) = (schema, yaml) {
-        return validate::validate_file(&schema_path, &yaml_path).context("Validation failed");
+    fn looks_like_yaml(path: &std::path::Path) -> bool {
+        path.extension()
+            .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("yaml"))
     }
 
-    bail!("Either provide schema and yaml files, or use --schema-dir and --yaml-dir");
+    fn looks_like_json(path: &std::path::Path) -> bool {
+        path.extension()
+            .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("json"))
+    }
+
+    match (input, yaml) {
+        // Legacy positional support: `wixer validate <schema.json> <file.yaml>`
+        // Also accept `wixer validate <file.yaml> <schema.json>`.
+        (Some(first), Some(second)) => {
+            if schema.is_some() {
+                bail!("Do not combine positional schema arguments with --schema");
+            }
+
+            let first_is_yaml = looks_like_yaml(&first);
+            let second_is_yaml = looks_like_yaml(&second);
+            let first_is_json = looks_like_json(&first);
+            let second_is_json = looks_like_json(&second);
+
+            if first_is_yaml && second_is_json {
+                return validate::validate_file(&second, &first).context("Validation failed");
+            }
+            if second_is_yaml && first_is_json {
+                return validate::validate_file(&first, &second).context("Validation failed");
+            }
+
+            if second_is_yaml {
+                return validate::validate_file(&first, &second).context("Validation failed");
+            }
+            if first_is_yaml {
+                return validate::validate_file(&second, &first).context("Validation failed");
+            }
+
+            bail!("Could not determine which argument is YAML to validate");
+        }
+
+        // Normal mode: one positional YAML (embedded schema by default).
+        (Some(yaml_path), None) => {
+            if let Some(schema_path) = schema {
+                validate::validate_file(&schema_path, &yaml_path).context("Validation failed")
+            } else {
+                validate::validate_file_embedded(&yaml_path).context("Validation failed")
+            }
+        }
+
+        (None, Some(yaml_path)) => {
+            if let Some(schema_path) = schema {
+                validate::validate_file(&schema_path, &yaml_path).context("Validation failed")
+            } else {
+                validate::validate_file_embedded(&yaml_path).context("Validation failed")
+            }
+        }
+
+        (None, None) => {
+            bail!("Either provide a YAML file to validate, or use --schema-dir and --yaml-dir")
+        }
+    }
 }
 
 async fn run_blocking<F, T>(f: F) -> Result<T>
@@ -455,13 +513,17 @@ enum Commands {
     },
     /// Validate YAML against JSON Schema
     Validate {
-        /// JSON Schema file
+        /// YAML file to validate. If a second positional argument is provided, the first is treated as a schema path (legacy).
         #[arg(index = 1)]
-        schema: Option<PathBuf>,
+        input: Option<PathBuf>,
 
-        /// YAML file to validate
+        /// YAML file to validate (legacy positional when a schema is also provided)
         #[arg(index = 2)]
         yaml: Option<PathBuf>,
+
+        /// JSON Schema file (optional override). If not provided, uses embedded schema.
+        #[arg(long)]
+        schema: Option<PathBuf>,
 
         /// Directory containing JSON schemas
         #[arg(long)]
@@ -471,9 +533,9 @@ enum Commands {
         #[arg(long)]
         yaml_dir: Option<PathBuf>,
     },
-    /// Initialize wixer by downloading XSD schemas to a local cache
+    /// Initialize wixer (no-op; assets are embedded)
     Init {
-        /// Delete existing cache and re-download schemas
+        /// Ignored (kept for backwards compatibility)
         #[arg(long)]
         fresh: bool,
     },

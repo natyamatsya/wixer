@@ -40,7 +40,7 @@ wixer/examples/gallery/msi/
 # Generated assets.zip (built by build.rs from source assets)
 wixer/assets/assets.zip
 
-# Downloaded schemas (not tracked, downloaded by wixer init)
+# Downloaded schemas (not tracked, populated by the prebuild-assets utility)
 wixer/assets/wix-v4-xsd-schemas/
 wixer/assets/ms-msix-xsd-schemas/
 

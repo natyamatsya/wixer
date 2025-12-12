@@ -61,7 +61,7 @@ wixer/
 | Command | Purpose |
 |---------|---------|
 | `wixer build <file.wxs.yaml>` | Convert YAML and invoke `wix build` |
-| `wixer init [--fresh]` | Download WiX schemas to global cache |
+| `wixer init [--fresh]` | Initialize wixer (no-op; assets are embedded) |
 | `wixer import <dir> <out>` | Batch convert `.wxs` → `.wxs.yaml` |
 | `wixer export <dir> <out>` | Batch convert `.wxs.yaml` → `.wxs` |
 | `wixer describe <term>` | Lookup WiX properties/variables/custom actions |

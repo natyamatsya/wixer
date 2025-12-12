@@ -4,8 +4,8 @@ mod mermaid;
 mod parser;
 mod types;
 
-use crate::dirs;
-use anyhow::{Context, Result};
+use crate::embedded_assets;
+use anyhow::{Context, Result, bail};
 use backends::asciidoc::AsciiDocGenerator;
 use backends::html::HtmlGenerator;
 use backends::markdown::MarkdownGenerator;
@@ -19,15 +19,6 @@ use tracing::info;
 use types::SchemaInfo;
 
 pub fn run(output_dir: &Path, format: &str) -> Result<()> {
-    let cache_dir = dirs::get_cache_dir()?;
-    let schema_dir = cache_dir.join("xml-schema");
-    if !schema_dir.exists() {
-        anyhow::bail!(
-            "Schema directory not found at {}. Please run 'wixer init' first.",
-            schema_dir.display()
-        );
-    }
-
     info!(
         output_dir = %output_dir.display(),
         format = %format,
@@ -70,17 +61,30 @@ pub fn run(output_dir: &Path, format: &str) -> Result<()> {
     let mut schemas: HashMap<String, SchemaInfo> = HashMap::new();
     let mut schema_contents: HashMap<String, String> = HashMap::new();
 
-    for entry in fs::read_dir(&schema_dir)
-        .with_context(|| format!("Failed to read schema directory: {}", schema_dir.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() && path.extension().is_some_and(|e| e == "xsd") {
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read schema file: {}", path.display()))?;
-            let name = path.file_stem().unwrap().to_string_lossy().to_string();
-            schema_contents.insert(name, content);
+    let embedded_files = embedded_assets::list_embedded_assets()
+        .context("Failed to list embedded assets")?;
+
+    for file_path in embedded_files {
+        if !(file_path.starts_with("wix-v4-xsd-schemas/") && file_path.ends_with(".xsd")) {
+            continue;
         }
+
+        let file_name = file_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(&file_path);
+        let name = file_name
+            .strip_suffix(".xsd")
+            .unwrap_or(file_name)
+            .to_string();
+
+        let content = embedded_assets::get_asset_str(&file_path)
+            .with_context(|| format!("Failed to read embedded schema: {}", file_path))?;
+        schema_contents.insert(name, content);
+    }
+
+    if schema_contents.is_empty() {
+        bail!("No embedded WiX XSD schemas found in assets.zip");
     }
 
     let mut element_index: HashMap<String, Vec<String>> = HashMap::new(); // element_name -> [schema_names]

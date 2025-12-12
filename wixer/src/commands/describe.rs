@@ -6,10 +6,10 @@ use tracing::warn;
 pub fn run(term: String) -> Result<()> {
     let term_lower = term.to_lowercase();
 
-    // Load DB from global cache
+    // Load DB from embedded assets
     let properties = describe_db::load().unwrap_or_else(|e| {
         warn!(
-            "Failed to load description database: {}. Run 'wixer init' to generate it.",
+            "Failed to load embedded description database: {}",
             e
         );
         vec![]
@@ -17,7 +17,6 @@ pub fn run(term: String) -> Result<()> {
 
     if properties.is_empty() {
         println!("Description database is empty or could not be loaded.");
-        println!("Try running 'wixer init' to generate it.");
         return Ok(());
     }
 

@@ -1,4 +1,5 @@
 use crate::constants::{ALL_SOURCE_EXTENSIONS, EXT_WIXLOC_YAML, EXT_WXL_YAML};
+use crate::embedded_assets;
 use anyhow::{Context, Result};
 use jsonschema::JSONSchema;
 use std::fs;
@@ -35,6 +36,57 @@ pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
     remove_xmlns(&mut json_value);
 
     // Validate
+    let result = compiled_schema.validate(&json_value);
+
+    if let Err(errors) = result {
+        error!("Validation failed:");
+        for error in errors {
+            error!("  - {} (at {})", error, error.instance_path);
+        }
+        anyhow::bail!("Validation failed");
+    } else {
+        info!("YAML is valid!");
+    }
+
+    Ok(())
+}
+
+pub fn validate_file_embedded(yaml_path: &Path) -> Result<()> {
+    let schema_name = yaml_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|name| {
+            if name.ends_with(EXT_WIXLOC_YAML) || name.ends_with(EXT_WXL_YAML) {
+                "wixloc"
+            } else {
+                "wix"
+            }
+        })
+        .unwrap_or("wix");
+
+    info!(
+        yaml = %yaml_path.display(),
+        schema = %format!("embedded:{}", schema_name),
+        "Validating file"
+    );
+
+    let schema_content = embedded_assets::get_json_schema(schema_name)
+        .with_context(|| format!("Failed to load embedded JSON schema: {}", schema_name))?;
+    let schema_json: serde_json::Value =
+        serde_json::from_str(&schema_content).with_context(|| "Failed to parse schema JSON")?;
+
+    let compiled_schema =
+        JSONSchema::compile(&schema_json).map_err(|e| anyhow::anyhow!("Invalid schema: {}", e))?;
+
+    let yaml_content = fs::read_to_string(yaml_path)
+        .with_context(|| format!("Failed to read YAML file: {}", yaml_path.display()))?;
+    let yaml_value: serde_yaml::Value =
+        serde_yaml::from_str(&yaml_content).with_context(|| "Failed to parse YAML")?;
+
+    let mut json_value =
+        serde_json::to_value(yaml_value).with_context(|| "Failed to convert YAML to JSON")?;
+    remove_xmlns(&mut json_value);
+
     let result = compiled_schema.validate(&json_value);
 
     if let Err(errors) = result {

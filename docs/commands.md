@@ -12,6 +12,7 @@ wixer build <file.wxs.yaml> [options]
 
 - `-o, --output <path>` — Output MSI file path
 - `--profile <name>` — Use a named profile from wixer.yaml
+- `--validate` — Run post-build ICE validation on the generated MSI (fails build on ICE errors)
 
 **Example:**
 
@@ -93,13 +94,18 @@ Validate YAML files against WiX JSON schemas.
 wixer validate <file.wxs.yaml>
 ```
 
+**Options:**
+
+- `--schema <path>` — Use an explicit JSON schema file instead of the embedded schema
+- `--schema-dir <dir> --yaml-dir <dir>` — Validate a directory (explicit schemas on disk)
+
 **Example:**
 
 ```bash
 wixer validate myproject.wxs.yaml
 ```
 
-Requires schemas to be initialized with `wixer init`.
+Uses the embedded JSON schemas by default.
 
 ---
 
@@ -148,7 +154,7 @@ Applies transformations to update deprecated elements and attributes to modern W
 
 ## init
 
-Initialize wixer by downloading WiX XSD schemas to the local cache.
+Initialize wixer (no-op; assets are embedded).
 
 ```bash
 wixer init [options]
@@ -156,7 +162,7 @@ wixer init [options]
 
 **Options:**
 
-- `--fresh` — Clear existing cache and re-download
+- `--fresh` — Ignored (kept for backwards compatibility)
 
 **Example:**
 
@@ -164,7 +170,7 @@ wixer init [options]
 wixer init --fresh
 ```
 
-Downloads schemas from the WiX GitHub repository and generates JSON schemas for validation.
+Prints information about embedded asset versions and available embedded schemas.
 
 ---
 
@@ -248,7 +254,7 @@ Convert WiX XSD schemas to JSON Schema format.
 wixer xsd-to-json <input.xsd> <output.json>
 ```
 
-Used internally by `wixer init` to generate validation schemas.
+This is primarily a development tool used to (re)generate schemas for embedding.
 
 ---
 
@@ -257,10 +263,10 @@ Used internally by `wixer init` to generate validation schemas.
 Generate documentation from WiX XSD schemas.
 
 ```bash
-wixer doc <schema.xsd> <output_dir>
+wixer doc [--output-dir <dir>] [--format <format>]
 ```
 
-Generates HTML or Markdown documentation from schema definitions.
+Generates documentation from the embedded WiX XSD schemas.
 
 ---
 

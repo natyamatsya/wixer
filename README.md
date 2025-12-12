@@ -13,7 +13,7 @@ Wixer is a Rust CLI tool that wraps the official WiX Toolset, enabling you to wr
 - **CMake Integration** — Seamless integration with CMake/CPack workflows
 - **Language Server** — LSP support for IDE integration
 - **VS Code Extension** — Syntax highlighting and language support for WiX YAML files
-- **Schema Validation** — Validate YAML against WiX JSON schemas
+- **Schema Validation** — Validate YAML against embedded WiX JSON schemas
 - **Auto Extension Detection** — Automatically detects required WiX extensions (Util, UI, etc.)
 
 ## Quick Start
@@ -22,7 +22,7 @@ Wixer is a Rust CLI tool that wraps the official WiX Toolset, enabling you to wr
 # Install (or build from source)
 cargo install --path wixer
 
-# Initialize schemas
+# Optional: show embedded assets information
 wixer init
 
 # Build MSI from YAML
@@ -68,11 +68,11 @@ Wix:
 | `export` | Convert YAML files to WiX XML |
 | `import` | Convert WiX XML files to YAML |
 | `migrate` | Migrate WiX project to MSIX |
-| `validate` | Validate YAML against schemas |
+| `validate` | Validate YAML against embedded schemas |
 | `describe` | Lookup WiX properties and variables |
 | `upgrade` | Upgrade WiX v3 syntax to v4/v6 |
 | `lsp` | Start Language Server Protocol server |
-| `init` | Initialize schemas (downloads or extracts embedded) |
+| `init` | Initialize wixer (no-op; assets are embedded) |
 
 See [docs/commands.md](docs/commands.md) for detailed command documentation.
 
@@ -135,7 +135,7 @@ logging:
 
 ### CI / Offline Usage
 
-Wixer embeds all required schemas and extension metadata at compile time. In CI environments without network access, `wixer init` automatically extracts embedded assets instead of downloading them.
+Wixer embeds all required schemas and extension metadata at compile time. No network access or initialization step is required for normal operation.
 
 ## Building from Source
 
