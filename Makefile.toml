@@ -95,20 +95,20 @@ args = [
 [tasks.msix-prepare]
 description = "Prepare MSIX staging directory"
 dependencies = ["msix-migrate", "vscode-package"]
-script_runner = "@shell"
+script_runner = "pwsh"
+script_extension = "ps1"
 script = '''
 # Copy executable to MSIX staging
-cp target/release/wixer.exe target/msix/
-# Copy assets
-cp -r assets target/msix/
-# Copy VS Code extension (use glob to find any version)
-mkdir -p target/msix/vscode
-for vsix in wixer-vscode/wixer-vscode-*.vsix; do
-    if [ -f "$vsix" ]; then
-        cp "$vsix" target/msix/vscode/
-        echo "Copied VS Code extension: $vsix"
-    fi
-done
+Copy-Item -Path "target/release/wixer.exe" -Destination "target/msix/" -Force
+# Copy assets (create Assets dir if needed)
+if (-not (Test-Path "target/msix/Assets")) { New-Item -ItemType Directory -Path "target/msix/Assets" -Force | Out-Null }
+Copy-Item -Path "assets/*" -Destination "target/msix/Assets/" -Force
+# Copy VS Code extension
+if (-not (Test-Path "target/msix/vscode")) { New-Item -ItemType Directory -Path "target/msix/vscode" -Force | Out-Null }
+Get-ChildItem -Path "wixer-vscode/wixer-vscode-*.vsix" | ForEach-Object {
+    Copy-Item -Path $_.FullName -Destination "target/msix/vscode/" -Force
+    Write-Host "Copied VS Code extension: $($_.Name)"
+}
 '''
 
 [tasks.msix-pack]

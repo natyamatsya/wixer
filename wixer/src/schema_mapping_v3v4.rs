@@ -65,13 +65,21 @@ pub fn extension_packages() -> HashMap<&'static str, &'static str> {
 pub fn detect_required_extensions(content: &str) -> Vec<&'static str> {
     let mut extensions = Vec::new();
 
-    // WixCA binary -> Util extension
-    if content.contains("WixCA") || content.contains("WixQuietExec") {
+    // Util extension - WixCA binary, util: namespace, or common util elements
+    if content.contains("WixCA")
+        || content.contains("WixQuietExec")
+        || content.contains("util:")
+        || content.contains("xmlns:util")
+    {
         extensions.push("WixToolset.Util.wixext");
     }
 
     // UI references
-    if content.contains("WixUI_") || content.contains("UIRef") {
+    if content.contains("WixUI_")
+        || content.contains("UIRef")
+        || content.contains("ui:")
+        || content.contains("xmlns:ui")
+    {
         extensions.push("WixToolset.UI.wixext");
     }
 

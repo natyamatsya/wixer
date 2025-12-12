@@ -1,5 +1,6 @@
 Wix:
   xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  xmlns:util: 'http://wixtoolset.org/schemas/v4/wxs/util'
   Package:
     Name: 'Wixer'
     Language: '1033'
@@ -17,44 +18,7 @@ Wix:
     Property:
       - Id: 'VSCODE_PATH'
         Secure: 'yes'
-    RegistrySearch:
-      # User install (traditional installer)
-      - Id: 'VSCodeUserSearch'
-        Root: 'HKCU'
-        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{771FD6B0-FA20-440A-A002-3B3BAC16DC50}_is1'
-        Name: 'InstallLocation'
-        Type: 'raw'
-        Variable: 'VSCODE_PATH'
-      # System install (traditional installer)
-      - Id: 'VSCodeMachineSearch'
-        Root: 'HKLM'
-        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1'
-        Name: 'InstallLocation'
-        Type: 'raw'
-        Variable: 'VSCODE_PATH'
-      # Winget/MSIX user install
-      - Id: 'VSCodeWingetUserSearch'
-        Root: 'HKCU'
-        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft.VisualStudioCode'
-        Name: 'InstallLocation'
-        Type: 'raw'
-        Variable: 'VSCODE_PATH'
-      # Winget/MSIX machine install
-      - Id: 'VSCodeWingetMachineSearch'
-        Root: 'HKLM'
-        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft.VisualStudioCode'
-        Name: 'InstallLocation'
-        Type: 'raw'
-        Variable: 'VSCODE_PATH'
-      # App Paths fallback (all install methods register here)
-      - Id: 'VSCodeAppPathSearch'
-        Root: 'HKLM'
-        Key: 'Software\Microsoft\Windows\CurrentVersion\App Paths\Code.exe'
-        Name: 'Path'
-        Type: 'raw'
-        Variable: 'VSCODE_PATH'
     # Custom action to install extension via 'code --install-extension'
-    # Note: Uses [#VSCodeExtVsix] to get the installed filename dynamically
     CustomAction:
       - Id: 'InstallVSCodeExtension'
         Directory: 'INSTALLFOLDER'
@@ -79,9 +43,6 @@ Wix:
         Description: 'Language support for WiX YAML files in Visual Studio Code (requires VS Code)'
         Level: '1000'
         AllowAbsent: 'yes'
-        Condition:
-          Level: '1'
-          Content: 'VSCODE_PATH'
         ComponentGroupRef:
           Id: 'VSCodeComponents'
     StandardDirectory:
@@ -109,5 +70,43 @@ Wix:
           Guid: 'b2c3d4e5-f6a7-8901-2345-678901bcdef0'
           File:
             Id: 'VSCodeExtVsix'
-            Source: 'wixer-vscode/wixer-vscode-*.vsix'
+            Source: 'wixer-vscode/wixer-vscode-0.1.0.vsix'
             KeyPath: 'yes'
+  # Registry searches must be in a Fragment with util extension
+  Fragment:
+    util:RegistrySearch:
+      # User install (traditional installer)
+      - Id: 'VSCodeUserSearch'
+        Root: 'HKCU'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{771FD6B0-FA20-440A-A002-3B3BAC16DC50}_is1'
+        Value: 'InstallLocation'
+        Variable: 'VSCODE_PATH'
+        Result: 'value'
+      # System install (traditional installer)
+      - Id: 'VSCodeMachineSearch'
+        Root: 'HKLM'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1'
+        Value: 'InstallLocation'
+        Variable: 'VSCODE_PATH'
+        Result: 'value'
+      # Winget/MSIX user install
+      - Id: 'VSCodeWingetUserSearch'
+        Root: 'HKCU'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft.VisualStudioCode'
+        Value: 'InstallLocation'
+        Variable: 'VSCODE_PATH'
+        Result: 'value'
+      # Winget/MSIX machine install
+      - Id: 'VSCodeWingetMachineSearch'
+        Root: 'HKLM'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft.VisualStudioCode'
+        Value: 'InstallLocation'
+        Variable: 'VSCODE_PATH'
+        Result: 'value'
+      # App Paths fallback (all install methods register here)
+      - Id: 'VSCodeAppPathSearch'
+        Root: 'HKLM'
+        Key: 'Software\Microsoft\Windows\CurrentVersion\App Paths\Code.exe'
+        Value: 'Path'
+        Variable: 'VSCODE_PATH'
+        Result: 'value'
