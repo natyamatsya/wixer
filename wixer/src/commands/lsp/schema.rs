@@ -2,13 +2,10 @@
 //!
 //! Handles loading WiX JSON schemas and building completion/documentation indices.
 
-use crate::constants::SCHEMA_DIR_NAME;
 use crate::describe_db;
-use crate::dirs;
+use crate::embedded_assets;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::Path;
 use tower_lsp::lsp_types::*;
 
 use super::WixerLsp;
@@ -93,23 +90,15 @@ impl SchemaSymbolInfo {
 }
 
 pub async fn load_schemas(lsp: &WixerLsp) {
-    let Some(cache_dir) = resolve_cache_dir(lsp).await else {
-        return;
-    };
-
-    let schema_dir = cache_dir.join(SCHEMA_DIR_NAME);
-    if !schema_dir.exists() {
-        lsp.client
-            .log_message(MessageType::WARNING, "Schema directory not found")
-            .await;
-        return;
-    }
-
-    let Ok(entries) = fs::read_dir(&schema_dir) else {
-        lsp.client
-            .log_message(MessageType::WARNING, "Failed to read schema directory")
-            .await;
-        return;
+    // Load schemas from embedded assets
+    let schema_names = match embedded_assets::list_json_schemas() {
+        Ok(names) => names,
+        Err(e) => {
+            lsp.client
+                .log_message(MessageType::WARNING, format!("Failed to list embedded schemas: {}", e))
+                .await;
+            return;
+        }
     };
 
     let mut schemas = lsp.schemas.write().await;
@@ -117,20 +106,14 @@ pub async fn load_schemas(lsp: &WixerLsp) {
     let mut completions = lsp.completions.write().await;
     let mut symbols = lsp.symbols.write().await;
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
-        }
-
-        let Some(json) = read_schema_json(&path) else {
+    for name in schema_names {
+        let Ok(content) = embedded_assets::get_json_schema(&name) else {
             continue;
         };
 
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+        let Ok(json) = serde_json::from_str::<Value>(&content) else {
             continue;
         };
-        let name = stem.replace(".schema", "");
 
         if !compile_schema(&json, &name, &mut schemas) {
             continue;
@@ -206,23 +189,6 @@ fn load_from_describe_db(
     }
 
     count
-}
-
-async fn resolve_cache_dir(lsp: &WixerLsp) -> Option<std::path::PathBuf> {
-    match dirs::get_cache_dir() {
-        Ok(dir) => Some(dir),
-        Err(_) => {
-            lsp.client
-                .log_message(MessageType::WARNING, "Could not determine cache directory")
-                .await;
-            None
-        }
-    }
-}
-
-fn read_schema_json(path: &Path) -> Option<Value> {
-    let content = fs::read_to_string(path).ok()?;
-    serde_json::from_str(&content).ok()
 }
 
 fn compile_schema(
