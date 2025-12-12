@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Coverage: Generate LCOV",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["make", "coverage"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Coverage: Refresh LCOV (clean + generate)",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["make", "coverage-refresh"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Coverage: Open HTML Report",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["make", "coverage-open-html"],
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}

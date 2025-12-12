@@ -9,6 +9,23 @@ use std::fs;
 use std::path::Path;
 use tracing::info;
 
+pub fn convert_xml_str_to_yaml_str(xml_content: &str, attribute_strategy: AttributeStrategy) -> Result<String> {
+    // Pre-process to handle CPack variables that break XML validity
+    let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
+    let processed_content = re.replace_all(xml_content, |caps: &regex::Captures| {
+        let var = &caps[0];
+        if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" {
+            " CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
+        } else {
+            var.to_string()
+        }
+    });
+
+    let root_val = parse_xml_to_json(&processed_content, attribute_strategy)?;
+    let yaml = serde_yaml::to_string(&root_val)?;
+    Ok(yaml)
+}
+
 pub fn convert_file(
     input: &Path,
     output: &Path,
@@ -22,57 +39,8 @@ pub fn convert_file(
     );
 
     let content = fs::read_to_string(input)?;
-
-    // Pre-process to handle CPack variables that break XML validity
-    // Pattern: @VAR_NAME@ appearing outside of attributes
-    // We convert @VAR_NAME@ to VAR_NAME="1" so it parses as an attribute
-    // This is a heuristic.
-    let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
-    let processed_content = re.replace_all(&content, |caps: &regex::Captures| {
-        let var = &caps[0]; // e.g. @CPACK_VAR@
-        // Heuristic: if it looks like it's inside an attribute value (followed by quote or inside quotes), we might break things
-        // But the error was about it being OUTSIDE attributes.
-        // The issue is that we can't easily distinguish context with regex.
-        // However, standard CPack variables in attributes are usually fine because they are inside "...".
-        // The problematic ones are those standing alone, like xmlns="..." @VAR@
-        // If we replace ALL @VAR@ with VAR="1", we break those inside attributes like Value="@VAR@".
-        // So we should only replace those that are likely standalone.
-        // For now, let's just handle the specific known problematic pattern or try a safer replacement.
-        // A safer regex would be checking for preceding space/newline and NO preceding quote? Hard.
-
-        // Let's rely on the specific case for now or just the user requirement "robustly".
-        // If we change it to an attribute, we might break existing attribute values.
-        // Example: Value="@VAR@" -> Value="VAR="1"" -> Invalid XML.
-
-        // Let's Try to detect if we are likely in an attribute value?
-        // No, let's just try to fix the specific parse error we saw:
-        // xmlns="..."@VAR@ -> we want xmlns="..." VAR="1"
-
-        // If the match is preceded by `"` and followed by `>` or whitespace...
-        // But regex crate doesn't support look-around.
-
-        // Let's assume the user wants us to fix the specific crashing case:
-        // `@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@`
-
-        if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" {
-            // Treat this specific one as a special attribute marker
-            // Add a space to ensure valid XML separation from previous attribute
-            " CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
-        } else {
-            var.to_string()
-        }
-    });
-
-    // Also handle the "&" in comments issue if possible, though quick-xml might handle comments better than roxmltree?
-    // The previous error was with quick-xml (implied by stack trace or crate usage).
-    // quick-xml usually handles & in comments fine unless configured otherwise?
-    // Actually, the error `Cannot find ';' after '&'` suggests it was trying to parse entities.
-
-    // Let's try parsing the processed content
-    let root_val = parse_xml_to_json(&processed_content, attribute_strategy)?;
-
-    let file = fs::File::create(output)?;
-    serde_yaml::to_writer(file, &root_val)?;
+    let yaml = convert_xml_str_to_yaml_str(&content, attribute_strategy)?;
+    fs::write(output, yaml)?;
 
     info!(file = %output.display(), "Successfully converted");
     Ok(())
@@ -131,6 +99,11 @@ fn parse_xml_to_json(xml_content: &str, strategy: AttributeStrategy) -> Result<V
             Ok(Event::Empty(e)) => {
                 let name = String::from_utf8(e.name().as_ref().to_vec())?;
                 let mut map = Map::new();
+
+                // Attach pending comment
+                if let Some(comment) = pending_comment.take() {
+                    map.insert("_comment".to_string(), Value::String(comment));
+                }
 
                 for attr in e.attributes() {
                     let attr = attr?;

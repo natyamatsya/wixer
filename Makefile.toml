@@ -11,6 +11,34 @@ description = "Build wixer in release mode"
 command = "cargo"
 args = ["build", "--release"]
 
+[tasks.coverage-clean]
+description = "Clean coverage artifacts"
+command = "cargo"
+args = ["llvm-cov", "clean", "--workspace"]
+
+[tasks.coverage]
+description = "Generate LCOV coverage report at target/coverage.lcov"
+command = "cargo"
+args = ["llvm-cov", "--workspace", "--lcov", "--output-path", "target/coverage.lcov"]
+
+[tasks.coverage-refresh]
+description = "Clean and regenerate LCOV coverage report"
+dependencies = ["coverage-clean", "coverage"]
+
+[tasks.coverage-html]
+description = "Generate HTML coverage report"
+command = "cargo"
+args = ["llvm-cov", "--workspace", "--html"]
+
+[tasks.coverage-open-html]
+description = "Open HTML coverage report"
+dependencies = ["coverage-html"]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = '''
+Start-Process "target/llvm-cov/html/index.html"
+'''
+
 # =============================================================================
 # VS Code Extension Tasks
 # =============================================================================

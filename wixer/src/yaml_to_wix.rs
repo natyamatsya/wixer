@@ -14,6 +14,48 @@ use std::io::Cursor;
 use std::path::Path;
 use tracing::info;
 
+pub fn convert_value_to_string(
+    yaml_data: &Value,
+    attribute_strategy: AttributeStrategy,
+    known_attributes: &HashSet<String>,
+) -> Result<String> {
+    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
+    writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
+
+    if let Some(wix) = yaml_data.get("Wix") {
+        convert_element(
+            &mut writer,
+            "Wix",
+            wix,
+            attribute_strategy,
+            known_attributes,
+        )?;
+    } else if let Value::Mapping(map) = yaml_data {
+        if map.len() == 1 {
+            let (key, value) = map.iter().next().unwrap();
+            convert_element(
+                &mut writer,
+                key.as_str().unwrap(),
+                value,
+                attribute_strategy,
+                known_attributes,
+            )?;
+        } else {
+            return Err(anyhow::anyhow!("Invalid root structure"));
+        }
+    } else {
+        return Err(anyhow::anyhow!("Invalid YAML structure"));
+    }
+
+    let result = writer.into_inner().into_inner();
+    let s = String::from_utf8(result)?;
+
+    // Post-process to restore CPack variables
+    let s = s.replace(CPACK_VAR_XML, CPACK_VAR_TOKEN);
+
+    Ok(s)
+}
+
 pub fn convert_file(
     input: &Path,
     output: &Path,
@@ -37,48 +79,11 @@ pub fn convert_file(
         );
     }
 
-    // Load and resolve includes using the new deep merge mechanism
+    // Load and resolve includes
     let yaml_data = includes::load_and_process_yaml(input)?;
+    let xml = convert_value_to_string(&yaml_data, attribute_strategy, known_attributes)?;
 
-    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
-    writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
-
-    if let Some(wix) = yaml_data.get("Wix") {
-        convert_element(
-            &mut writer,
-            "Wix",
-            wix,
-            attribute_strategy,
-            known_attributes,
-        )?
-    } else if let Value::Mapping(map) = &yaml_data {
-        if map.len() == 1 {
-            let (key, value) = map.iter().next().unwrap();
-            convert_element(
-                &mut writer,
-                key.as_str().unwrap(),
-                value,
-                attribute_strategy,
-                known_attributes,
-            )?
-        } else {
-            // If multiple roots or flat structure, wrap in Wix?
-            // The Python script iterates and appends to a created Wix element
-            // But for now let's assume valid structure
-            return Err(anyhow::anyhow!("Invalid root structure"));
-        }
-    } else {
-        return Err(anyhow::anyhow!("Invalid YAML structure"));
-    };
-
-    let result = writer.into_inner().into_inner();
-    let s = String::from_utf8(result)?;
-
-    // Post-process to restore CPack variables
-    // Include the leading space in search to remove it during replacement, restoring original no-space format
-    let s = s.replace(CPACK_VAR_XML, CPACK_VAR_TOKEN);
-
-    fs::write(output, s)?;
+    fs::write(output, xml)?;
 
     info!(file = %output.display(), "Successfully converted");
     Ok(())
@@ -147,6 +152,7 @@ fn convert_element(
                         // Known element names that should not be attributes
                         let known_elements = ["_include", "_comment"];
                         !known_elements.contains(&key)
+                            && !TEXT_PROPERTIES.contains(&key)
                             && (key.starts_with("xmlns")
                                 || known_attributes.contains(key)
                                 || key == CPACK_VAR_KEY

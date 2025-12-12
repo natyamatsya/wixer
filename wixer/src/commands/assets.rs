@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use tracing::info;
 
 use crate::embedded_assets;
