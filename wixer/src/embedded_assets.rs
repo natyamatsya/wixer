@@ -130,7 +130,7 @@ pub fn get_extension(name: &str) -> Result<String> {
 
 /// Get the versions.json manifest with asset version information.
 pub fn get_versions() -> Result<String> {
-    get_asset_str("versions.json")
+    get_asset_str("generated/versions.json")
 }
 
 /// Get the pre-generated describe.json database.
