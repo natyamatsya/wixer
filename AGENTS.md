@@ -129,6 +129,12 @@ The `embedded_assets` module provides:
 - `extract_wix_schemas()` / `extract_msix_schemas()` — Extract to cache directory
 - `get_extension(name)` / `get_knowledge_base()` — Direct access without extraction
 - `has_embedded_assets()` — Check availability
+- `get_versions()` — Get the `versions.json` manifest with build info and content hashes
+
+The `versions.json` manifest contains:
+- `build_time` — ISO-8601 timestamp of when assets.zip was built
+- `git_commit` — Git commit hash for git-tracked assets
+- `assets` — Per-asset metadata including source URLs and content hashes
 
 ## Build System
 

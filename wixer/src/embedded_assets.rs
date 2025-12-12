@@ -128,6 +128,11 @@ pub fn get_extension(name: &str) -> Result<String> {
     get_asset_str(&format!("wix-v4-extensions-json/{}.json", name))
 }
 
+/// Get the versions.json manifest with asset version information.
+pub fn get_versions() -> Result<String> {
+    get_asset_str("versions.json")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,5 +191,14 @@ mod tests {
     fn test_get_extension() {
         let util = get_extension("util").expect("Should get util.json");
         assert!(util.contains("WixToolset.Util"), "Util extension should have correct ID");
+    }
+
+    #[test]
+    fn test_get_versions() {
+        let versions = get_versions().expect("Should get versions.json");
+        assert!(versions.contains("build_time"), "Versions should have build_time");
+        assert!(versions.contains("git_commit"), "Versions should have git_commit");
+        assert!(versions.contains("wix-v4-xsd-schemas"), "Versions should have WiX schemas info");
+        println!("Versions manifest:\n{}", versions);
     }
 }
