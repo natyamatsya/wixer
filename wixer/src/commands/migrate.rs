@@ -22,8 +22,25 @@ pub fn run(input: PathBuf, output_dir: PathBuf, target: MigrationTarget) -> Resu
     }
 }
 
+fn get_wixer_tmp_dir(output_dir: &Path) -> Result<PathBuf> {
+    let parent = output_dir
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("output_dir has no parent"))?;
+    let name = output_dir
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("output_dir has no file name"))?;
+    Ok(parent.join(".wixer-tmp").join(name))
+}
+
 fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     fs::create_dir_all(output_dir)?;
+
+    // Clean any stale temp conversion output from previous runs.
+    // Temp XML is now written to a sibling `.wixer-tmp` directory instead.
+    let stale_temp = output_dir.join("wixer_temp");
+    if stale_temp.exists() {
+        let _ = fs::remove_dir_all(&stale_temp);
+    }
 
     let is_template = input.extension().is_some_and(|e| e == "in");
 
@@ -34,7 +51,10 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
         || input_str.ends_with(EXT_WXL_YAML);
 
     let temp_dir = if is_yaml {
-        let temp = output_dir.join("wixer_temp");
+        let temp = get_wixer_tmp_dir(output_dir)?;
+        if temp.exists() {
+            let _ = fs::remove_dir_all(&temp);
+        }
         fs::create_dir_all(&temp)?;
         Some(temp)
     } else {

@@ -33,6 +33,7 @@ pub mod describe_db;
 pub mod dirs;
 pub mod embedded_assets;
 pub mod example_config;
+#[path = "gallery/mod.rs"]
 pub mod gallery;
 pub mod includes;
 pub mod project;

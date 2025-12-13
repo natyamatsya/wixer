@@ -116,8 +116,8 @@ args = ["run", "--release", "--bin", "wixer", "--", "export", ".", "target/wix"]
 # MSI Installer Tasks (using wixer build)
 # =============================================================================
 
-[tasks.wix-installer]
-description = "Build MSI installer from YAML using wixer"
+[tasks.wixer-package-msi]
+description = "Build wixer MSI installer from YAML using wixer"
 dependencies = ["build-release", "vscode-package"]
 command = "cargo"
 args = [
@@ -131,6 +131,10 @@ args = [
     "-o",
     "target/wixer.msi",
 ]
+
+[tasks.wix-installer]
+description = "Build MSI installer from YAML using wixer"
+dependencies = ["wixer-package-msi"]
 
 # =============================================================================
 # MSIX Packaging Tasks
@@ -185,6 +189,10 @@ if (-not (Get-Command MakeAppx -ErrorAction SilentlyContinue)) {
 
 MakeAppx pack /d target/msix /p target/wixer.msix /o
 '''
+
+[tasks.wixer-package-msix]
+description = "Build wixer MSIX package (manifest + staging + MakeAppx pack)"
+dependencies = ["msix-pack"]
 
 [tasks.msix-bundle]
 description = "Create MSIX bundle"
@@ -429,13 +437,17 @@ args = [
 # Convenience Aliases
 # =============================================================================
 
+[tasks.wixer-package]
+description = "Build wixer packages (MSI + MSIX)"
+dependencies = ["wixer-package-msi", "wixer-package-msix"]
+
 [tasks.msi]
-description = "Build MSI installer (alias for wix-installer)"
-dependencies = ["wix-installer"]
+description = "Build MSI installer (alias for wixer-package-msi)"
+dependencies = ["wixer-package-msi"]
 
 [tasks.msix]
-description = "Build MSIX package (alias for msix-pack)"
-dependencies = ["msix-pack"]
+description = "Build MSIX package (alias for wixer-package-msix)"
+dependencies = ["wixer-package-msix"]
 
 [tasks.msix-auto]
 description = "Build MSIX with auto-generated AppxManifest from YAML"
@@ -443,7 +455,7 @@ dependencies = ["cmake-msix-auto"]
 
 [tasks.all]
 description = "Build all packages (MSI + MSIX)"
-dependencies = ["wix-installer", "msix-bundle"]
+dependencies = ["wixer-package"]
 
 # =============================================================================
 # Default Task
