@@ -39,6 +39,24 @@ script = '''
 Start-Process "target/llvm-cov/html/index.html"
 '''
 
+[tasks.coverage-summary]
+description = "Summarize target/coverage.lcov"
+command = "python"
+args = ["wixer/tools/coverage_summary.py"]
+
+[tasks.coverage-summary-yaml-xml]
+description = "Summarize coverage with focus on YAML<->XML modules"
+command = "python"
+args = [
+    "wixer/tools/coverage_summary.py",
+    "--focus",
+    "wixer/src/yaml_to_wix.rs",
+    "--focus",
+    "wixer/src/wix_to_yaml.rs",
+    "--focus",
+    "wixer/src/includes.rs",
+]
+
 # =============================================================================
 # VS Code Extension Tasks
 # =============================================================================

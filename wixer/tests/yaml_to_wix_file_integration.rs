@@ -47,6 +47,59 @@ fn yaml_to_wix_convert_file_rejects_xml_content_in_yaml_file() {
 }
 
 #[test]
+fn yaml_to_wix_convert_file_appends_sequences_from_includes() {
+    let dir = make_temp_dir("include_seq");
+
+    let base = dir.join("base.yaml");
+    let main = dir.join("main.wxs.yaml");
+    let output = dir.join("out.wxs");
+
+    fs::write(
+        &base,
+        r#"Wix:
+  Fragment:
+    Component:
+      - Id: 'A'
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        &main,
+        r#"!include base.yaml
+Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Fragment:
+    Component:
+      - Id: 'B'
+"#,
+    )
+    .unwrap();
+
+    yaml_to_wix::convert_file(&main, &output, AttributeStrategy::Inline, &known_attributes()).unwrap();
+
+    let xml = fs::read_to_string(&output).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let wix = doc.descendants().find(|n| n.has_tag_name("Wix")).unwrap();
+    let ns = wix.tag_name().namespace().unwrap();
+
+    let components: Vec<_> = doc
+        .descendants()
+        .filter(|n| n.is_element() && n.has_tag_name((ns, "Component")))
+        .collect();
+    assert_eq!(components.len(), 2);
+
+    let ids: Vec<_> = components
+        .iter()
+        .map(|n| n.attribute("Id").unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&"A".to_string()));
+    assert!(ids.contains(&"B".to_string()));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn yaml_to_wix_convert_file_resolves_include_end_to_end() {
     let dir = make_temp_dir("include");
 
