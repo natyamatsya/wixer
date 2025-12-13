@@ -162,10 +162,11 @@ pub fn analyze_launch_app(fields: &[Value]) -> String {
         }
     }
 
-    match type_val & CustomActionType::MASK_EXECUTION {
-        CustomActionType::ROLLBACK => flags.push("Rollback"),
-        CustomActionType::COMMIT => flags.push("Commit"),
-        _ => {}
+    if (type_val & CustomActionType::ROLLBACK) != 0 {
+        flags.push("Rollback");
+    }
+    if (type_val & CustomActionType::COMMIT) != 0 {
+        flags.push("Commit");
     }
 
     format!(
