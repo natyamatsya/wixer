@@ -14,7 +14,7 @@ fn test_roundtrip_example_installer() {
 
     // 1. Convert WXS to YAML
     let status = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--bin",
             "wixer",
@@ -29,7 +29,7 @@ fn test_roundtrip_example_installer() {
 
     // 2. Convert YAML back to WXS
     let status = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--bin",
             "wixer",

@@ -86,7 +86,7 @@ impl WixProject {
             .with_context(|| format!("Failed to read {}", path.display()))?;
 
         // Pre-process content (CPack variables)
-        let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
+        let re = Regex::new(r"(@[A-Za-z0-9_]+@)").unwrap();
         let processed_content = re
             .replace_all(&content, |caps: &regex::Captures| {
                 let var = &caps[0];

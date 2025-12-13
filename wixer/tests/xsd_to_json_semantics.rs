@@ -110,13 +110,12 @@ fn xsd_to_json_converts_local_xsd_and_uses_cache_on_second_run() {
     assert!(pkg_props.contains_key("Name"));
     assert!(pkg_props.contains_key("Feature"));
 
-    assert_eq!(
+    assert!(
         package_type
             .get("additionalProperties")
             .unwrap()
             .as_bool()
-            .unwrap(),
-        true
+            .unwrap()
     );
 
     // Required should include the required attribute and required element (Name)

@@ -13,7 +13,7 @@ fn test_recursive_import() {
     }
 
     let status = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--bin",
             "wixer",

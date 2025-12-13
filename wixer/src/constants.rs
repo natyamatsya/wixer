@@ -51,6 +51,10 @@ pub const CPACK_VAR_KEY: &str = "CPACK_WIX_CUSTOM_XMLNS_EXPANDED";
 pub const CPACK_VAR_TOKEN: &str = "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@";
 pub const CPACK_VAR_XML: &str = " CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"";
 
+pub const CPACK_PATCH_VAR_KEY: &str = "CPACK_WIX_PATCH_XMLNS_EXPANDED";
+pub const CPACK_PATCH_VAR_TOKEN: &str = "@CPACK_WIX_PATCH_XMLNS_EXPANDED@";
+pub const CPACK_PATCH_VAR_XML: &str = " CPACK_WIX_PATCH_XMLNS_EXPANDED=\"1\"";
+
 /// MSI Standard Properties
 pub mod msi_properties {
     // Installation state properties

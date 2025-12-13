@@ -1,12 +1,27 @@
-mod test_support;
-
 use serde_yaml::Value;
+use std::sync::OnceLock;
 
 use wixer::analysis::yaml::publish_conflicts::{self, ConflictSuggestion};
 use wixer::constants::ui_events::{ACTION_EVENTS, DO_ACTION, NAVIGATION_EVENTS, SPAWN_DIALOG};
+use wixer::simulation::{ExtensionRegistry, ExtractedExtension};
+
+fn yaml(s: &str) -> Value {
+    serde_yaml::from_str(s).unwrap()
+}
+
+fn ui() -> &'static ExtractedExtension {
+    static UI: OnceLock<ExtractedExtension> = OnceLock::new();
+    UI.get_or_init(|| {
+        let registry = ExtensionRegistry::load_bundled();
+        registry
+            .get("ui")
+            .expect("ui extension must be bundled")
+            .clone()
+    })
+}
 
 fn first_ui_publish_entry() -> (String, String, String, Option<String>, i32) {
-    let ui = test_support::registry::ui();
+    let ui = ui();
 
     let entry = ui
         .publish_entries
@@ -24,7 +39,7 @@ fn first_ui_publish_entry() -> (String, String, String, Option<String>, i32) {
 }
 
 fn first_ui_navigation_publish_entry_with_value() -> (String, String, String, String, i32) {
-    let ui = test_support::registry::ui();
+    let ui = ui();
 
     let entry = ui
         .publish_entries
@@ -47,7 +62,7 @@ fn first_ui_navigation_publish_entry_with_value() -> (String, String, String, St
 }
 
 fn max_ui_order_for(dialog: &str, control: &str) -> i32 {
-    let ui = test_support::registry::ui();
+    let ui = ui();
 
     ui.publish_entries
         .iter()
@@ -58,7 +73,7 @@ fn max_ui_order_for(dialog: &str, control: &str) -> i32 {
 }
 
 fn first_ui_publish_entry_with_value() -> (String, String, String, String) {
-    let ui = test_support::registry::ui();
+    let ui = ui();
 
     let entry = ui
         .publish_entries
@@ -78,7 +93,7 @@ fn first_ui_publish_entry_with_value() -> (String, String, String, String) {
 fn publish_conflicts_suggests_override_when_user_matches_extension_event() {
     let (dialog, control, event, value, order) = first_ui_publish_entry();
 
-    let yaml: Value = test_support::yaml(&format!(
+    let yaml: Value = yaml(&format!(
         r#"
 Wix:
   UI:
@@ -111,7 +126,7 @@ Wix:
 fn publish_conflicts_reports_invalid_overrides_and_lists_available_targets() {
     let (dialog, control, _event, existing_target) = first_ui_publish_entry_with_value();
 
-    let yaml: Value = test_support::yaml(&format!(
+    let yaml: Value = yaml(&format!(
         r#"
 Wix:
   UI:
@@ -139,7 +154,7 @@ fn publish_conflicts_suggests_change_order_for_action_before_navigation() {
         first_ui_navigation_publish_entry_with_value();
     assert!(NAVIGATION_EVENTS.contains(&ext_event.as_str()));
 
-    let yaml: Value = test_support::yaml(&format!(
+    let yaml: Value = yaml(&format!(
         r#"
 Wix:
   UI:
@@ -175,7 +190,7 @@ fn publish_conflicts_suggests_override_for_navigation_event_mismatch() {
         first_ui_navigation_publish_entry_with_value();
     assert!(NAVIGATION_EVENTS.contains(&ext_event.as_str()));
 
-    let yaml: Value = test_support::yaml(&format!(
+    let yaml: Value = yaml(&format!(
         r#"
 Wix:
   UI:
@@ -207,7 +222,7 @@ fn publish_conflicts_suggests_add_with_order_by_default() {
     let (dialog, control, _event, _target, order) = first_ui_navigation_publish_entry_with_value();
     let max_order = max_ui_order_for(&dialog, &control);
 
-    let yaml: Value = test_support::yaml(&format!(
+    let yaml: Value = yaml(&format!(
         r#"
 Wix:
   UI:
@@ -234,7 +249,7 @@ Wix:
 
 #[test]
 fn publish_conflicts_invalid_override_has_empty_available_targets_when_control_is_unknown() {
-    let yaml: Value = test_support::yaml(
+    let yaml: Value = yaml(
         r#"
 Wix:
   UI:
@@ -257,7 +272,7 @@ Wix:
 fn publish_conflicts_override_parsing_is_case_insensitive_and_ignores_empty_targets() {
     let (dialog, control, _event, existing_target) = first_ui_publish_entry_with_value();
 
-    let yaml: Value = test_support::yaml(&format!(
+    let yaml: Value = yaml(&format!(
         r#"
 Wix:
   UI:
@@ -275,4 +290,42 @@ Wix:
     assert!(invalid.is_empty());
 
     assert!(ACTION_EVENTS.contains(&DO_ACTION));
+}
+
+fn with_debug_tracing<T>(f: impl FnOnce() -> T) -> T {
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+    let dispatch = tracing::dispatcher::Dispatch::new(subscriber);
+    tracing::dispatcher::with_default(&dispatch, f)
+}
+
+#[test]
+fn publish_conflicts_emits_debug_and_warn_logs_when_tracing_is_enabled() {
+    let (dialog, control, ext_event, target, order) =
+        first_ui_navigation_publish_entry_with_value();
+
+    let yaml: Value = yaml(&format!(
+        r#"
+Wix:
+  UI:
+    Publish:
+      - Dialog: {dialog}
+        Control: {control}
+        Event: {ext_event}
+        Value: {target}
+        Order: {order}
+      - Dialog: {dialog}
+        Control: {control}
+        Event: "override TotallyNotARealTarget"
+"#,
+    ));
+
+    with_debug_tracing(|| {
+        let conflicts = publish_conflicts::find_conflicts(&yaml);
+        assert!(!conflicts.is_empty());
+
+        let invalid = publish_conflicts::find_invalid_overrides(&yaml);
+        assert!(!invalid.is_empty());
+    });
 }

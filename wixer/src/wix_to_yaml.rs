@@ -14,11 +14,13 @@ pub fn convert_xml_str_to_yaml_str(
     attribute_strategy: AttributeStrategy,
 ) -> Result<String> {
     // Pre-process to handle CPack variables that break XML validity
-    let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
+    let re = Regex::new(r"(@[A-Za-z0-9_]+@)").unwrap();
     let processed_content = re.replace_all(xml_content, |caps: &regex::Captures| {
         let var = &caps[0];
         if var == "@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@" {
             " CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\"".to_string()
+        } else if var == "@CPACK_WIX_PATCH_XMLNS_EXPANDED@" {
+            " CPACK_WIX_PATCH_XMLNS_EXPANDED=\"1\"".to_string()
         } else {
             var.to_string()
         }

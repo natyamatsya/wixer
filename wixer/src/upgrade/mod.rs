@@ -15,3 +15,9 @@ pub use context::{UpgradeContext, analyze_files};
 pub use pipeline::{upgrade_content_with_context, upgrade_file, upgrade_files};
 pub use preprocessor::PreprocessorPreserver;
 pub use transformations::Transformation;
+pub use transformations::{
+    ConditionToLaunch, ControlConditionToAttribute, ControlTextToAttribute, CustomActionTransform,
+    InnerTextToCondition, RemoveDeprecatedAttributes, SkipControlTextAndCondition,
+    SkipWixUIInstallDirProperty, UIRefToWixUI, V4_NAMESPACE, V4_UI_NAMESPACE,
+    standard_transformations,
+};

@@ -249,3 +249,34 @@ fn upgrade_pipeline_control_text_to_attribute_preserves_other_children() {
     assert!(out.contains("<Control Id=\"ChildCtl\""));
     assert!(!out.contains("<Text>Hello</Text>"));
 }
+
+#[test]
+fn upgrade_transformations_expose_stable_names_for_debugging() {
+    use wixer::upgrade::{
+        ConditionToLaunch, ControlConditionToAttribute, ControlTextToAttribute,
+        CustomActionTransform, InnerTextToCondition, RemoveDeprecatedAttributes,
+        SkipControlTextAndCondition, SkipWixUIInstallDirProperty, Transformation, UIRefToWixUI,
+        standard_transformations,
+    };
+
+    let mut names = Vec::new();
+    for t in standard_transformations() {
+        names.push(t.name());
+    }
+
+    // Also call name() on concrete types directly to exercise those methods.
+    names.push(ConditionToLaunch.name());
+    names.push(InnerTextToCondition.name());
+    names.push(CustomActionTransform.name());
+    names.push(RemoveDeprecatedAttributes.name());
+    names.push(ControlTextToAttribute.name());
+    names.push(ControlConditionToAttribute.name());
+    names.push(SkipControlTextAndCondition.name());
+    names.push(UIRefToWixUI.name());
+    names.push(SkipWixUIInstallDirProperty.name());
+
+    // Ensure they are non-empty and contain a couple expected values.
+    assert!(names.iter().all(|n| !n.trim().is_empty()));
+    assert!(names.contains(&"ConditionToLaunch"));
+    assert!(names.contains(&"CustomActionTransform"));
+}

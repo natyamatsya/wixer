@@ -16,7 +16,7 @@ fn test_roundtrip() {
     // 1. Convert WXS to YAML
     // Note: using cargo run to execute the binary
     let status = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--bin",
             "wixer",
@@ -31,7 +31,7 @@ fn test_roundtrip() {
 
     // 2. Convert YAML back to WXS
     let status = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--bin",
             "wixer",

@@ -1,7 +1,8 @@
 use crate::common::AttributeStrategy;
 use crate::constants::{
-    ATTRIBUTES_PROPERTY, COMMENT_PROPERTY, CPACK_VAR_KEY, CPACK_VAR_TOKEN, CPACK_VAR_XML,
-    ELEMENTS_PROPERTY, TEXT_PROPERTIES,
+    ATTRIBUTES_PROPERTY, COMMENT_PROPERTY, CPACK_PATCH_VAR_KEY, CPACK_PATCH_VAR_TOKEN,
+    CPACK_PATCH_VAR_XML, CPACK_VAR_KEY, CPACK_VAR_TOKEN, CPACK_VAR_XML, ELEMENTS_PROPERTY,
+    TEXT_PROPERTIES,
 };
 use crate::includes;
 use anyhow::Result;
@@ -52,6 +53,7 @@ pub fn convert_value_to_string(
 
     // Post-process to restore CPack variables
     let s = s.replace(CPACK_VAR_XML, CPACK_VAR_TOKEN);
+    let s = s.replace(CPACK_PATCH_VAR_XML, CPACK_PATCH_VAR_TOKEN);
 
     Ok(s)
 }
@@ -160,6 +162,7 @@ fn convert_element(
                             && (key.starts_with("xmlns")
                                 || known_attributes.contains(key)
                                 || key == CPACK_VAR_KEY
+                                || key == CPACK_PATCH_VAR_KEY
                                 // Heuristic: simple values (not mappings/sequences) are likely attributes
                                 || (!v.is_mapping() && !v.is_sequence()))
                             && !v.is_mapping()
