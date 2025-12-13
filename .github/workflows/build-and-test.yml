@@ -84,6 +84,49 @@ jobs:
         run: cargo build --release
         env:
           WIXER_STRICT_ASSETS: "1"
+
+      - name: Setup MakeAppx (Windows SDK)
+        shell: pwsh
+        run: |
+          $makeAppx = Get-ChildItem -Path "${Env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter MakeAppx.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\x64\\" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $makeAppx) {
+            Write-Error "MakeAppx.exe not found. Ensure the Windows SDK is installed on the runner."
+            exit 1
+          }
+          $makeDir = Split-Path $makeAppx.FullName -Parent
+          Add-Content -Path $env:GITHUB_PATH -Value $makeDir
+
+      - name: Build MSIX package
+        shell: pwsh
+        env:
+          WIXER_STRICT_ASSETS: "1"
+        run: |
+          cargo run --release --bin wixer -- migrate --target msix ./wixer.wxs.yaml target/msix
+
+          Copy-Item -Path "target/release/wixer.exe" -Destination "target/msix/" -Force
+
+          if (-not (Test-Path "target/msix/Assets")) { New-Item -ItemType Directory -Path "target/msix/Assets" -Force | Out-Null }
+          Copy-Item -Path "assets/*" -Destination "target/msix/Assets/" -Force
+
+          if (-not (Test-Path "target/msix/vscode")) { New-Item -ItemType Directory -Path "target/msix/vscode" -Force | Out-Null }
+          $vsix = Get-ChildItem -Path "wixer-vscode/wixer-vscode-*.vsix" | Select-Object -First 1
+          if (-not $vsix) {
+            Write-Error "VSIX not found. Expected wixer-vscode/wixer-vscode-*.vsix"
+            exit 1
+          }
+          Copy-Item -Path $vsix.FullName -Destination "target/msix/vscode/" -Force
+
+          MakeAppx pack /d target/msix /p target/wixer.msix /o
+
+      - name: Upload MSIX Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wixer-msix
+          path: target/wixer.msix
+          if-no-files-found: warn
       - name: Build MSI Installer
         run: cargo run --release --bin wixer -- build wixer.wxs.yaml -o target/wixer.msi
         env:
