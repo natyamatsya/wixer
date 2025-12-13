@@ -144,6 +144,10 @@ fn convert_element(
                     continue;
                 }
 
+                if strategy == AttributeStrategy::Separate && key == ATTRIBUTES_PROPERTY {
+                    continue;
+                }
+
                 let is_attribute = match strategy {
                     AttributeStrategy::Prefix => key.starts_with('@'),
                     AttributeStrategy::Separate => false, // handled differently
