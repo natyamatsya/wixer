@@ -160,18 +160,31 @@ Get-ChildItem -Path "wixer-vscode/wixer-vscode-*.vsix" | ForEach-Object {
 [tasks.msix-pack]
 description = "Create MSIX package using MakeAppx"
 dependencies = ["msix-prepare"]
-script_runner = "@shell"
+script_runner = "pwsh"
+script_extension = "ps1"
 script = '''
+if (-not (Get-Command MakeAppx -ErrorAction SilentlyContinue)) {
+    Write-Error "MakeAppx not found in PATH. Initialize your Windows SDK environment (e.g. run from a Visual Studio Developer Command Prompt / VsDevCmd) and try again."
+    exit 1
+}
+
 MakeAppx pack /d target/msix /p target/wixer.msix /o
 '''
 
 [tasks.msix-bundle]
 description = "Create MSIX bundle"
 dependencies = ["msix-pack"]
-script_runner = "@shell"
+script_runner = "pwsh"
+script_extension = "ps1"
 script = '''
-mkdir -p target/msix-bundle
-cp target/wixer.msix target/msix-bundle/
+if (-not (Get-Command MakeAppx -ErrorAction SilentlyContinue)) {
+    Write-Error "MakeAppx not found in PATH. Initialize your Windows SDK environment (e.g. run from a Visual Studio Developer Command Prompt / VsDevCmd) and try again."
+    exit 1
+}
+
+if (-not (Test-Path "target/msix-bundle")) { New-Item -ItemType Directory -Path "target/msix-bundle" -Force | Out-Null }
+Copy-Item -Path "target/wixer.msix" -Destination "target/msix-bundle/" -Force
+
 MakeAppx bundle /d target/msix-bundle /p target/wixer.msixbundle /bv 0.1.0.0 /o
 '''
 
