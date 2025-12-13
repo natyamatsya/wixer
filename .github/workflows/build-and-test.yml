@@ -32,14 +32,26 @@ jobs:
 #        uses: taiki-e/install-action@cargo-llvm-cov
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      - name: Prebuild embedded assets (schemas + generated files)
+        run: cargo run --bin prebuild-assets
+
       - name: Lint with Clippy
         run: cargo clippy --workspace -- -D warnings
+        env:
+          WIXER_STRICT_ASSETS: "1"
       - name: Build
         run: cargo build --workspace
+        env:
+          WIXER_STRICT_ASSETS: "1"
       - name: Run tests
         run: cargo nextest run --workspace --profile ci
+        env:
+          WIXER_STRICT_ASSETS: "1"
       - name: Test docs
         run: cargo test --workspace --doc
+        env:
+          WIXER_STRICT_ASSETS: "1"
       - name: Debug - List junit files
         if: always()
         run: |
@@ -70,8 +82,12 @@ jobs:
         run: dotnet tool install --global wix
       - name: Build Release
         run: cargo build --release
+        env:
+          WIXER_STRICT_ASSETS: "1"
       - name: Build MSI Installer
         run: cargo run --release --bin wixer -- build wixer.wxs.yaml -o target/wixer.msi
+        env:
+          WIXER_STRICT_ASSETS: "1"
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:

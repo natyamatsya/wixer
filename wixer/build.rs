@@ -11,11 +11,14 @@ use std::env;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
+use zip::ZipArchive;
 
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let assets_dir = Path::new(&manifest_dir).join("assets");
     let zip_path = assets_dir.join("assets.zip");
+
+    let strict_assets = env::var_os("WIXER_STRICT_ASSETS").is_some();
 
     // Rerun if build.rs changes
     println!("cargo:rerun-if-changed=build.rs");
@@ -35,6 +38,80 @@ fn main() {
         assets_dir.join("ms-msix-xsd-schemas"),
         assets_dir.join("generated"),
     ];
+
+    let required_sources = [
+        assets_dir.join("wix-v4-xsd-schemas"),
+        assets_dir.join("ms-msix-xsd-schemas"),
+        assets_dir.join("generated"),
+    ];
+
+    if strict_assets {
+        fn dir_has_entries(path: &Path) -> bool {
+            fs::read_dir(path)
+                .ok()
+                .and_then(|mut it| it.next())
+                .is_some()
+        }
+
+        let sources_ok = required_sources
+            .iter()
+            .all(|p| p.exists() && p.is_dir() && dir_has_entries(p));
+
+        let zip_ok = if !zip_path.exists() {
+            false
+        } else {
+            match File::open(&zip_path) {
+                Ok(file) => match ZipArchive::new(file) {
+                    Ok(mut archive) => {
+                        let mut has_wix = false;
+                        let mut has_msix = false;
+                        let mut has_describe = false;
+                        let mut has_versions = false;
+                        let mut has_json_schema = false;
+
+                        for i in 0..archive.len() {
+                            let file = match archive.by_index(i) {
+                                Ok(f) => f,
+                                Err(_) => continue,
+                            };
+                            let name = file.name();
+
+                            has_wix |=
+                                name.starts_with("wix-v4-xsd-schemas/") && name.ends_with(".xsd");
+                            has_msix |=
+                                name.starts_with("ms-msix-xsd-schemas/") && name.ends_with(".xsd");
+                            has_describe |= name == "generated/describe.json";
+                            has_versions |= name == "generated/versions.json";
+                            has_json_schema |= name.starts_with("generated/json-schema/")
+                                && name.ends_with(".schema.json");
+                        }
+
+                        has_wix && has_msix && has_describe && has_versions && has_json_schema
+                    }
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            }
+        };
+
+        if !sources_ok && !zip_ok {
+            panic!(
+                "Embedded assets are incomplete.\n\
+                 Missing required schema/generated assets.\n\
+                 Expected either:\n\
+                 - populated assets directories (run prebuild-assets), or\n\
+                 - an assets.zip that contains wix/msix schemas and generated outputs.\n\
+                 \n\
+                 Required directories:\n\
+                 - assets/wix-v4-xsd-schemas/\n\
+                 - assets/ms-msix-xsd-schemas/\n\
+                 - assets/generated/\n\
+                 \n\
+                 To generate these locally/CI: cargo run --bin prebuild-assets\n\
+                 (CI should run this step before clippy/tests.)"
+            );
+        }
+    }
 
     // Get the newest source modification time
     let newest_source = sources
