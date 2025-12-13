@@ -33,6 +33,7 @@ pub mod describe_db;
 pub mod dirs;
 pub mod embedded_assets;
 pub mod example_config;
+pub mod gallery;
 pub mod includes;
 pub mod project;
 pub mod schema_mapping;
