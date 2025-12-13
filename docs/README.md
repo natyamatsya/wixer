@@ -12,3 +12,5 @@ This folder contains the human-readable documentation for Wixer.
   - High-level architecture and code layout.
 - `embedded-assets.md`
   - Embedded assets model (schemas/describe DB/extensions), and how assets.zip is built/updated.
+- `testing.md`
+  - Testing strategy (YAML <-> XML semantics-first), coverage workflow, and pre-commit hooks.
