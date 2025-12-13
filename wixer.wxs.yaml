@@ -30,6 +30,7 @@ Wix:
         Action: 'InstallVSCodeExtension'
         After: 'InstallFiles'
         Condition: 'VSCODE_PATH AND &VSCodeExtension=3'
+    util:BroadcastEnvironmentChange: {}
     # Set VS Code extension feature to Level 1 (enabled) when VS Code is detected
     SetProperty:
       - Id: 'VSCodeExtension'

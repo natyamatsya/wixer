@@ -587,7 +587,7 @@ enum Commands {
         #[arg(long, default_value = "wix_docs")]
         output_dir: PathBuf,
 
-        /// Format to generate (markdown, html, or all)
+        /// Format to generate (markdown, html, asciidoc, or all)
         #[arg(long, default_value = "markdown")]
         format: String,
     },
