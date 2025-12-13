@@ -4,3 +4,12 @@ arch: x64
 buildable: true
 defines:
   BinarySource: weather-api/target/release
+
+prebuild:
+  - tool: cargo
+    cwd: weather-api
+    args:
+      - build
+      - --release
+    produces:
+      - weather-api/target/release/weather-api.exe

@@ -624,6 +624,71 @@ fn build_example(
 
     let msi_path = msi_dir.join(format!("{}.msi", example.name));
 
+    // If this example has prebuild steps, run them when their outputs are missing.
+    if let Some(ref config) = example.config {
+        for step in &config.prebuild {
+            if step.produces.is_empty() {
+                continue;
+            }
+
+            let missing_outputs: Vec<String> = step
+                .produces
+                .iter()
+                .filter(|p| !example.source_dir.join(p).exists())
+                .cloned()
+                .collect();
+
+            if missing_outputs.is_empty() {
+                continue;
+            }
+
+            let mut pre = Command::new(&step.tool);
+            pre.current_dir(
+                step.cwd
+                    .as_deref()
+                    .map(|p| example.source_dir.join(p))
+                    .unwrap_or_else(|| example.source_dir.clone()),
+            );
+            pre.args(&step.args);
+
+            if _verbose {
+                eprintln!("  Prebuild ({}): {:?}", example.name, pre);
+            }
+
+            match pre.output() {
+                Ok(out) => {
+                    if !out.status.success() {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        let stdout = String::from_utf8_lossy(&out.stdout);
+                        let combined = format!("{}\n{}", stderr, stdout);
+                        let first_error = combined
+                            .lines()
+                            .find(|l| l.contains("error") || l.contains("failed"))
+                            .unwrap_or("prebuild failed");
+                        return BuildResult::Error(first_error.chars().take(80).collect());
+                    }
+                }
+                Err(e) => {
+                    return BuildResult::Error(format!("prebuild exec failed: {}", e));
+                }
+            }
+
+            // Verify outputs now exist.
+            let still_missing: Vec<String> = step
+                .produces
+                .iter()
+                .filter(|p| !example.source_dir.join(p).exists())
+                .cloned()
+                .collect();
+            if !still_missing.is_empty() {
+                return BuildResult::Error(format!(
+                    "missing outputs: {}",
+                    still_missing.join(", ")
+                ));
+            }
+        }
+    }
+
     // Build command
     let mut cmd = Command::new(wixer_path);
     cmd.current_dir(&example.source_dir);

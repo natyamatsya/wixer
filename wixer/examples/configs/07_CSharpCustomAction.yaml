@@ -2,3 +2,18 @@ name: "07_CSharpCustomAction"
 description: "Modern C# custom action example targeting .NET 8"
 arch: x64
 buildable: true
+
+prebuild:
+  - tool: dotnet
+    cwd: MyCSharpCustomAction
+    args:
+      - publish
+      - -c
+      - Release
+      - -p:Platform=x64
+      - -r
+      - win-x64
+      - -f
+      - net8.0-windows
+    produces:
+      - MyCSharpCustomAction/bin/x64/Release/net8.0-windows/win-x64/publish/MyCSharpCustomAction.dll

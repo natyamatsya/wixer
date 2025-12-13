@@ -38,6 +38,10 @@ pub struct ExampleConfig {
     #[serde(default)]
     pub requires: Vec<Requirement>,
 
+    /// Optional prebuild steps to generate required artifacts (e.g., custom action DLLs)
+    #[serde(default)]
+    pub prebuild: Vec<PrebuildStep>,
+
     /// Whether this example can be built standalone (without external deps)
     #[serde(default = "default_buildable")]
     pub buildable: bool,
@@ -45,6 +49,25 @@ pub struct ExampleConfig {
     /// Reason why the example is not buildable (if buildable=false)
     #[serde(default)]
     pub skip_reason: Option<String>,
+}
+
+/// A prebuild step to run before building the MSI (only if required artifacts are missing)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrebuildStep {
+    /// The tool/executable to run (e.g., dotnet, cmake, cargo)
+    pub tool: String,
+
+    /// Arguments for the tool
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    /// Working directory for the command (relative to example dir)
+    #[serde(default)]
+    pub cwd: Option<String>,
+
+    /// Files that should exist after the command runs (relative to example dir)
+    #[serde(default)]
+    pub produces: Vec<String>,
 }
 
 fn default_buildable() -> bool {
@@ -129,6 +152,7 @@ impl Default for ExampleConfig {
             sources: Vec::new(),
             extensions: Vec::new(),
             requires: Vec::new(),
+            prebuild: Vec::new(),
             buildable: true,
             skip_reason: None,
         }

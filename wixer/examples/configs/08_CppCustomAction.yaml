@@ -2,3 +2,20 @@ name: "08_CppCustomAction"
 description: "Modern C++23 custom action example using CMake"
 arch: x64
 buildable: true
+
+prebuild:
+  - tool: cmake
+    cwd: MyCppCustomAction
+    args:
+      - --preset
+      - default
+    produces:
+      - MyCppCustomAction/build/build.ninja
+  - tool: cmake
+    cwd: MyCppCustomAction
+    args:
+      - --build
+      - --preset
+      - default
+    produces:
+      - MyCppCustomAction/build/MyCppCustomAction.dll
