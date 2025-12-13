@@ -98,6 +98,70 @@ fn yaml_to_wix_emits_text_from_value_property() {
 }
 
 #[test]
+fn yaml_to_wix_emits_text_from_text_property_text() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"WixLocalization:
+  String:
+    - Id: 'WelcomeText'
+      text: 'Welcome to MyApp'
+"#,
+    )
+    .unwrap();
+
+    let xml = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+
+    let s = doc
+        .descendants()
+        .find(|n| n.has_tag_name("String"))
+        .unwrap();
+    assert_eq!(s.attribute("Id").unwrap(), "WelcomeText");
+    let combined: String = s
+        .children()
+        .filter(|c| c.is_text())
+        .filter_map(|c| c.text())
+        .collect();
+    assert_eq!(combined.trim(), "Welcome to MyApp");
+}
+
+#[test]
+fn yaml_to_wix_emits_text_from_text_property_value() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"WixLocalization:
+  String:
+    - Id: 'WelcomeText'
+      value: 'Welcome to MyApp'
+"#,
+    )
+    .unwrap();
+
+    let xml = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+
+    let s = doc
+        .descendants()
+        .find(|n| n.has_tag_name("String"))
+        .unwrap();
+    assert_eq!(s.attribute("Id").unwrap(), "WelcomeText");
+    let combined: String = s
+        .children()
+        .filter(|c| c.is_text())
+        .filter_map(|c| c.text())
+        .collect();
+    assert_eq!(combined.trim(), "Welcome to MyApp");
+}
+
+#[test]
 fn yaml_to_wix_repeats_elements_for_sequences() {
     let yaml_data: serde_yaml::Value = serde_yaml::from_str(
         r#"Wix:
@@ -153,4 +217,25 @@ fn yaml_to_wix_writes_comment_before_element() {
     )
     .unwrap();
     assert!(xml.contains("<!--Hello-->"));
+}
+
+#[test]
+fn yaml_to_wix_rejects_invalid_root_with_multiple_top_level_keys() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"RootA:
+  Child: 'A'
+RootB:
+  Child: 'B'
+"#,
+    )
+    .unwrap();
+
+    let err = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap_err();
+
+    assert!(err.to_string().contains("Invalid root structure"));
 }

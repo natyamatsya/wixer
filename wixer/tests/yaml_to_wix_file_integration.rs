@@ -36,6 +36,122 @@ fn make_temp_dir(prefix: &str) -> PathBuf {
 }
 
 #[test]
+fn yaml_to_wix_convert_file_reports_missing_include_file() {
+    let dir = make_temp_dir("include_missing");
+    let main = dir.join("main.wxs.yaml");
+    let output = dir.join("out.wxs");
+
+    fs::write(
+        &main,
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Fragment:
+    !include does_not_exist.yaml
+"#,
+    )
+    .unwrap();
+
+    let err = yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap_err();
+
+    assert!(err.to_string().contains("Failed to read file"));
+    assert!(err.to_string().contains("does_not_exist.yaml"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn yaml_to_wix_convert_file_includes_value_context_replaces_mapping() {
+    let dir = make_temp_dir("include_value_context");
+
+    let included = dir.join("package.yaml");
+    let main = dir.join("main.wxs.yaml");
+    let output = dir.join("out.wxs");
+
+    fs::write(
+        &included,
+        r#"Name: 'FromInclude'
+Version: '1.0.0.0'
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        &main,
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Package: !include package.yaml
+"#,
+    )
+    .unwrap();
+
+    yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
+
+    let xml = fs::read_to_string(&output).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let wix = doc.descendants().find(|n| n.has_tag_name("Wix")).unwrap();
+    let ns = wix.tag_name().namespace().unwrap();
+
+    let package = wix
+        .children()
+        .find(|n| n.is_element() && n.has_tag_name((ns, "Package")))
+        .unwrap();
+    assert_eq!(package.attribute("Name").unwrap(), "FromInclude");
+    assert_eq!(package.attribute("Version").unwrap(), "1.0.0.0");
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn yaml_to_wix_convert_file_reports_error_when_mixin_is_not_mapping() {
+    let dir = make_temp_dir("include_mixin_non_mapping");
+
+    let included = dir.join("list.yaml");
+    let main = dir.join("main.wxs.yaml");
+    let output = dir.join("out.wxs");
+
+    fs::write(&included, "- A\n- B\n").unwrap();
+
+    fs::write(
+        &main,
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Fragment:
+    !include list.yaml
+    Package:
+      Name: 'MyApp'
+"#,
+    )
+    .unwrap();
+
+    let err = yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("is not a mapping, cannot be mixed into a mapping")
+    );
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn yaml_to_wix_convert_file_rejects_xml_content_in_yaml_file() {
     let dir = make_temp_dir("reject_xml");
     let input = dir.join("in.wxs.yaml");
@@ -52,6 +168,93 @@ fn yaml_to_wix_convert_file_rejects_xml_content_in_yaml_file() {
     .unwrap_err();
 
     assert!(err.to_string().contains("contains XML content"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn yaml_to_wix_convert_file_expands_value_context_includes() {
+    let dir = make_temp_dir("include_value_context");
+
+    let included = dir.join("package.yaml");
+    let main = dir.join("main.wxs.yaml");
+    let output = dir.join("out.wxs");
+
+    fs::write(
+        &included,
+        r#"Name: 'FromInclude'
+Version: '1.0.0.0'
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        &main,
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Package:
+    !include package.yaml
+"#,
+    )
+    .unwrap();
+
+    yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
+
+    let xml = fs::read_to_string(&output).unwrap();
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let wix = doc.descendants().find(|n| n.has_tag_name("Wix")).unwrap();
+    let ns = wix.tag_name().namespace().unwrap();
+
+    let package = wix
+        .children()
+        .find(|n| n.is_element() && n.has_tag_name((ns, "Package")))
+        .unwrap();
+    assert_eq!(package.attribute("Name").unwrap(), "FromInclude");
+    assert_eq!(package.attribute("Version").unwrap(), "1.0.0.0");
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn yaml_to_wix_convert_file_reports_error_when_mixin_is_not_mapping_into_mapping() {
+    let dir = make_temp_dir("include_mixin_non_mapping_into_mapping");
+
+    let included = dir.join("list.yaml");
+    let main = dir.join("main.wxs.yaml");
+    let output = dir.join("out.wxs");
+
+    fs::write(&included, "- A\n- B\n").unwrap();
+
+    fs::write(
+        &main,
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Fragment:
+    Package:
+      !include list.yaml
+      Name: 'MyApp'
+"#,
+    )
+    .unwrap();
+
+    let err = yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("is not a mapping, cannot be mixed into a mapping")
+    );
 
     let _ = fs::remove_dir_all(&dir);
 }

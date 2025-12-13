@@ -81,6 +81,23 @@ fn wix_to_yaml_converts_include_processing_instruction() {
 }
 
 #[test]
+fn wix_to_yaml_ignores_non_include_processing_instructions() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<Wix>
+  <?define Foo=Bar?>
+  <Package Name="MyApp" />
+</Wix>
+"#;
+
+    let yaml_str =
+        wix_to_yaml::convert_xml_str_to_yaml_str(xml, AttributeStrategy::Inline).unwrap();
+    let root: serde_yaml::Value = serde_yaml::from_str(&yaml_str).unwrap();
+
+    let wix = support::yaml_get(&root, "Wix");
+    assert!(wix.get("_include").is_none());
+}
+
+#[test]
 fn wix_to_yaml_preserves_comments_as_comment_property() {
     let xml = r#"<?xml version="1.0" encoding="utf-8"?>
 <Wix>

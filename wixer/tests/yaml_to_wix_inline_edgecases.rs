@@ -99,3 +99,26 @@ fn yaml_to_wix_inline_emits_multiple_xmlns_prefix_declarations() {
         "Expected util namespace declaration"
     );
 }
+
+#[test]
+fn yaml_to_wix_cpack_token_is_restored_in_output() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  CPACK_WIX_CUSTOM_XMLNS_EXPANDED: 1
+  Package:
+    Name: 'MyApp'
+"#,
+    )
+    .unwrap();
+
+    let xml = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
+
+    assert!(xml.contains("@CPACK_WIX_CUSTOM_XMLNS_EXPANDED@"));
+    assert!(!xml.contains("CPACK_WIX_CUSTOM_XMLNS_EXPANDED=\"1\""));
+}
