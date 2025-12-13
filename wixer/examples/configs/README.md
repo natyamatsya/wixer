@@ -18,21 +18,24 @@ See the main [examples README](../README.md) for the full configuration schema.
 | `extensions` | list | WiX extensions (`-ext` flags) |
 | `sources` | list | Source files (auto-detected if omitted) |
 | `buildable` | bool | Whether to attempt building (default: true) |
+| `expect_build_failure` | bool | If true, a failing build is treated as success (for intentionally-invalid examples) |
 | `skip_reason` | string | Reason shown when skipped |
 | `requires` | list | External dependencies |
+| `prebuild` | list | Prebuild commands run when their `produces` outputs are missing |
 
 ## Files
 
-| Config | Example | Buildable |
+| Config | Example | Notes |
 |--------|---------|-----------|
 | `00_HelloWorldInstaller.yaml` | Minimal installer | ✓ |
 | `01_HelloWorldInstallerUpgradable.yaml` | With MajorUpgrade | ✓ |
-| `02_x86_x64_Installer.yaml` | Platform-dependent | ⊘ |
+| `02_x64_arm64_Installer.yaml` | Multi-arch example | ✓ |
 | `03_PassingInstallLocationParameterToInstaller.yaml` | Custom install path | ✓ |
 | `04_PowerShellPreconditionCustomAction.yaml` | PowerShell precondition | ✓ |
 | `05_RememberPropertyPattern.yaml` | Remember Property pattern | ✓ |
 | `06_RememberPropertyPatternComplete.yaml` | Complete Remember Property | ✓ |
-| `07_CSharpCustomAction.yaml` | C# custom action | ⊘ |
-| `08_CppCustomAction.yaml` | C++ custom action | ⊘ |
-| `09_InstallerWithUserInterface.yaml` | Custom WixUI dialogs | ⊘ |
-| `10_ASP.NET_Core6_WeatherForecastInstaller.yaml` | IIS web app installer | ⊘ |
+| `07_CSharpCustomAction.yaml` | C# custom action | ✓ (uses `prebuild`) |
+| `08_CppCustomAction.yaml` | C++ custom action | ✓ (uses `prebuild`) |
+| `09_InstallerWithUserInterface.yaml` | Custom WixUI dialogs | ✓ |
+| `10_Rust_Axum_WeatherForecastInstaller.yaml` | Rust/Axum app installer | ✓ (uses `prebuild`) |
+| `known-pitfalls.yaml` | Known pitfalls gallery | ✓ (expected failure) |

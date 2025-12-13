@@ -244,6 +244,7 @@ fn main() -> Result<()> {
 
             // Counters for parallel builds
             let built = AtomicUsize::new(0);
+            let expected_failed = AtomicUsize::new(0);
             let skipped = AtomicUsize::new(0);
             let errors = AtomicUsize::new(0);
             let completed = AtomicUsize::new(0);
@@ -260,6 +261,13 @@ fn main() -> Result<()> {
                     BuildResult::Success => {
                         built.fetch_add(1, Ordering::Relaxed);
                         format!("[{}/{}] Building {}... ✓", done, total, example.name)
+                    }
+                    BuildResult::ExpectedFailure => {
+                        expected_failed.fetch_add(1, Ordering::Relaxed);
+                        format!(
+                            "[{}/{}] Building {}... ✓ (expected failure)",
+                            done, total, example.name
+                        )
                     }
                     BuildResult::Skipped(reason) => {
                         skipped.fetch_add(1, Ordering::Relaxed);
@@ -290,8 +298,9 @@ fn main() -> Result<()> {
 
             println!();
             println!(
-                "MSI packages: {} built, {} skipped, {} failed",
+                "MSI packages: {} built, {} expected failures, {} skipped, {} failed",
                 stats.built,
+                expected_failed.load(Ordering::Relaxed),
                 skipped.load(Ordering::Relaxed),
                 stats.build_errors
             );
@@ -432,6 +441,7 @@ struct BuildExample {
 
 enum BuildResult {
     Success,
+    ExpectedFailure,
     Skipped(String),
     Error(String),
 }
@@ -720,8 +730,19 @@ fn build_example(
 
     match cmd.output() {
         Ok(output) => {
+            let expect_failure = example
+                .config
+                .as_ref()
+                .is_some_and(|c| c.expect_build_failure);
+
             if output.status.success() {
-                BuildResult::Success
+                if expect_failure {
+                    BuildResult::Error("build succeeded but failure was expected".to_string())
+                } else {
+                    BuildResult::Success
+                }
+            } else if expect_failure {
+                BuildResult::ExpectedFailure
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -828,8 +849,21 @@ fn generate_index(output: &Path, examples: &[Example]) -> Result<()> {
         .push_str("This gallery contains WiX installer examples converted for use with wixer.\n\n");
     content.push_str("## Structure\n\n");
     content.push_str("- **wix-v4/** — WiX v4 XML files (upgraded from v3)\n");
-    content.push_str("- **wixer-yaml/** — YAML equivalents for use with wixer\n\n");
-    content.push_str("## Examples\n\n");
+    content.push_str("- **wixer-yaml/** — Curated YAML gallery (tracked in git)\n");
+    content.push_str("- **msi/** — Built MSI packages\n\n");
+
+    content.push_str("## Curated YAML Gallery\n\n");
+    content.push_str(
+        "The curated YAML gallery lives under `examples/wixer-yaml/` in the repository.\n\n",
+    );
+    content.push_str("### Known Pitfalls\n\n");
+    content.push_str("The `known-pitfalls` example is intentionally invalid and is used to demonstrate common WiX mistakes.\n\n");
+    content.push_str("When building the gallery, `known-pitfalls` is configured with `expect_build_failure: true`.\n");
+    content.push_str(
+        "This means a failing build is treated as success and shown as `✓ (expected failure)`.\n\n",
+    );
+
+    content.push_str("## Submodule Examples (upgraded from v3)\n\n");
     content.push_str("| Example | Description |\n");
     content.push_str("|---------|-------------|\n");
 

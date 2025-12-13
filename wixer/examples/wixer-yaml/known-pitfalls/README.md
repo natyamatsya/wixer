@@ -2,6 +2,16 @@
 
 This directory contains examples of common mistakes in WiX installers. Each example demonstrates a specific pitfall with documentation on how to detect and fix it.
 
+## Expected Build Failures
+
+These examples are intentionally invalid and are not meant to build into an MSI package.
+
+When running `cargo make gallery-build`, the `known-pitfalls` entry is configured with `expect_build_failure: true`.
+This means:
+
+- A failing build is treated as success and shown as `✓ (expected failure)`.
+- A successful build is treated as an error (because the pitfall is no longer causing a build-time failure).
+
 ## Pitfalls
 
 | # | Pitfall | Detection Method |
@@ -188,7 +198,7 @@ wixer describe InstallDirDlg
 ## Running All Pitfall Tests
 
 ```bash
-cd wixer/examples/wixer-yaml/_pitfalls
+cd wixer/examples/wixer-yaml/known-pitfalls
 
 # Quick test all examples
 for f in *.wxs.yaml; do

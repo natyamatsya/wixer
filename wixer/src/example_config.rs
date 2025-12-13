@@ -46,6 +46,10 @@ pub struct ExampleConfig {
     #[serde(default = "default_buildable")]
     pub buildable: bool,
 
+    /// If true, gallery builds are expected to fail and should be treated as success.
+    #[serde(default)]
+    pub expect_build_failure: bool,
+
     /// Reason why the example is not buildable (if buildable=false)
     #[serde(default)]
     pub skip_reason: Option<String>,
@@ -154,6 +158,7 @@ impl Default for ExampleConfig {
             requires: Vec::new(),
             prebuild: Vec::new(),
             buildable: true,
+            expect_build_failure: false,
             skip_reason: None,
         }
     }

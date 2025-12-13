@@ -15,6 +15,7 @@ examples/
 │   ├── 00_HelloWorldInstaller/
 │   ├── ...
 │   └── 07_CSharpCustomAction/  # Modernized with .NET 6/8
+│   └── known-pitfalls/          # Intentionally-invalid examples (expected build failures)
 └── gallery/                  # Generated output (gitignored)
     ├── wix-v4/              # Upgraded WiX v4 XML (regenerated from submodule)
     └── msi/                 # Built MSI packages
@@ -73,6 +74,17 @@ sources:                          # Source files (auto-detected if omitted)
 # Build control
 buildable: true                   # Set to false to skip building
 skip_reason: "Reason for skip"    # Shown when buildable=false
+
+# Expected build failure (for intentionally-invalid examples)
+expect_build_failure: false
+
+# Prebuild steps (optional)
+prebuild:
+  - tool: dotnet
+    cwd: MyCSharpCustomAction
+    args: ["publish", "-c", "Release", "-p:Platform=x64", "-r", "win-x64", "-f", "net8.0-windows"]
+    produces:
+      - MyCSharpCustomAction/bin/x64/Release/net8.0-windows/win-x64/publish/MyCSharpCustomAction.dll
 
 # External dependencies
 requires:
@@ -137,17 +149,30 @@ Contains built MSI packages for examples that completed successfully.
 |---------|--------|-------|
 | 00_HelloWorldInstaller | ✓ | Builds successfully |
 | 01_HelloWorldInstallerUpgradable | ✓ | Builds successfully |
-| 02_x86_x64_Installer | ⊘ | Requires DLL files |
+| 02_x64_arm64_Installer | ✓ | Builds successfully |
 | 03_PassingInstallLocationParameterToInstaller | ✓ | Builds successfully |
 | 04_PowerShellPreconditionCustomAction | ✓ | Builds successfully |
 | 05_RememberPropertyPattern | ✓ | Builds successfully |
 | 06_RememberPropertyPatternComplete | ✓ | Builds successfully |
-| 07_CSharpCustomAction | ⊘ | Requires C# project build |
-| 08_CppCustomAction | ⊘ | Requires C++ project build |
-| 09_InstallerWithUserInterface | ⊘ | WixUI v3→v4 migration needed |
-| 10_ASP.NET_Core6_WeatherForecastInstaller | ⊘ | Requires ASP.NET app |
+| 07_CSharpCustomAction | ✓ | Uses `prebuild` to compile the C# custom action |
+| 08_CppCustomAction | ✓ | Uses `prebuild` to compile the C++ custom action |
+| 09_InstallerWithUserInterface | ✓ | Builds successfully |
+| 10_Rust_Axum_WeatherForecastInstaller | ✓ | Uses `prebuild` to compile the Rust app |
+| known-pitfalls | ✓ (expected failure) | Intentionally invalid inputs; build failure is the expected outcome |
 
-**Legend:** ✓ = builds, ⊘ = skipped (external dependency)
+**Legend:**
+
+- **✓** = builds successfully
+- **✓ (expected failure)** = build fails as expected (example is intentionally invalid)
+
+### Expected Build Failures (known-pitfalls)
+
+The curated `wixer-yaml/known-pitfalls/` examples are designed to demonstrate common WiX mistakes.
+
+When an example config sets `expect_build_failure: true`, `cargo make gallery-build` treats:
+
+- A **failing** build as success and prints `✓ (expected failure)`.
+- A **successful** build as an error (because the pitfall is no longer triggering a build-time failure).
 
 ## Modernized Examples
 

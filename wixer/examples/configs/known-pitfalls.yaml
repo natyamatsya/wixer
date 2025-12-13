@@ -1,0 +1,3 @@
+name: "known-pitfalls"
+description: "Intentionally invalid examples used to demonstrate common WiX pitfalls"
+expect_build_failure: true
