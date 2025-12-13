@@ -66,3 +66,67 @@ Wix:
             .any(|w| { w.suggestion.as_ref().is_some_and(|s| s.contains("MyProp")) })
     );
 }
+
+#[test]
+fn condition_validation_does_not_warn_for_set_property_defined_properties() {
+    let yaml: Value = serde_yaml::from_str(
+        r#"
+Wix:
+  Package:
+    SetProperty:
+      - Id: StageProp
+        Value: "1"
+    InstallExecuteSequence:
+      Custom:
+        - Action: CA_Test
+          Before: InstallFinalize
+          Condition: StageProp AND -1
+"#,
+    )
+    .unwrap();
+
+    let warnings = condition_validation::find_undefined_properties(&yaml);
+    assert!(warnings.is_empty());
+}
+
+#[test]
+fn condition_validation_does_not_warn_for_custom_action_property_attributes() {
+    let yaml: Value = serde_yaml::from_str(
+        r#"
+Wix:
+  Package:
+    CustomAction:
+      - Id: CA_Set
+        Property: MyDefinedProp
+        Value: "1"
+    InstallExecuteSequence:
+      Custom:
+        - Action: CA_Run
+          Before: InstallFinalize
+          Condition: MyDefinedProp
+"#,
+    )
+    .unwrap();
+
+    let warnings = condition_validation::find_undefined_properties(&yaml);
+    assert!(warnings.is_empty());
+}
+
+#[test]
+fn condition_validation_ignores_invalid_identifier_tokens() {
+    let yaml: Value = serde_yaml::from_str(
+        r#"
+Wix:
+  Package:
+    InstallExecuteSequence:
+      Custom:
+        - Action: CA_Test
+          Before: InstallFinalize
+          Condition: 1ABC AND A-B AND _INTERNAL
+"#,
+    )
+    .unwrap();
+
+    let warnings = condition_validation::find_undefined_properties(&yaml);
+    assert!(warnings.is_empty());
+}

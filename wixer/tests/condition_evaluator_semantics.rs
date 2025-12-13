@@ -82,3 +82,36 @@ fn condition_evaluator_tokenizes_negative_integers() {
     let p = HashMap::new();
     assert!(ConditionEvaluator::evaluate("-5", &p).is_true());
 }
+
+#[test]
+fn condition_evaluator_handles_unknown_single_character_tokens_as_properties() {
+    let p = HashMap::new();
+    assert!(!ConditionEvaluator::evaluate("?", &p).is_true());
+}
+
+#[test]
+fn condition_evaluator_supports_string_relational_comparisons() {
+    let p = props_str(&[("A", "abc"), ("B", "bcd")]);
+    assert!(ConditionEvaluator::evaluate("A < B", &p).is_true());
+    assert!(ConditionEvaluator::evaluate("B > A", &p).is_true());
+}
+
+#[test]
+fn condition_evaluator_integer_like_operator_returns_false() {
+    let mut p = HashMap::new();
+    p.insert("N".to_string(), PropertyValue::Integer(7));
+    assert!(!ConditionEvaluator::evaluate("N >< 3", &p).is_true());
+}
+
+#[test]
+fn condition_evaluator_no_operator_integer_truthiness_works_for_zero() {
+    let mut p = HashMap::new();
+    p.insert("N".to_string(), PropertyValue::Integer(0));
+    assert!(!ConditionEvaluator::evaluate("N", &p).is_true());
+}
+
+#[test]
+fn condition_evaluator_unexpected_token_defaults_to_false() {
+    let p = HashMap::new();
+    assert!(!ConditionEvaluator::evaluate(")", &p).is_true());
+}

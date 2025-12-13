@@ -110,3 +110,48 @@ Wix:
             .any(|o| o.kind == OrphanKind::Component && o.id == "C1")
     );
 }
+
+#[test]
+fn orphan_detection_supports_component_group_ref_as_string() {
+    let yaml: Value = test_support::yaml(
+        r#"
+Wix:
+  Package:
+    ComponentGroup:
+      - Id: G1
+        Component:
+          - Id: C1
+    Feature:
+      Id: Main
+      ComponentGroupRef: G1
+"#,
+    );
+
+    let orphans = find_orphans(&yaml);
+    assert!(orphans.is_empty(), "Unexpected orphans: {:?}", orphans);
+}
+
+#[test]
+fn orphan_detection_supports_component_ref_sequences_inside_group() {
+    let yaml: Value = test_support::yaml(
+        r#"
+Wix:
+  Package:
+    Component:
+      - Id: C1
+      - Id: C2
+    ComponentGroup:
+      - Id: G1
+        ComponentRef:
+          - Id: C1
+          - Id: C2
+    Feature:
+      Id: Main
+      ComponentGroupRef:
+        Id: G1
+"#,
+    );
+
+    let orphans = find_orphans(&yaml);
+    assert!(orphans.is_empty(), "Unexpected orphans: {:?}", orphans);
+}
