@@ -67,75 +67,97 @@ jobs:
           report_paths: "target/nextest/ci/junit.xml"
           require_tests: false
           include_passed: true
-      # MSI Installer Build (Windows only)
+      # Package wixer installer (MSI + MSIX) and upload artifacts
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Build VS Code Extension
-        run: |
-          cd wixer-vscode
-          npm install
-          npm run compile
-          npx @vscode/vsce package --no-dependencies
+
       - name: Install WiX Toolset
         run: dotnet tool install --global wix
-      - name: Build Release
-        run: cargo build --release
-        env:
-          WIXER_STRICT_ASSETS: "1"
 
-      - name: Setup MakeAppx (Windows SDK)
+      - name: Install WiX extensions
         shell: pwsh
         run: |
-          $makeAppx = Get-ChildItem -Path "${Env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter MakeAppx.exe -ErrorAction SilentlyContinue |
+          # Ensure dotnet global tools are on PATH
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
+
+          wix --version
+
+          # Extensions are separate packages; install them explicitly
+          wix extension add --global WixToolset.Util.wixext
+          wix extension add --global WixToolset.UI.wixext
+
+          wix extension list --global
+
+      - name: Setup Windows SDK tools (MakeAppx + signtool)
+        shell: pwsh
+        run: |
+          $sdkBin = Get-ChildItem -Path "${Env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter MakeAppx.exe -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -match "\\x64\\" } |
             Sort-Object FullName -Descending |
             Select-Object -First 1
-          if (-not $makeAppx) {
+          if (-not $sdkBin) {
             Write-Error "MakeAppx.exe not found. Ensure the Windows SDK is installed on the runner."
             exit 1
           }
-          $makeDir = Split-Path $makeAppx.FullName -Parent
-          Add-Content -Path $env:GITHUB_PATH -Value $makeDir
+          $binDir = Split-Path $sdkBin.FullName -Parent
+          Add-Content -Path $env:GITHUB_PATH -Value $binDir
 
-      - name: Build MSIX package
-        shell: pwsh
-        env:
-          WIXER_STRICT_ASSETS: "1"
-        run: |
-          cargo run --release --bin wixer -- migrate --target msix ./wixer.wxs.yaml target/msix
-
-          Copy-Item -Path "target/release/wixer.exe" -Destination "target/msix/" -Force
-
-          if (-not (Test-Path "target/msix/Assets")) { New-Item -ItemType Directory -Path "target/msix/Assets" -Force | Out-Null }
-          Copy-Item -Path "assets/*" -Destination "target/msix/Assets/" -Force
-
-          if (-not (Test-Path "target/msix/vscode")) { New-Item -ItemType Directory -Path "target/msix/vscode" -Force | Out-Null }
-          $vsix = Get-ChildItem -Path "wixer-vscode/wixer-vscode-*.vsix" | Select-Object -First 1
-          if (-not $vsix) {
-            Write-Error "VSIX not found. Expected wixer-vscode/wixer-vscode-*.vsix"
+          $signTool = Get-Command signtool -ErrorAction SilentlyContinue
+          if (-not $signTool) {
+            Write-Error "signtool.exe not found after adding Windows SDK bin dir to PATH."
             exit 1
           }
-          Copy-Item -Path $vsix.FullName -Destination "target/msix/vscode/" -Force
 
-          MakeAppx pack /d target/msix /p target/wixer.msix /o
+      - name: Install cargo-make
+        run: cargo install cargo-make --locked
 
-      - name: Upload MSIX Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: wixer-msix
-          path: target/wixer.msix
-          if-no-files-found: warn
-      - name: Build MSI Installer
-        run: cargo run --release --bin wixer -- build wixer.wxs.yaml -o target/wixer.msi
+      - name: Build wixer packages (MSI + MSIX)
         env:
           WIXER_STRICT_ASSETS: "1"
-      - name: Upload MSI Artifact
+        run: cargo make wixer-package
+
+      - name: Compute package version + git hash
+        id: pkg
+        shell: pwsh
+        run: |
+          $meta = cargo metadata --format-version 1 --no-deps | ConvertFrom-Json
+          $pkg = $meta.packages | Where-Object { $_.name -eq "wixer" } | Select-Object -First 1
+          if (-not $pkg) { throw "Unable to determine wixer version via cargo metadata" }
+          $version = $pkg.version
+          $sha = (git rev-parse --short HEAD).Trim()
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Rename artifacts with version + git hash
+        shell: pwsh
+        run: |
+          $version = "${{ steps.pkg.outputs.version }}"
+          $sha = "${{ steps.pkg.outputs.sha }}"
+          Copy-Item -Path "target/wixer.msi" -Destination "target/wixer-$version-$sha.msi" -Force
+          Copy-Item -Path "target/wixer.msix" -Destination "target/wixer-$version-$sha.msix" -Force
+
+          if (Test-Path "target/.wixer-tmp/codesign/wixer-dev-codesign.cer") {
+            Copy-Item -Path "target/.wixer-tmp/codesign/wixer-dev-codesign.cer" -Destination "target/wixer-$version-$sha.cer" -Force
+          }
+          if (Test-Path "target/.wixer-tmp/codesign/subject.txt") {
+            Copy-Item -Path "target/.wixer-tmp/codesign/subject.txt" -Destination "target/wixer-$version-$sha.codesign-subject.txt" -Force
+          }
+          if (Test-Path "target/.wixer-tmp/codesign/thumbprint.txt") {
+            Copy-Item -Path "target/.wixer-tmp/codesign/thumbprint.txt" -Destination "target/wixer-$version-$sha.codesign-thumbprint.txt" -Force
+          }
+
+      - name: Upload wixer package artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wixer-msi
-          path: target/wixer.msi
+          name: wixer-packages-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}
+          path: |
+            target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.msi
+            target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.msix
+            target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.cer
+            target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.codesign-subject.txt
+            target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.codesign-thumbprint.txt
           if-no-files-found: warn
 #      - name: Test with coverage
 #        run: cargo llvm-cov nextest --workspace --profile ci --lcov --output-path lcov.info

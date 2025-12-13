@@ -116,7 +116,7 @@ args = ["run", "--release", "--bin", "wixer", "--", "export", ".", "target/wix"]
 # MSI Installer Tasks (using wixer build)
 # =============================================================================
 
-[tasks.wixer-package-msi]
+[tasks.wixer-package-msi-build]
 description = "Build wixer MSI installer from YAML using wixer"
 dependencies = ["build-release", "vscode-package"]
 command = "cargo"
@@ -131,6 +131,10 @@ args = [
     "-o",
     "target/wixer.msi",
 ]
+
+[tasks.wixer-package-msi]
+description = "Build and sign wixer MSI installer"
+dependencies = ["wixer-package-msi-build", "wixer-codesign-msi"]
 
 [tasks.wix-installer]
 description = "Build MSI installer from YAML using wixer"
@@ -190,9 +194,178 @@ if (-not (Get-Command MakeAppx -ErrorAction SilentlyContinue)) {
 MakeAppx pack /d target/msix /p target/wixer.msix /o
 '''
 
-[tasks.wixer-package-msix]
+[tasks.wixer-package-msix-build]
 description = "Build wixer MSIX package (manifest + staging + MakeAppx pack)"
 dependencies = ["msix-pack"]
+
+[tasks.wixer-package-msix]
+description = "Build and sign wixer MSIX package"
+dependencies = ["wixer-package-msix-build", "wixer-codesign-msix"]
+
+[tasks.wixer-codesign-cert]
+description = "Create/reuse a self-signed code signing cert and write metadata under target/.wixer-tmp/codesign"
+script_runner = "pwsh"
+script_extension = "ps1"
+script = '''
+$ErrorActionPreference = "Stop"
+
+$tmpRoot = "target/.wixer-tmp/codesign"
+if (Test-Path $tmpRoot) { Remove-Item -Recurse -Force $tmpRoot | Out-Null }
+New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+
+$subject = $env:WIXER_CODESIGN_SUBJECT
+
+if ([string]::IsNullOrWhiteSpace($subject)) {
+    $manifest = "target/msix/AppxManifest.xml"
+    if (Test-Path $manifest) {
+        $content = Get-Content -Path $manifest -Raw
+        $m = [regex]::Match($content, 'Publisher\s*=\s*"([^"]+)"')
+        if ($m.Success) {
+            $subject = $m.Groups[1].Value
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($subject)) {
+    $subject = "CN=Wixer Dev Code Signing"
+}
+
+Set-Content -Path "$tmpRoot/subject.txt" -Value $subject
+
+$existing = Get-ChildItem -Path "Cert:\CurrentUser\My" | Where-Object { $_.Subject -eq $subject } | Select-Object -First 1
+
+if ($null -eq $existing) {
+    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $subject -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature -NotAfter (Get-Date).AddYears(5)
+} else {
+    $cert = $existing
+}
+
+$thumb = $cert.Thumbprint
+Set-Content -Path "$tmpRoot/thumbprint.txt" -Value $thumb
+
+$cerPath = "$tmpRoot/wixer-dev-codesign.cer"
+Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
+
+Write-Host "Using code signing cert subject: $subject"
+Write-Host "Thumbprint: $thumb"
+Write-Host "Exported public cert: $cerPath"
+'''
+
+[tasks.wixer-codesign-trust]
+description = "Install the self-signed code signing cert into CurrentUser\\TrustedPeople (for local MSIX install)"
+dependencies = ["wixer-codesign-cert"]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = '''
+$ErrorActionPreference = "Stop"
+
+$cerPath = "target/.wixer-tmp/codesign/wixer-dev-codesign.cer"
+if (-not (Test-Path $cerPath)) {
+    Write-Error "Missing cert file: $cerPath"
+    exit 1
+}
+
+Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
+Write-Host "Imported cert into CurrentUser\\TrustedPeople"
+'''
+
+[tasks.wixer-codesign-msi]
+description = "Sign target/wixer.msi using the self-signed code signing cert"
+dependencies = ["wixer-codesign-cert"]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = '''
+$ErrorActionPreference = "Stop"
+
+$require = $env:WIXER_CODESIGN_REQUIRE -eq "1"
+$signtool = Get-Command signtool -ErrorAction SilentlyContinue
+if ($null -eq $signtool) {
+    if ($require) { Write-Error "signtool not found in PATH"; exit 1 }
+    Write-Host "signtool not found; skipping MSI signing"
+    exit 0
+}
+
+$msi = "target/wixer.msi"
+if (-not (Test-Path $msi)) {
+    Write-Error "Missing MSI: $msi"
+    exit 1
+}
+
+$thumb = (Get-Content "target/.wixer-tmp/codesign/thumbprint.txt" -ErrorAction Stop).Trim()
+
+$timestamp = $env:WIXER_CODESIGN_TIMESTAMP_URL
+if ([string]::IsNullOrWhiteSpace($timestamp)) {
+    & $signtool.Path sign /fd SHA256 /sha1 $thumb /v $msi
+} else {
+    & $signtool.Path sign /fd SHA256 /sha1 $thumb /tr $timestamp /td SHA256 /v $msi
+}
+
+if ($LASTEXITCODE -ne 0) {
+    if ($require) { Write-Error "MSI signing failed (exit code $LASTEXITCODE)"; exit $LASTEXITCODE }
+    Write-Host "MSI signing failed (exit code $LASTEXITCODE); leaving unsigned: $msi"
+    exit 0
+}
+
+Write-Host "Signed MSI: $msi"
+'''
+
+[tasks.wixer-codesign-msix]
+description = "Sign target/wixer.msix using the self-signed code signing cert"
+dependencies = ["wixer-codesign-cert"]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = '''
+$ErrorActionPreference = "Stop"
+
+$require = $env:WIXER_CODESIGN_REQUIRE -eq "1"
+$signtool = Get-Command signtool -ErrorAction SilentlyContinue
+if ($null -eq $signtool) {
+    if ($require) { Write-Error "signtool not found in PATH"; exit 1 }
+    Write-Host "signtool not found; skipping MSIX signing"
+    exit 0
+}
+
+$msix = "target/wixer.msix"
+if (-not (Test-Path $msix)) {
+    Write-Error "Missing MSIX: $msix"
+    exit 1
+}
+
+$thumb = (Get-Content "target/.wixer-tmp/codesign/thumbprint.txt" -ErrorAction Stop).Trim()
+
+$timestamp = $env:WIXER_CODESIGN_TIMESTAMP_URL
+if ([string]::IsNullOrWhiteSpace($timestamp)) {
+    & $signtool.Path sign /fd SHA256 /sha1 $thumb /v $msix
+} else {
+    & $signtool.Path sign /fd SHA256 /sha1 $thumb /tr $timestamp /td SHA256 /v $msix
+}
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "MSIX signing failed (exit code $LASTEXITCODE); attempting .appx fallback"
+
+    $fallbackDir = "target/.wixer-tmp/codesign"
+    New-Item -ItemType Directory -Path $fallbackDir -Force | Out-Null
+
+    $appx = "$fallbackDir/wixer.appx"
+    Copy-Item -Path $msix -Destination $appx -Force
+
+    if ([string]::IsNullOrWhiteSpace($timestamp)) {
+        & $signtool.Path sign /fd SHA256 /sha1 $thumb /v $appx
+    } else {
+        & $signtool.Path sign /fd SHA256 /sha1 $thumb /tr $timestamp /td SHA256 /v $appx
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        if ($require) { Write-Error "MSIX signing failed (exit code $LASTEXITCODE)"; exit $LASTEXITCODE }
+        Write-Host "MSIX signing failed (exit code $LASTEXITCODE); leaving unsigned: $msix"
+        exit 0
+    }
+
+    Move-Item -Path $appx -Destination $msix -Force
+}
+
+Write-Host "Signed MSIX: $msix"
+'''
 
 [tasks.msix-bundle]
 description = "Create MSIX bundle"
