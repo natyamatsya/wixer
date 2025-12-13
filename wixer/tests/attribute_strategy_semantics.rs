@@ -115,3 +115,79 @@ fn yaml_to_wix_separate_strategy_treats_plain_scalars_as_elements() {
         .unwrap();
     assert_eq!(name_child.text().unwrap(), "MyApp");
 }
+
+#[test]
+fn yaml_to_wix_separate_strategy_supports_elements_as_sequence() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"Wix:
+  Package:
+    attributes:
+      Name: 'MyApp'
+    elements:
+      - Feature:
+          attributes:
+            Id: 'A'
+      - Feature:
+          attributes:
+            Id: 'B'
+"#,
+    )
+    .unwrap();
+
+    let xml = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Separate,
+        &known_attributes(),
+    )
+    .unwrap();
+
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let wix = doc.descendants().find(|n| n.has_tag_name("Wix")).unwrap();
+    let package = wix
+        .children()
+        .find(|n| n.is_element() && n.has_tag_name("Package"))
+        .unwrap();
+
+    let features: Vec<_> = package
+        .children()
+        .filter(|n| n.is_element() && n.has_tag_name("Feature"))
+        .collect();
+    assert_eq!(features.len(), 2);
+
+    let ids: Vec<_> = features
+        .iter()
+        .map(|n| n.attribute("Id").unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&"A".to_string()));
+    assert!(ids.contains(&"B".to_string()));
+}
+
+#[test]
+fn yaml_to_wix_separate_strategy_serializes_numbers_and_bools_in_attributes_map() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"Wix:
+  Package:
+    attributes:
+      Compressed: true
+      InstallPrivileges: 1
+"#,
+    )
+    .unwrap();
+
+    let xml = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Separate,
+        &known_attributes(),
+    )
+    .unwrap();
+
+    let doc = roxmltree::Document::parse(&xml).unwrap();
+    let wix = doc.descendants().find(|n| n.has_tag_name("Wix")).unwrap();
+    let package = wix
+        .children()
+        .find(|n| n.is_element() && n.has_tag_name("Package"))
+        .unwrap();
+
+    assert_eq!(package.attribute("Compressed").unwrap(), "yes");
+    assert_eq!(package.attribute("InstallPrivileges").unwrap(), "1");
+}

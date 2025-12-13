@@ -220,6 +220,30 @@ fn yaml_to_wix_writes_comment_before_element() {
 }
 
 #[test]
+fn yaml_to_wix_writes_comment_before_nested_element() {
+    let yaml_data: serde_yaml::Value = serde_yaml::from_str(
+        r#"Wix:
+  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  Package:
+    _comment: 'Pkg'
+    Name: 'MyApp'
+"#,
+    )
+    .unwrap();
+
+    let xml = yaml_to_wix::convert_value_to_string(
+        &yaml_data,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
+
+    let comment_pos = xml.find("<!--Pkg-->").unwrap();
+    let package_pos = xml.find("<Package").unwrap();
+    assert!(comment_pos < package_pos);
+}
+
+#[test]
 fn yaml_to_wix_rejects_invalid_root_with_multiple_top_level_keys() {
     let yaml_data: serde_yaml::Value = serde_yaml::from_str(
         r#"RootA:

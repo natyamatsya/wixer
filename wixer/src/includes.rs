@@ -292,6 +292,36 @@ Wix:
     }
 
     #[test]
+    fn test_preprocess_text_supports_quoted_paths_with_spaces() {
+        let input = r#"
+Wix:
+  Key: !include "dir with spaces/value.yaml"
+  !include "dir with spaces/mixin.yaml"
+"#;
+
+        let processed = preprocess_text(input);
+
+        assert!(
+            processed.contains(r#"Key: { "__wixer_include__ dir with spaces/value.yaml": null }"#)
+        );
+        assert!(processed.contains(r#""__wixer_include__ dir with spaces/mixin.yaml": null"#));
+    }
+
+    #[test]
+    fn test_preprocess_text_supports_single_quoted_paths() {
+        let input = r#"
+Wix:
+  Key: !include 'value.yaml'
+  !include 'mixin.yaml'
+"#;
+
+        let processed = preprocess_text(input);
+
+        assert!(processed.contains(r#"Key: { "__wixer_include__ value.yaml": null }"#));
+        assert!(processed.contains(r#""__wixer_include__ mixin.yaml": null"#));
+    }
+
+    #[test]
     fn test_deep_merge() {
         let mut base = serde_yaml::from_str::<Value>(
             r#"
