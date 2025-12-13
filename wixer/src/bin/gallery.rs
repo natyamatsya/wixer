@@ -63,6 +63,10 @@ struct Args {
     #[arg(long)]
     validate: bool,
 
+    /// Generate MSIX manifest outputs via `wixer migrate --target msix`
+    #[arg(long)]
+    msix: bool,
+
     #[arg(short = 'j', long, default_value = "0")]
     jobs: usize,
 }
@@ -106,6 +110,7 @@ fn main() -> anyhow::Result<()> {
         wixer: args.wixer,
         verbose: args.verbose,
         validate: args.validate,
+        msix: args.msix,
     };
 
     wixer::gallery::run_with_options(options)

@@ -33,6 +33,7 @@ build/
 # Generated gallery outputs (rebuild with cargo make gallery)
 wixer/examples/gallery/wix-v4/
 wixer/examples/gallery/msi/
+wixer/examples/gallery/.msix-tmp/
 
 # wixer-yaml/ is the curated gallery - tracked in git
 # !wixer/examples/wixer-yaml/

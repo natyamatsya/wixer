@@ -16,6 +16,8 @@ pub struct ResolvedPaths {
     pub(super) configs_dir: PathBuf,
     pub(super) v4_dir: PathBuf,
     pub(super) msi_dir: PathBuf,
+    pub(super) msix_dir: PathBuf,
+    pub(super) msix_tmp_dir: PathBuf,
 }
 
 #[derive(Clone)]
@@ -33,6 +35,7 @@ pub struct GalleryOptions {
     pub wixer: PathBuf,
     pub verbose: bool,
     pub validate: bool,
+    pub msix: bool,
 }
 
 impl GalleryOptions {
@@ -65,6 +68,8 @@ impl GalleryOptions {
 
         let v4_dir = output.join("wix-v4");
         let msi_dir = output.join("msi");
+        let msix_dir = output.join("msix");
+        let msix_tmp_dir = output.join(".msix-tmp");
 
         Ok(ResolvedPaths {
             source,
@@ -73,6 +78,8 @@ impl GalleryOptions {
             configs_dir,
             v4_dir,
             msi_dir,
+            msix_dir,
+            msix_tmp_dir,
         })
     }
 }

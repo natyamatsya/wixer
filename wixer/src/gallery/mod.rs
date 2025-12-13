@@ -2,6 +2,7 @@ mod build;
 mod discover;
 mod fs_support;
 mod index;
+mod msix;
 use anyhow::Result;
 pub mod options;
 mod upgrade;
@@ -14,7 +15,12 @@ pub fn run_with_options(options: GalleryOptions) -> Result<()> {
     let paths = options.resolve_paths()?;
 
     if options.clean {
-        for dir in [&paths.v4_dir, &paths.msi_dir] {
+        for dir in [
+            &paths.v4_dir,
+            &paths.msi_dir,
+            &paths.msix_dir,
+            &paths.msix_tmp_dir,
+        ] {
             if dir.exists() {
                 println!("Cleaning {}", dir.display());
                 fs::remove_dir_all(dir)?;
@@ -33,6 +39,10 @@ pub fn run_with_options(options: GalleryOptions) -> Result<()> {
 
     if options.build {
         build::run_build(&options, &paths, &mut stats)?;
+    }
+
+    if options.msix {
+        msix::run_msix(&options, &paths, &mut stats)?;
     }
 
     let has_errors = stats.upgrade_errors > 0 || stats.build_errors > 0;

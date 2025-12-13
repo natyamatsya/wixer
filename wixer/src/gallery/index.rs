@@ -13,6 +13,7 @@ This gallery contains WiX installer examples converted for use with wixer.
 - **wix-v4/** — WiX v4 XML files (upgraded from v3)
 - **wixer-yaml/** — Curated YAML gallery (tracked in git)
 - **msi/** — Built MSI packages
+- **msix/** — Generated MSIX manifest outputs
 
 ## Curated YAML Gallery
 

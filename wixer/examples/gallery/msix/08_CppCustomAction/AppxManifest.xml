@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
+  <Identity Name="WixerExamples.08_CppCustomAction" Publisher="CN=Wixer Examples" Version="1.0.0.0" ProcessorArchitecture="x64"/>
+  <Properties>
+    <DisplayName>08_CppCustomAction</DisplayName>
+    <PublisherDisplayName>Wixer Examples</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0"/>
+  </Dependencies>
+  <Resources>
+    <Resource Language="x-generate"/>
+  </Resources>
+  <Applications>
+    <Application Id="App" Executable="App.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="08_CppCustomAction" Description="08_CppCustomAction" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square150x150Logo.png"/>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+  </Capabilities>
+</Package>

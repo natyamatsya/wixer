@@ -311,6 +311,52 @@ args = [
     "--clean",
 ]
 
+[tasks.gallery-msix]
+description = "Generate MSIX manifest outputs from curated wixer-yaml/ gallery"
+dependencies = ["build-release"]
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--msix",
+    "--clean",
+    "${@}",
+]
+
+[tasks.gallery-msix-validate]
+description = "Generate and validate MSIX outputs (Level 1 + Level 2 when MakeAppx is available)"
+dependencies = ["build-release"]
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--bin",
+    "wixer-gallery",
+    "--",
+    "--source",
+    "wixer/examples/WiXInstallerExamples",
+    "--output",
+    "wixer/examples/gallery",
+    "--configs",
+    "wixer/examples/configs",
+    "--yaml-gallery",
+    "wixer/examples/wixer-yaml",
+    "--msix",
+    "--validate",
+    "--clean",
+]
+
 [tasks.gallery-refresh]
 description = "Refresh curated wixer-yaml/ from upgraded v4 files (review changes!)"
 dependencies = ["build-release"]

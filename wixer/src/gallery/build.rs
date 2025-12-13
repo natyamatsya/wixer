@@ -113,7 +113,7 @@ pub(super) fn run_build(
     );
     println!("Output: {}", paths.msi_dir.display());
 
-    if options.validate && stats.built > 0 {
+    if stats.built > 0 {
         run_ice_validation(&paths.msi_dir, stats)?;
     }
 
