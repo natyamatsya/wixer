@@ -1,6 +1,7 @@
 import argparse
 import os
 from pathlib import Path
+import fnmatch
 
 
 def parse_lcov(path: Path):
@@ -61,6 +62,24 @@ def main() -> int:
         default=[],
         help="Show detailed stats for a specific file path (can be repeated)",
     )
+    ap.add_argument(
+        "--min-file-line",
+        type=float,
+        default=None,
+        help="Fail if any file has line coverage below this percentage",
+    )
+    ap.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="Only consider files whose normalized relative path matches this glob (can be repeated)",
+    )
+    ap.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Exclude files whose normalized relative path matches this glob (can be repeated)",
+    )
 
     args = ap.parse_args()
 
@@ -106,6 +125,17 @@ def main() -> int:
                     f"funcs {v['FNH']}/{v['FNF']} ({pct(v['FNH'], v['FNF']):.2f}%)"
                 )
 
+    include_globs = args.include
+    exclude_globs = args.exclude
+
+    def should_consider(rel_path: str) -> bool:
+        rel_norm = rel_path.replace("\\", "/")
+        if include_globs and not any(fnmatch.fnmatch(rel_norm, g) for g in include_globs):
+            return False
+        if exclude_globs and any(fnmatch.fnmatch(rel_norm, g) for g in exclude_globs):
+            return False
+        return True
+
     items = []
     for sf, v in files.items():
         if v["LF"] <= 0:
@@ -115,12 +145,24 @@ def main() -> int:
             rel = str(Path(sf).resolve().relative_to(root))
         except Exception:
             pass
+
+        if not should_consider(rel):
+            continue
+
         items.append((pct(v["LH"], v["LF"]), v["LH"], v["LF"], rel))
 
     items.sort(key=lambda t: (t[0], -t[2], t[3]))
     print(f"\nlowest line coverage (top {args.top}):")
     for cov, lh, lf, rel in items[: args.top]:
         print(f"  {cov:6.2f}%  {lh:5d}/{lf:<5d}  {rel}")
+
+    if args.min_file_line is not None:
+        offenders = [t for t in items if t[0] + 1e-9 < args.min_file_line]
+        if offenders:
+            print(f"\nfiles under min-file-line={args.min_file_line:.2f}%:")
+            for cov, lh, lf, rel in offenders:
+                print(f"  {cov:6.2f}%  {lh:5d}/{lf:<5d}  {rel}")
+            return 1
 
     return 0
 

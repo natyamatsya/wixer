@@ -57,6 +57,21 @@ args = [
     "wixer/src/includes.rs",
 ]
 
+[tasks.coverage-min-file]
+description = "Fail if any tracked source file is below minimum line coverage"
+command = "python"
+args = [
+    "wixer/tools/coverage_summary.py",
+    "--min-file-line",
+    "10",
+    "--include",
+    "wixer/src/**/*.rs",
+    "--exclude",
+    "wixer/src/bin/**",
+    "--exclude",
+    "wixer/src/commands/**",
+]
+
 # =============================================================================
 # VS Code Extension Tasks
 # =============================================================================
