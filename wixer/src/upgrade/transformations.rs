@@ -168,6 +168,9 @@ impl Transformation for CustomActionTransform {
             && (dll_entry == Some("WixQuietExec") || dll_entry == Some("WixQuietExec64"));
 
         for attr in node.attributes() {
+            if attr.name() == "Win64" {
+                continue;
+            }
             let (name, value) = match attr.name() {
                 "BinaryKey" | "BinaryRef" if is_wix_quiet_exec => ("BinaryRef", "Wix4UtilCA_X86"),
                 "BinaryKey" => ("BinaryRef", attr.value()),
@@ -292,10 +295,34 @@ impl Transformation for ControlTextToAttribute {
             }
         }
 
+        let mut enable_condition: Option<String> = None;
+        let mut disable_condition: Option<String> = None;
+
+        for child in node.children() {
+            if child.tag_name().name() == "Condition" {
+                let action = child.attribute("Action").unwrap_or("");
+                let condition_text: String = child.children().filter_map(|c| c.text()).collect();
+                let condition_text = condition_text.trim().to_string();
+
+                match action.to_lowercase().as_str() {
+                    "enable" => enable_condition = Some(condition_text),
+                    "disable" => disable_condition = Some(condition_text),
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some(cond) = disable_condition {
+            elem.push_attribute(("DisableCondition", cond.as_str()));
+        }
+        if let Some(cond) = enable_condition {
+            elem.push_attribute(("EnableCondition", cond.as_str()));
+        }
+
         // Check for other children (non-Text elements)
-        let has_other_children = node
-            .children()
-            .any(|c| c.is_element() && c.tag_name().name() != "Text");
+        let has_other_children = node.children().any(|c| {
+            c.is_element() && c.tag_name().name() != "Text" && c.tag_name().name() != "Condition"
+        });
 
         if has_other_children {
             writer.write_event(Event::Start(elem))?;

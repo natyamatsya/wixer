@@ -11,6 +11,12 @@ resolver = "2"
 version = "0.1.0"
 edition = "2024"
 
+[profile.dev]
+incremental = false
+
+[profile.test]
+incremental = false
+
 [profile.ci]
 inherits = "test"
 incremental = false

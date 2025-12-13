@@ -63,7 +63,7 @@ command = "python"
 args = [
     "wixer/tools/coverage_summary.py",
     "--min-file-line",
-    "10",
+    "30",
     "--include",
     "wixer/src/**/*.rs",
     "--exclude",

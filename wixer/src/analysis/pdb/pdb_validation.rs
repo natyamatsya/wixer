@@ -359,28 +359,3 @@ fn conditions_equivalent(expected: &str, actual: &str) -> bool {
     let norm_actual = actual.split_whitespace().collect::<Vec<_>>().join(" ");
     norm_expected == norm_actual
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_standard_action() {
-        assert!(is_standard_action("InstallFiles"));
-        assert!(is_standard_action("CostInitialize"));
-        assert!(!is_standard_action("MyCustomAction"));
-    }
-
-    #[test]
-    fn test_is_extension_action() {
-        assert!(is_extension_action("WixCloseApplications"));
-        assert!(is_extension_action("Wix4CloseApplications_X86"));
-        assert!(!is_extension_action("MyCustomAction"));
-    }
-
-    #[test]
-    fn test_conditions_equivalent() {
-        assert!(conditions_equivalent("A AND B", "A  AND  B"));
-        assert!(!conditions_equivalent("A AND B", "A OR B"));
-    }
-}

@@ -94,16 +94,6 @@ def main() -> int:
 
     files = parse_lcov(lcov_path)
 
-    totals = {k: sum(v[k] for v in files.values()) for k in ("LF", "LH", "FNF", "FNH", "BF", "BH")}
-
-    print(f"files: {len(files)}")
-    print(f"lines: {totals['LH']}/{totals['LF']} ({pct(totals['LH'], totals['LF']):.2f}%)")
-    print(f"functions: {totals['FNH']}/{totals['FNF']} ({pct(totals['FNH'], totals['FNF']):.2f}%)")
-    if totals["BF"]:
-        print(f"branches: {totals['BH']}/{totals['BF']} ({pct(totals['BH'], totals['BF']):.2f}%)")
-    else:
-        print("branches: n/a")
-
     focus_set = set()
     for f in args.focus:
         p = Path(f)
@@ -127,6 +117,7 @@ def main() -> int:
 
     include_globs = args.include
     exclude_globs = args.exclude
+    have_filters = bool(include_globs or exclude_globs)
 
     def should_consider(rel_path: str) -> bool:
         rel_norm = rel_path.replace("\\", "/")
@@ -137,6 +128,7 @@ def main() -> int:
         return True
 
     items = []
+    considered = []
     for sf, v in files.items():
         if v["LF"] <= 0:
             continue
@@ -149,7 +141,19 @@ def main() -> int:
         if not should_consider(rel):
             continue
 
+        considered.append(v)
+
         items.append((pct(v["LH"], v["LF"]), v["LH"], v["LF"], rel))
+
+    totals = {k: sum(v[k] for v in (considered if have_filters else files.values())) for k in ("LF", "LH", "FNF", "FNH", "BF", "BH")}
+
+    print(f"files: {len(considered) if have_filters else len(files)}")
+    print(f"lines: {totals['LH']}/{totals['LF']} ({pct(totals['LH'], totals['LF']):.2f}%)")
+    print(f"functions: {totals['FNH']}/{totals['FNF']} ({pct(totals['FNH'], totals['FNF']):.2f}%)")
+    if totals["BF"]:
+        print(f"branches: {totals['BH']}/{totals['BF']} ({pct(totals['BH'], totals['BF']):.2f}%)")
+    else:
+        print("branches: n/a")
 
     items.sort(key=lambda t: (t[0], -t[2], t[3]))
     print(f"\nlowest line coverage (top {args.top}):")
