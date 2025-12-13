@@ -104,10 +104,15 @@ jobs:
           $binDir = Split-Path $sdkBin.FullName -Parent
           Add-Content -Path $env:GITHUB_PATH -Value $binDir
 
-          $signTool = Get-Command signtool -ErrorAction SilentlyContinue
-          if (-not $signTool) {
-            Write-Error "signtool.exe not found after adding Windows SDK bin dir to PATH."
-            exit 1
+          $signToolExe = Get-ChildItem -Path "${Env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\x64\\" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if ($signToolExe) {
+            $signDir = Split-Path $signToolExe.FullName -Parent
+            Add-Content -Path $env:GITHUB_PATH -Value $signDir
+          } else {
+            Write-Warning "signtool.exe not found. MSI/MSIX signing will be skipped unless explicitly required."
           }
 
       - name: Install cargo-make
