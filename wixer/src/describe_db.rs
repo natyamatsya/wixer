@@ -14,8 +14,8 @@ pub struct WixProperty {
 
 /// Load the pre-generated describe database from embedded assets.
 pub fn load() -> Result<Vec<WixProperty>> {
-    let json = embedded_assets::get_describe_db()
-        .context("Failed to load embedded describe database")?;
+    let json =
+        embedded_assets::get_describe_db().context("Failed to load embedded describe database")?;
     let properties: Vec<WixProperty> =
         serde_json::from_str(&json).context("Failed to parse describe database")?;
     Ok(properties)

@@ -8,10 +8,7 @@ pub fn run(term: String) -> Result<()> {
 
     // Load DB from embedded assets
     let properties = describe_db::load().unwrap_or_else(|e| {
-        warn!(
-            "Failed to load embedded description database: {}",
-            e
-        );
+        warn!("Failed to load embedded description database: {}", e);
         vec![]
     });
 

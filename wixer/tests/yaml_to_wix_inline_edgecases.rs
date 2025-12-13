@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use wixer::{yaml_to_wix, AttributeStrategy};
+use wixer::{AttributeStrategy, yaml_to_wix};
 
 fn known_attributes() -> HashSet<String> {
     ["Compressed", "InstallPrivileges", "Name", "Id"]

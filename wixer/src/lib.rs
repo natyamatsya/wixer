@@ -25,13 +25,13 @@
 //! ```
 
 pub mod analysis;
-pub mod embedded_assets;
 pub mod commands;
 pub mod common;
 pub mod config;
 pub mod constants;
 pub mod describe_db;
 pub mod dirs;
+pub mod embedded_assets;
 pub mod example_config;
 pub mod includes;
 pub mod project;

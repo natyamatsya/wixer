@@ -20,12 +20,9 @@ use std::path::Path;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .unwrap_or_else(|_| ".".to_string());
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let assets_dir = Path::new(&manifest_dir).join("assets");
 
     println!("Prebuild assets utility");
@@ -38,10 +35,11 @@ async fn main() -> Result<()> {
 
     // 1. Download XSD schemas if missing
     println!("\n=== Checking XSD schemas ===");
-    
+
     if !wix_xsd_dir.exists() || fs::read_dir(&wix_xsd_dir)?.count() == 0 {
         println!("  Downloading WiX v4 XSD schemas...");
-        wixer::xsd_to_json::download_wix_schemas(&wix_xsd_dir, false).await
+        wixer::xsd_to_json::download_wix_schemas(&wix_xsd_dir, false)
+            .await
             .context("Failed to download WiX schemas")?;
         println!("  ✓ Downloaded WiX schemas to {}", wix_xsd_dir.display());
     } else {
@@ -50,7 +48,8 @@ async fn main() -> Result<()> {
 
     if !msix_xsd_dir.exists() || fs::read_dir(&msix_xsd_dir)?.count() == 0 {
         println!("  Downloading MSIX XSD schemas...");
-        wixer::xsd_to_json::download_msix_schemas(&msix_xsd_dir, false).await
+        wixer::xsd_to_json::download_msix_schemas(&msix_xsd_dir, false)
+            .await
             .context("Failed to download MSIX schemas")?;
         println!("  ✓ Downloaded MSIX schemas to {}", msix_xsd_dir.display());
     } else {
@@ -96,48 +95,48 @@ async fn main() -> Result<()> {
     let file = File::create(&attr_path)?;
     let writer = BufWriter::new(file);
     serde_json::to_writer_pretty(writer, &sorted_attributes)?;
-    println!("  Generated: {} ({} attributes)", attr_path.display(), sorted_attributes.len());
+    println!(
+        "  Generated: {} ({} attributes)",
+        attr_path.display(),
+        sorted_attributes.len()
+    );
 
     // 4. Generate describe.json
     println!("\n=== Generating describe.json ===");
     let describe_path = generated_dir.join("describe.json");
-    
+
     // Load knowledge base
-    let kb_content = fs::read_to_string(&knowledge_base_path)
-        .context("Failed to read knowledge base")?;
-    let mut properties: Vec<wixer::describe_db::WixProperty> = 
-        serde_json::from_str(&kb_content)?;
+    let kb_content =
+        fs::read_to_string(&knowledge_base_path).context("Failed to read knowledge base")?;
+    let mut properties: Vec<wixer::describe_db::WixProperty> = serde_json::from_str(&kb_content)?;
 
     // Add entries from JSON schemas
     for entry in fs::read_dir(&json_schema_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().is_some_and(|e| e == "json") 
+        if path.extension().is_some_and(|e| e == "json")
             && path.to_string_lossy().contains(".schema.json")
+            && let Ok(content) = fs::read_to_string(&path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+            && let Some(definitions) = json.get("definitions").and_then(|d| d.as_object())
         {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) {
-                        let schema_name = path.file_stem().unwrap().to_string_lossy();
-                        for (name, def) in definitions {
-                            let description = def
-                                .get("description")
-                                .and_then(|d| d.as_str())
-                                .unwrap_or("No description available.")
-                                .to_string();
+            let schema_name = path.file_stem().unwrap().to_string_lossy();
+            for (name, def) in definitions {
+                let description = def
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("No description available.")
+                    .to_string();
 
-                            let tags = vec!["Element".to_string(), schema_name.replace(".schema", "")];
+                let tags = vec!["Element".to_string(), schema_name.replace(".schema", "")];
 
-                            properties.push(wixer::describe_db::WixProperty {
-                                name: name.clone(),
-                                kind: "Element".to_string(),
-                                description,
-                                docs_url: None,
-                                tags,
-                            });
-                        }
-                    }
-                }
+                properties.push(wixer::describe_db::WixProperty {
+                    name: name.clone(),
+                    kind: "Element".to_string(),
+                    description,
+                    docs_url: None,
+                    tags,
+                });
             }
         }
     }
@@ -153,7 +152,11 @@ async fn main() -> Result<()> {
     // Write describe.json
     let file = File::create(&describe_path)?;
     serde_json::to_writer_pretty(file, &properties)?;
-    println!("  Generated: {} ({} entries)", describe_path.display(), properties.len());
+    println!(
+        "  Generated: {} ({} entries)",
+        describe_path.display(),
+        properties.len()
+    );
 
     // 5. Generate versions.json manifest
     println!("\n=== Generating versions.json ===");
@@ -175,7 +178,7 @@ async fn main() -> Result<()> {
 fn generate_versions_manifest(assets_dir: &Path) -> Result<String> {
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
-    
+
     // Get current timestamp
     let build_time = {
         let duration = SystemTime::now()
@@ -187,11 +190,12 @@ fn generate_versions_manifest(assets_dir: &Path) -> Result<String> {
         let hours = time_of_day / 3600;
         let minutes = (time_of_day % 3600) / 60;
         let seconds = time_of_day % 60;
-        
+
         let mut year = 1970u64;
         let mut remaining_days = days_since_epoch;
         loop {
-            let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+            let is_leap =
+                (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400);
             let days_in_year = if is_leap { 366 } else { 365 };
             if remaining_days < days_in_year {
                 break;
@@ -199,14 +203,15 @@ fn generate_versions_manifest(assets_dir: &Path) -> Result<String> {
             remaining_days -= days_in_year;
             year += 1;
         }
-        
-        let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+
+        let is_leap =
+            (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400);
         let days_in_months: [u64; 12] = if is_leap {
             [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         } else {
             [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         };
-        
+
         let mut month = 1u64;
         for days in days_in_months {
             if remaining_days < days {
@@ -216,10 +221,13 @@ fn generate_versions_manifest(assets_dir: &Path) -> Result<String> {
             month += 1;
         }
         let day = remaining_days + 1;
-        
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", year, month, day, hours, minutes, seconds)
+
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+            year, month, day, hours, minutes, seconds
+        )
     };
-    
+
     // Get git commit hash
     let git_hash = Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -228,14 +236,14 @@ fn generate_versions_manifest(assets_dir: &Path) -> Result<String> {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    
+
     // Compute content hashes
     let wix_schemas_hash = compute_directory_hash(&assets_dir.join("wix-v4-xsd-schemas"));
     let msix_schemas_hash = compute_directory_hash(&assets_dir.join("ms-msix-xsd-schemas"));
     let extensions_hash = compute_directory_hash(&assets_dir.join("wix-v4-extensions-json"));
     let knowledge_base_hash = compute_file_hash(&assets_dir.join("wixer-knowledge-base.json"));
     let generated_hash = compute_directory_hash(&assets_dir.join("generated"));
-    
+
     Ok(format!(
         r#"{{
   "build_time": "{}",
@@ -279,20 +287,20 @@ fn generate_versions_manifest(assets_dir: &Path) -> Result<String> {
 
 fn compute_directory_hash(dir: &Path) -> String {
     use std::collections::BTreeSet;
-    use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
-    
+    use std::hash::{Hash, Hasher};
+
     if !dir.exists() {
         return "not-present".to_string();
     }
-    
+
     let mut files: BTreeSet<std::path::PathBuf> = BTreeSet::new();
     collect_files_recursive(dir, &mut files);
-    
+
     if files.is_empty() {
         return "empty".to_string();
     }
-    
+
     let mut combined = Vec::new();
     for file_path in files {
         if let Ok(content) = fs::read(&file_path) {
@@ -302,16 +310,16 @@ fn compute_directory_hash(dir: &Path) -> String {
             combined.extend_from_slice(&content);
         }
     }
-    
+
     let mut hasher = DefaultHasher::new();
     combined.hash(&mut hasher);
     let hash1 = hasher.finish();
-    
+
     let mut hasher2 = DefaultHasher::new();
     hash1.hash(&mut hasher2);
     combined.len().hash(&mut hasher2);
     let hash2 = hasher2.finish();
-    
+
     format!("{:016x}{:016x}", hash1, hash2)
 }
 
@@ -329,22 +337,22 @@ fn collect_files_recursive(dir: &Path, files: &mut std::collections::BTreeSet<st
 }
 
 fn compute_file_hash(path: &Path) -> String {
-    use std::hash::{Hash, Hasher};
     use std::collections::hash_map::DefaultHasher;
-    
+    use std::hash::{Hash, Hasher};
+
     let Ok(content) = fs::read(path) else {
         return "not-present".to_string();
     };
-    
+
     let mut hasher = DefaultHasher::new();
     content.hash(&mut hasher);
     let hash1 = hasher.finish();
-    
+
     let mut hasher2 = DefaultHasher::new();
     hash1.hash(&mut hasher2);
     content.len().hash(&mut hasher2);
     let hash2 = hasher2.finish();
-    
+
     format!("{:016x}{:016x}", hash1, hash2)
 }
 
@@ -371,7 +379,11 @@ fn add_extension_entries(
                 .as_ref()
                 .map(|e| format!(", DLL Entry: {}", e))
                 .unwrap_or_default(),
-            if ca.suppress_modularization { ", SuppressModularization" } else { "" }
+            if ca.suppress_modularization {
+                ", SuppressModularization"
+            } else {
+                ""
+            }
         );
 
         properties.push(wixer::describe_db::WixProperty {
@@ -398,7 +410,11 @@ fn add_extension_entries(
                 .as_ref()
                 .map(|c| format!(", Condition: {}", c))
                 .unwrap_or_default(),
-            if seq.overridable { " [Overridable]" } else { "" }
+            if seq.overridable {
+                " [Overridable]"
+            } else {
+                ""
+            }
         );
 
         if !properties.iter().any(|p| p.name == seq.action) {

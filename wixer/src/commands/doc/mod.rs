@@ -61,18 +61,15 @@ pub fn run(output_dir: &Path, format: &str) -> Result<()> {
     let mut schemas: HashMap<String, SchemaInfo> = HashMap::new();
     let mut schema_contents: HashMap<String, String> = HashMap::new();
 
-    let embedded_files = embedded_assets::list_embedded_assets()
-        .context("Failed to list embedded assets")?;
+    let embedded_files =
+        embedded_assets::list_embedded_assets().context("Failed to list embedded assets")?;
 
     for file_path in embedded_files {
         if !(file_path.starts_with("wix-v4-xsd-schemas/") && file_path.ends_with(".xsd")) {
             continue;
         }
 
-        let file_name = file_path
-            .rsplit('/')
-            .next()
-            .unwrap_or(&file_path);
+        let file_name = file_path.rsplit('/').next().unwrap_or(&file_path);
         let name = file_name
             .strip_suffix(".xsd")
             .unwrap_or(file_name)

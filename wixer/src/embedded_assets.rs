@@ -34,8 +34,7 @@ pub fn extract_all(output_dir: &Path) -> Result<Vec<PathBuf>> {
     std::fs::create_dir_all(output_dir)?;
 
     let cursor = Cursor::new(ASSETS_ZIP);
-    let mut archive =
-        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+    let mut archive = ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
 
     let mut extracted = Vec::new();
 
@@ -73,8 +72,7 @@ fn extract_schemas_by_prefix(output_dir: &Path, prefix: &str) -> Result<Vec<Path
     std::fs::create_dir_all(output_dir)?;
 
     let cursor = Cursor::new(ASSETS_ZIP);
-    let mut archive =
-        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+    let mut archive = ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
 
     let mut extracted = Vec::new();
 
@@ -116,14 +114,16 @@ fn extract_schemas_by_prefix(output_dir: &Path, prefix: &str) -> Result<Vec<Path
 
 /// Check if embedded assets are available (non-empty zip).
 pub fn has_embedded_assets() -> bool {
-    !ASSETS_ZIP.is_empty()
+    let cursor = Cursor::new(ASSETS_ZIP);
+    ZipArchive::new(cursor)
+        .map(|archive| !archive.is_empty())
+        .unwrap_or(false)
 }
 
 /// List all files in the embedded assets archive.
 pub fn list_embedded_assets() -> Result<Vec<String>> {
     let cursor = Cursor::new(ASSETS_ZIP);
-    let mut archive =
-        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+    let mut archive = ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
 
     let mut files = Vec::new();
     for i in 0..archive.len() {
@@ -138,8 +138,7 @@ pub fn list_embedded_assets() -> Result<Vec<String>> {
 /// Get the contents of a single file from the embedded assets.
 pub fn get_asset(path: &str) -> Result<Vec<u8>> {
     let cursor = Cursor::new(ASSETS_ZIP);
-    let mut archive =
-        ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
+    let mut archive = ZipArchive::new(cursor).context("Failed to read embedded assets archive")?;
 
     let mut file = archive
         .by_name(path)
@@ -208,13 +207,22 @@ mod tests {
 
     #[test]
     fn test_embedded_assets_available() {
-        assert!(has_embedded_assets(), "Embedded assets.zip should not be empty");
+        assert!(
+            has_embedded_assets(),
+            "Embedded assets.zip should not be empty"
+        );
 
         let files = list_embedded_assets().expect("Should list embedded assets");
         println!("Embedded schema files: {}", files.len());
 
-        let wix_count = files.iter().filter(|f| f.starts_with("wix-v4-xsd-schemas/")).count();
-        let msix_count = files.iter().filter(|f| f.starts_with("ms-msix-xsd-schemas/")).count();
+        let wix_count = files
+            .iter()
+            .filter(|f| f.starts_with("wix-v4-xsd-schemas/"))
+            .count();
+        let msix_count = files
+            .iter()
+            .filter(|f| f.starts_with("ms-msix-xsd-schemas/"))
+            .count();
 
         println!("  WiX schemas: {}", wix_count);
         println!("  MSIX schemas: {}", msix_count);
@@ -223,7 +231,10 @@ mod tests {
         assert!(msix_count > 0, "Should have MSIX schemas embedded");
 
         // Check extensions and knowledge_base
-        let ext_count = files.iter().filter(|f| f.starts_with("wix-v4-extensions-json/")).count();
+        let ext_count = files
+            .iter()
+            .filter(|f| f.starts_with("wix-v4-extensions-json/"))
+            .count();
         let has_kb = files.iter().any(|f| f == "wixer-knowledge-base.json");
 
         println!("  Extensions: {}", ext_count);
@@ -243,7 +254,9 @@ mod tests {
 
         // Verify wix.xsd exists
         assert!(
-            files.iter().any(|f| f.file_name().map(|n| n == "wix.xsd").unwrap_or(false)),
+            files
+                .iter()
+                .any(|f| f.file_name().map(|n| n == "wix.xsd").unwrap_or(false)),
             "Should have wix.xsd"
         );
 
@@ -253,29 +266,50 @@ mod tests {
     #[test]
     fn test_get_knowledge_base() {
         let kb = get_knowledge_base().expect("Should get knowledge_base.json");
-        assert!(kb.contains("ACTION"), "Knowledge base should contain MSI properties");
+        assert!(
+            kb.contains("ACTION"),
+            "Knowledge base should contain MSI properties"
+        );
     }
 
     #[test]
     fn test_get_extension() {
         let util = get_extension("util").expect("Should get util.json");
-        assert!(util.contains("WixToolset.Util"), "Util extension should have correct ID");
+        assert!(
+            util.contains("WixToolset.Util"),
+            "Util extension should have correct ID"
+        );
     }
 
     #[test]
     fn test_get_versions() {
         let versions = get_versions().expect("Should get versions.json");
-        assert!(versions.contains("build_time"), "Versions should have build_time");
-        assert!(versions.contains("git_commit"), "Versions should have git_commit");
-        assert!(versions.contains("wix-v4-xsd-schemas"), "Versions should have WiX schemas info");
+        assert!(
+            versions.contains("build_time"),
+            "Versions should have build_time"
+        );
+        assert!(
+            versions.contains("git_commit"),
+            "Versions should have git_commit"
+        );
+        assert!(
+            versions.contains("wix-v4-xsd-schemas"),
+            "Versions should have WiX schemas info"
+        );
         println!("Versions manifest:\n{}", versions);
     }
 
     #[test]
     fn test_get_describe_db() {
         let db = get_describe_db().expect("Should get describe.json");
-        assert!(db.contains("ACTION"), "Describe DB should contain MSI properties");
-        assert!(db.contains("CustomAction"), "Describe DB should contain custom actions");
+        assert!(
+            db.contains("ACTION"),
+            "Describe DB should contain MSI properties"
+        );
+        assert!(
+            db.contains("CustomAction"),
+            "Describe DB should contain custom actions"
+        );
     }
 
     #[test]
@@ -288,15 +322,27 @@ mod tests {
     #[test]
     fn test_get_json_schema() {
         let wix_schema = get_json_schema("wix").expect("Should get wix.schema.json");
-        assert!(wix_schema.contains("definitions"), "Schema should have definitions");
-        assert!(wix_schema.contains("Package"), "Schema should have Package element");
+        assert!(
+            wix_schema.contains("definitions"),
+            "Schema should have definitions"
+        );
+        assert!(
+            wix_schema.contains("Package"),
+            "Schema should have Package element"
+        );
     }
 
     #[test]
     fn test_list_json_schemas() {
         let schemas = list_json_schemas().expect("Should list JSON schemas");
         println!("Available schemas: {:?}", schemas);
-        assert!(schemas.contains(&"wix".to_string()), "Should have wix schema");
-        assert!(schemas.contains(&"util".to_string()), "Should have util schema");
+        assert!(
+            schemas.contains(&"wix".to_string()),
+            "Should have wix schema"
+        );
+        assert!(
+            schemas.contains(&"util".to_string()),
+            "Should have util schema"
+        );
     }
 }

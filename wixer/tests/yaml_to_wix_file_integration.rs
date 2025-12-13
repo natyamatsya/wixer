@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-use wixer::{yaml_to_wix, AttributeStrategy};
+use wixer::{AttributeStrategy, yaml_to_wix};
 
 fn known_attributes() -> HashSet<String> {
     [
@@ -25,7 +25,12 @@ fn make_temp_dir(prefix: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("wixer_test_{}_{}_{}", prefix, std::process::id(), nanos));
+    let dir = std::env::temp_dir().join(format!(
+        "wixer_test_{}_{}_{}",
+        prefix,
+        std::process::id(),
+        nanos
+    ));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -38,8 +43,13 @@ fn yaml_to_wix_convert_file_rejects_xml_content_in_yaml_file() {
 
     fs::write(&input, "<?xml version=\"1.0\"?><Wix />").unwrap();
 
-    let err = yaml_to_wix::convert_file(&input, &output, AttributeStrategy::Inline, &known_attributes())
-        .unwrap_err();
+    let err = yaml_to_wix::convert_file(
+        &input,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap_err();
 
     assert!(err.to_string().contains("contains XML content"));
 
@@ -74,7 +84,13 @@ fn yaml_to_wix_convert_file_merges_mapping_mixins() {
     )
     .unwrap();
 
-    yaml_to_wix::convert_file(&main, &output, AttributeStrategy::Inline, &known_attributes()).unwrap();
+    yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
 
     let xml = fs::read_to_string(&output).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -125,7 +141,13 @@ fn yaml_to_wix_convert_file_expands_sequence_includes() {
     )
     .unwrap();
 
-    yaml_to_wix::convert_file(&main, &output, AttributeStrategy::Inline, &known_attributes()).unwrap();
+    yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
 
     let xml = fs::read_to_string(&output).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -172,8 +194,13 @@ Wix:
     )
     .unwrap();
 
-    let err = yaml_to_wix::convert_file(&main, &output, AttributeStrategy::Inline, &known_attributes())
-        .unwrap_err();
+    let err = yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap_err();
 
     assert!(err.to_string().contains("Maximum recursion depth"));
 
@@ -210,7 +237,13 @@ Wix:
     )
     .unwrap();
 
-    yaml_to_wix::convert_file(&main, &output, AttributeStrategy::Inline, &known_attributes()).unwrap();
+    yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
 
     let xml = fs::read_to_string(&output).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -262,7 +295,13 @@ Wix:
     )
     .unwrap();
 
-    yaml_to_wix::convert_file(&main, &output, AttributeStrategy::Inline, &known_attributes()).unwrap();
+    yaml_to_wix::convert_file(
+        &main,
+        &output,
+        AttributeStrategy::Inline,
+        &known_attributes(),
+    )
+    .unwrap();
 
     let xml = fs::read_to_string(&output).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();

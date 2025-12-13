@@ -26,10 +26,14 @@ impl SchemaMapper {
         // Load MSIX definitions from embedded assets
         let mut msix_elements = HashMap::new();
         let files = embedded_assets::list_embedded_assets()?;
-        
+
         for file_path in files {
             if file_path.starts_with("ms-msix-xsd-schemas/") && file_path.ends_with(".xsd") {
-                let file_name = file_path.rsplit('/').next().unwrap_or(&file_path).to_string();
+                let file_name = file_path
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&file_path)
+                    .to_string();
                 if let Ok(content) = embedded_assets::get_asset_str(&file_path)
                     && let Ok(doc) = Document::parse(&content)
                 {

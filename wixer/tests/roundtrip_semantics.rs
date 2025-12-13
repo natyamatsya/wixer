@@ -2,7 +2,7 @@ mod support;
 
 use std::collections::HashSet;
 
-use wixer::{wix_to_yaml, yaml_to_wix, AttributeStrategy};
+use wixer::{AttributeStrategy, wix_to_yaml, yaml_to_wix};
 
 fn known_attributes() -> HashSet<String> {
     ["xmlns", "Id", "Name", "Version", "Manufacturer", "Title"]
@@ -37,19 +37,29 @@ fn roundtrip_yaml_to_xml_to_yaml_preserves_core_semantics() {
     )
     .unwrap();
 
-    let yaml_out = wix_to_yaml::convert_xml_str_to_yaml_str(&xml, AttributeStrategy::Inline).unwrap();
+    let yaml_out =
+        wix_to_yaml::convert_xml_str_to_yaml_str(&xml, AttributeStrategy::Inline).unwrap();
     let out_val: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
 
     let wix = support::yaml_get(&out_val, "Wix");
-    assert_eq!(support::yaml_get(wix, "_comment").as_str().unwrap(), "Hello");
+    assert_eq!(
+        support::yaml_get(wix, "_comment").as_str().unwrap(),
+        "Hello"
+    );
     assert_eq!(
         support::yaml_get(wix, "xmlns").as_str().unwrap(),
         "http://wixtoolset.org/schemas/v4/wxs"
     );
 
     let package = support::yaml_get(wix, "Package");
-    assert_eq!(support::yaml_get(package, "Name").as_str().unwrap(), "MyApp");
-    assert_eq!(support::yaml_get(package, "Version").as_str().unwrap(), "1.0.0.0");
+    assert_eq!(
+        support::yaml_get(package, "Name").as_str().unwrap(),
+        "MyApp"
+    );
+    assert_eq!(
+        support::yaml_get(package, "Version").as_str().unwrap(),
+        "1.0.0.0"
+    );
     assert_eq!(
         support::yaml_get(package, "Manufacturer").as_str().unwrap(),
         "MyCo"

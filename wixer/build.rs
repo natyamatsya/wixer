@@ -19,7 +19,7 @@ fn main() {
 
     // Rerun if build.rs changes
     println!("cargo:rerun-if-changed=build.rs");
-    
+
     // Rerun if any asset source files change
     println!("cargo:rerun-if-changed=assets/wix-v4-extensions-json");
     println!("cargo:rerun-if-changed=assets/wixer-knowledge-base.json");
@@ -44,15 +44,12 @@ fn main() {
         .max();
 
     // Check if zip exists and is newer than all sources
-    let zip_mtime = zip_path
-        .metadata()
-        .ok()
-        .and_then(|m| m.modified().ok());
+    let zip_mtime = zip_path.metadata().ok().and_then(|m| m.modified().ok());
 
     // Also check zip size - if it's tiny, it's probably a placeholder
     let zip_size = zip_path.metadata().ok().map(|m| m.len()).unwrap_or(0);
     let zip_is_placeholder = zip_size < 1000; // Real zip should be >1MB
-    
+
     let needs_rebuild = match (newest_source, zip_mtime) {
         (Some(src), Some(zip)) => src > zip || zip_is_placeholder,
         (Some(_), None) => true, // zip doesn't exist
@@ -86,24 +83,37 @@ fn main() {
     let file = File::create(&zip_path).expect("Failed to create assets.zip");
     let mut zip = zip::ZipWriter::new(file);
 
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     // Add all asset directories/files (including generated/ which contains versions.json)
     for source in &sources {
         if source.exists() {
             if source.is_dir() {
-                add_directory_to_zip(&mut zip, source, source.file_name().unwrap().to_str().unwrap(), options)
-                    .expect("Failed to add directory to zip");
+                add_directory_to_zip(
+                    &mut zip,
+                    source,
+                    source.file_name().unwrap().to_str().unwrap(),
+                    options,
+                )
+                .expect("Failed to add directory to zip");
             } else if source.is_file() {
-                add_file_to_zip(&mut zip, source, source.file_name().unwrap().to_str().unwrap(), options)
-                    .expect("Failed to add file to zip");
+                add_file_to_zip(
+                    &mut zip,
+                    source,
+                    source.file_name().unwrap().to_str().unwrap(),
+                    options,
+                )
+                .expect("Failed to add file to zip");
             }
         }
     }
 
     zip.finish().expect("Failed to finalize zip");
-    println!("cargo:warning=Created assets.zip ({} bytes)", zip_path.metadata().unwrap().len());
+    println!(
+        "cargo:warning=Created assets.zip ({} bytes)",
+        zip_path.metadata().unwrap().len()
+    );
 }
 
 fn get_newest_mtime(path: &Path) -> Option<std::time::SystemTime> {

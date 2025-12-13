@@ -1,9 +1,12 @@
 use std::collections::HashSet;
 
-use wixer::{yaml_to_wix, AttributeStrategy};
+use wixer::{AttributeStrategy, yaml_to_wix};
 
 fn known_attributes() -> HashSet<String> {
-    ["Id", "Name", "Version", "Title"].into_iter().map(|s| s.to_string()).collect()
+    ["Id", "Name", "Version", "Title"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
 }
 
 #[test]

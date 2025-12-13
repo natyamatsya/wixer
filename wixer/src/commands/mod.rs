@@ -1,5 +1,5 @@
-pub mod assets;
 pub mod analyze;
+pub mod assets;
 pub mod build;
 pub mod describe;
 pub mod doc;

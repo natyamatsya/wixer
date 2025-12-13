@@ -95,7 +95,10 @@ pub async fn load_schemas(lsp: &WixerLsp) {
         Ok(names) => names,
         Err(e) => {
             lsp.client
-                .log_message(MessageType::WARNING, format!("Failed to list embedded schemas: {}", e))
+                .log_message(
+                    MessageType::WARNING,
+                    format!("Failed to list embedded schemas: {}", e),
+                )
                 .await;
             return;
         }

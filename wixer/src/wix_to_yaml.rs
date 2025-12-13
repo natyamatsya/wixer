@@ -9,7 +9,10 @@ use std::fs;
 use std::path::Path;
 use tracing::info;
 
-pub fn convert_xml_str_to_yaml_str(xml_content: &str, attribute_strategy: AttributeStrategy) -> Result<String> {
+pub fn convert_xml_str_to_yaml_str(
+    xml_content: &str,
+    attribute_strategy: AttributeStrategy,
+) -> Result<String> {
     // Pre-process to handle CPack variables that break XML validity
     let re = Regex::new(r"(@[A-Z_]+@)").unwrap();
     let processed_content = re.replace_all(xml_content, |caps: &regex::Captures| {

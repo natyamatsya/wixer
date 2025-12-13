@@ -1,6 +1,6 @@
 mod support;
 
-use wixer::{wix_to_yaml, AttributeStrategy};
+use wixer::{AttributeStrategy, wix_to_yaml};
 
 #[test]
 fn wix_to_yaml_captures_attributes_repeated_elements_and_text() {
@@ -24,7 +24,10 @@ fn wix_to_yaml_captures_attributes_repeated_elements_and_text() {
     );
 
     let package = support::yaml_get(wix, "Package");
-    assert_eq!(support::yaml_get(package, "Name").as_str().unwrap(), "MyApp");
+    assert_eq!(
+        support::yaml_get(package, "Name").as_str().unwrap(),
+        "MyApp"
+    );
 
     let features = support::yaml_get(package, "Feature").as_sequence().unwrap();
     assert_eq!(features.len(), 2);
@@ -51,7 +54,10 @@ fn wix_to_yaml_stores_inner_text_as_value() {
     let wxl = support::yaml_get(&root, "WixLocalization");
     let s = support::yaml_get(wxl, "String");
     assert_eq!(support::yaml_get(s, "Id").as_str().unwrap(), "WelcomeText");
-    assert_eq!(support::yaml_get(s, "_value").as_str().unwrap(), "Welcome to MyApp");
+    assert_eq!(
+        support::yaml_get(s, "_value").as_str().unwrap(),
+        "Welcome to MyApp"
+    );
 }
 
 #[test]
@@ -89,5 +95,8 @@ fn wix_to_yaml_preserves_comments_as_comment_property() {
 
     let wix = support::yaml_get(&root, "Wix");
     let package = support::yaml_get(wix, "Package");
-    assert_eq!(support::yaml_get(package, "_comment").as_str().unwrap(), "Hello");
+    assert_eq!(
+        support::yaml_get(package, "_comment").as_str().unwrap(),
+        "Hello"
+    );
 }

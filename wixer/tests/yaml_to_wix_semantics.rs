@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use wixer::{yaml_to_wix, AttributeStrategy};
+use wixer::{AttributeStrategy, yaml_to_wix};
 
 fn known_attributes() -> HashSet<String> {
     [
@@ -84,7 +84,10 @@ fn yaml_to_wix_emits_text_from_value_property() {
     .unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
 
-    let s = doc.descendants().find(|n| n.has_tag_name("String")).unwrap();
+    let s = doc
+        .descendants()
+        .find(|n| n.has_tag_name("String"))
+        .unwrap();
     assert_eq!(s.attribute("Id").unwrap(), "WelcomeText");
     let combined: String = s
         .children()

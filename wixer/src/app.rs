@@ -92,7 +92,8 @@ pub async fn run() -> Result<()> {
             schema_dir,
             yaml_dir,
         } => {
-            run_blocking(move || handle_validate(input, yaml, schema, schema_dir, yaml_dir)).await?;
+            run_blocking(move || handle_validate(input, yaml, schema, schema_dir, yaml_dir))
+                .await?;
         }
         Commands::Import {
             input_dir,

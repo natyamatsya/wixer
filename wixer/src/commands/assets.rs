@@ -14,7 +14,10 @@ pub fn run(info_flag: bool, extract: Option<PathBuf>) -> Result<()> {
         }
 
         let files = embedded_assets::list_embedded_assets()?;
-        let wix_xsd = files.iter().filter(|f| f.starts_with("wix-v4-xsd-schemas/")).count();
+        let wix_xsd = files
+            .iter()
+            .filter(|f| f.starts_with("wix-v4-xsd-schemas/"))
+            .count();
         let msix_xsd = files
             .iter()
             .filter(|f| f.starts_with("ms-msix-xsd-schemas/") && f.ends_with(".xsd"))
@@ -30,11 +33,7 @@ pub fn run(info_flag: bool, extract: Option<PathBuf>) -> Result<()> {
 
         info!(
             total = files.len(),
-            wix_xsd,
-            msix_xsd,
-            json_schemas,
-            extensions,
-            "Embedded assets summary"
+            wix_xsd, msix_xsd, json_schemas, extensions, "Embedded assets summary"
         );
 
         if let Ok(schemas) = embedded_assets::list_json_schemas() {
