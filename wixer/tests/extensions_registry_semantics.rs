@@ -1,23 +1,12 @@
-use wixer::simulation::{ExtensionRegistry, ExtractedExtension, ExtractedLicense};
+mod test_support;
+
+use wixer::simulation::ExtensionRegistry;
 
 #[test]
 fn extension_registry_registers_and_normalizes_names() {
     let mut registry = ExtensionRegistry::new();
 
-    let ext = ExtractedExtension {
-        license: ExtractedLicense {
-            notice: "n".into(),
-            source: "s".into(),
-            spdx_id: "MIT".into(),
-        },
-        id: "WixToolset.MyExt.wixext".into(),
-        namespace: None,
-        custom_actions: vec![],
-        sequence_entries: vec![],
-        publish_entries: vec![],
-        properties: vec![],
-        binaries: vec![],
-    };
+    let ext = test_support::extension::dummy_extension("WixToolset.MyExt.wixext");
 
     registry.register(ext);
 
@@ -31,7 +20,7 @@ fn extension_registry_registers_and_normalizes_names() {
 
 #[test]
 fn extension_registry_available_is_sorted_and_deduped() {
-    let registry = ExtensionRegistry::load_bundled();
+    let registry = test_support::registry::bundled();
     let names = registry.available();
 
     assert!(!names.is_empty());

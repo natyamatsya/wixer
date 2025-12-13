@@ -1,12 +1,12 @@
+mod test_support;
+
 use serde_yaml::Value;
 
 use wixer::analysis::yaml::publish_conflicts::{self, ConflictSuggestion};
 use wixer::constants::ui_events::{ACTION_EVENTS, DO_ACTION, NAVIGATION_EVENTS, SPAWN_DIALOG};
-use wixer::simulation::ExtensionRegistry;
 
 fn first_ui_publish_entry() -> (String, String, String, Option<String>, i32) {
-    let registry = ExtensionRegistry::load_bundled();
-    let ui = registry.get("ui").expect("ui extension must be bundled");
+    let ui = test_support::registry::ui();
 
     let entry = ui
         .publish_entries
@@ -24,8 +24,7 @@ fn first_ui_publish_entry() -> (String, String, String, Option<String>, i32) {
 }
 
 fn first_ui_navigation_publish_entry_with_value() -> (String, String, String, String, i32) {
-    let registry = ExtensionRegistry::load_bundled();
-    let ui = registry.get("ui").expect("ui extension must be bundled");
+    let ui = test_support::registry::ui();
 
     let entry = ui
         .publish_entries
@@ -48,8 +47,7 @@ fn first_ui_navigation_publish_entry_with_value() -> (String, String, String, St
 }
 
 fn max_ui_order_for(dialog: &str, control: &str) -> i32 {
-    let registry = ExtensionRegistry::load_bundled();
-    let ui = registry.get("ui").expect("ui extension must be bundled");
+    let ui = test_support::registry::ui();
 
     ui.publish_entries
         .iter()
@@ -60,8 +58,7 @@ fn max_ui_order_for(dialog: &str, control: &str) -> i32 {
 }
 
 fn first_ui_publish_entry_with_value() -> (String, String, String, String) {
-    let registry = ExtensionRegistry::load_bundled();
-    let ui = registry.get("ui").expect("ui extension must be bundled");
+    let ui = test_support::registry::ui();
 
     let entry = ui
         .publish_entries
@@ -81,7 +78,7 @@ fn first_ui_publish_entry_with_value() -> (String, String, String, String) {
 fn publish_conflicts_suggests_override_when_user_matches_extension_event() {
     let (dialog, control, event, value, order) = first_ui_publish_entry();
 
-    let yaml: Value = serde_yaml::from_str(&format!(
+    let yaml: Value = test_support::yaml(&format!(
         r#"
 Wix:
   UI:
@@ -93,8 +90,7 @@ Wix:
       Order: {order}
 "#,
         value = value.clone().unwrap_or_else(|| "".to_string())
-    ))
-    .unwrap();
+    ));
 
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
@@ -114,7 +110,7 @@ Wix:
 fn publish_conflicts_reports_invalid_overrides_and_lists_available_targets() {
     let (dialog, control, _event, existing_target) = first_ui_publish_entry_with_value();
 
-    let yaml: Value = serde_yaml::from_str(&format!(
+    let yaml: Value = test_support::yaml(&format!(
         r#"
 Wix:
   UI:
@@ -126,8 +122,7 @@ Wix:
         Control: {control}
         Event: "override {existing_target}"
 "#,
-    ))
-    .unwrap();
+    ));
 
     let invalid = publish_conflicts::find_invalid_overrides(&yaml);
     assert_eq!(invalid.len(), 1);
@@ -142,7 +137,7 @@ fn publish_conflicts_suggests_change_order_for_action_before_navigation() {
         first_ui_navigation_publish_entry_with_value();
     assert!(NAVIGATION_EVENTS.contains(&ext_event.as_str()));
 
-    let yaml: Value = serde_yaml::from_str(&format!(
+    let yaml: Value = test_support::yaml(&format!(
         r#"
 Wix:
   UI:
@@ -154,8 +149,7 @@ Wix:
       Order: {order}
 "#,
         user_event = DO_ACTION,
-    ))
-    .unwrap();
+    ));
 
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
@@ -180,7 +174,7 @@ fn publish_conflicts_suggests_override_for_navigation_event_mismatch() {
         first_ui_navigation_publish_entry_with_value();
     assert!(NAVIGATION_EVENTS.contains(&ext_event.as_str()));
 
-    let yaml: Value = serde_yaml::from_str(&format!(
+    let yaml: Value = test_support::yaml(&format!(
         r#"
 Wix:
   UI:
@@ -192,8 +186,7 @@ Wix:
       Order: {order}
 "#,
         user_event = SPAWN_DIALOG,
-    ))
-    .unwrap();
+    ));
 
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
@@ -212,7 +205,7 @@ fn publish_conflicts_suggests_add_with_order_by_default() {
     let (dialog, control, _event, _target, order) = first_ui_navigation_publish_entry_with_value();
     let max_order = max_ui_order_for(&dialog, &control);
 
-    let yaml: Value = serde_yaml::from_str(&format!(
+    let yaml: Value = test_support::yaml(&format!(
         r#"
 Wix:
   UI:
@@ -222,8 +215,7 @@ Wix:
       Event: SomeOtherEvent
       Order: {order}
 "#,
-    ))
-    .unwrap();
+    ));
 
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
@@ -239,7 +231,7 @@ Wix:
 
 #[test]
 fn publish_conflicts_invalid_override_has_empty_available_targets_when_control_is_unknown() {
-    let yaml: Value = serde_yaml::from_str(
+    let yaml: Value = test_support::yaml(
         r#"
 Wix:
   UI:
@@ -248,8 +240,7 @@ Wix:
       Control: TotallyUnknownControl
       Event: "override SomeDlg"
 "#,
-    )
-    .unwrap();
+    );
 
     let invalid = publish_conflicts::find_invalid_overrides(&yaml);
     assert_eq!(invalid.len(), 1);
@@ -260,7 +251,7 @@ Wix:
 fn publish_conflicts_override_parsing_is_case_insensitive_and_ignores_empty_targets() {
     let (dialog, control, _event, existing_target) = first_ui_publish_entry_with_value();
 
-    let yaml: Value = serde_yaml::from_str(&format!(
+    let yaml: Value = test_support::yaml(&format!(
         r#"
 Wix:
   UI:
@@ -272,8 +263,7 @@ Wix:
         Control: {control}
         Event: "override   "
 "#
-    ))
-    .unwrap();
+    ));
 
     let invalid = publish_conflicts::find_invalid_overrides(&yaml);
     assert!(invalid.is_empty());
