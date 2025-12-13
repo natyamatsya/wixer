@@ -42,3 +42,42 @@ fn analyze_launch_app_is_robust_to_missing_fields() {
     assert!(s.contains("Calculated MSI Type:"));
     assert!(s.contains("Behavior:"));
 }
+
+#[test]
+fn analyze_launch_app_reports_commit_script_property_jscript() {
+    let mut fields = vec![serde_json::Value::Null; 13];
+
+    fields[0] = field(json!(1536));
+    fields[2] = field(json!(48));
+    fields[4] = field(json!(5));
+    fields[5] = field(json!(false));
+    fields[6] = field(json!(false));
+    fields[7] = field(json!(false));
+    fields[8] = field(json!(true));
+    fields[11] = field(json!(false));
+    fields[9] = field(json!(false));
+
+    let s = custom_action::analyze_launch_app(&fields);
+
+    assert!(s.contains("JScript"));
+    assert!(s.contains("Source:Property"));
+    assert!(s.contains("Deferred"));
+    assert!(s.contains("Commit"));
+    assert!(!s.contains("NoImpersonate"));
+}
+
+#[test]
+fn analyze_launch_app_reports_directory_dll_immediate() {
+    let mut fields = vec![serde_json::Value::Null; 13];
+
+    fields[0] = field(json!(0));
+    fields[2] = field(json!(32));
+    fields[4] = field(json!(1));
+    fields[8] = field(json!(true));
+
+    let s = custom_action::analyze_launch_app(&fields);
+
+    assert!(s.contains("DLL"));
+    assert!(s.contains("Source:Directory"));
+    assert!(!s.contains("Deferred"));
+}
