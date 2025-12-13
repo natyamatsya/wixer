@@ -61,3 +61,20 @@ fn upgrade_pipeline_merges_inner_package_attributes_and_renames_scope() {
     assert!(!out.contains("InstallScope=\"perMachine\""));
     assert!(!out.contains("InstallerVersion=\"200\""));
 }
+
+#[test]
+fn upgrade_pipeline_preserves_comment_in_prolog_between_decl_and_root() {
+    let input = r#"<?xml version="1.0" encoding="utf-8"?>
+<!--prolog comment-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Test" Version="1.0.0" Manufacturer="Test" UpgradeCode="{00000000-0000-0000-0000-000000000000}">
+    <Package />
+  </Product>
+</Wix>"#;
+
+    let ctx = UpgradeContext::new();
+    let out = upgrade_content_with_context(input, &ctx).unwrap();
+
+    assert!(out.contains("<!--prolog comment-->"));
+    assert!(out.contains("<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\""));
+}

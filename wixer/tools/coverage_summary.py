@@ -69,6 +69,12 @@ def main() -> int:
         help="Fail if any file has line coverage below this percentage",
     )
     ap.add_argument(
+        "--min-total-line",
+        type=float,
+        default=None,
+        help="Fail if overall line coverage is below this percentage (after include/exclude filters)",
+    )
+    ap.add_argument(
         "--include",
         action="append",
         default=[],
@@ -159,6 +165,15 @@ def main() -> int:
     print(f"\nlowest line coverage (top {args.top}):")
     for cov, lh, lf, rel in items[: args.top]:
         print(f"  {cov:6.2f}%  {lh:5d}/{lf:<5d}  {rel}")
+
+    if args.min_total_line is not None:
+        total_cov = pct(totals["LH"], totals["LF"])
+        if total_cov + 1e-9 < args.min_total_line:
+            print(
+                f"\noverall line coverage under min-total-line={args.min_total_line:.2f}%: "
+                f"{totals['LH']}/{totals['LF']} ({total_cov:.2f}%)"
+            )
+            return 1
 
     if args.min_file_line is not None:
         offenders = [t for t in items if t[0] + 1e-9 < args.min_file_line]

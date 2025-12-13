@@ -5,6 +5,12 @@ mod test_support;
 use wixer::analysis::yaml::orphan_detection::{OrphanKind, find_orphans};
 
 #[test]
+fn orphan_kind_display_formats_as_expected() {
+    assert_eq!(format!("{}", OrphanKind::Component), "Component");
+    assert_eq!(format!("{}", OrphanKind::ComponentGroup), "ComponentGroup");
+}
+
+#[test]
 fn orphan_detection_handles_components_in_unreferenced_groups_without_emitting_component_warning() {
     let yaml: Value = test_support::yaml(
         r#"

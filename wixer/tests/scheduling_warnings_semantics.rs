@@ -30,7 +30,7 @@ Wix:
 
     let warnings = scheduling_warnings::find_deferred_after_finalize(&yaml);
     assert_eq!(warnings.len(), 1);
-    assert_eq!(warnings[0].action_id, "CA_Deferred");
+    assert!(warnings.iter().any(|w| w.action_id == "CA_Deferred"));
 }
 
 #[test]

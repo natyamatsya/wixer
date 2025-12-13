@@ -60,5 +60,9 @@ Wix:
 
     let warnings = condition_validation::find_undefined_properties(&yaml);
     assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].suggestion.as_ref().unwrap().contains("MyProp"));
+    assert!(
+        warnings
+            .iter()
+            .any(|w| { w.suggestion.as_ref().is_some_and(|s| s.contains("MyProp")) })
+    );
 }

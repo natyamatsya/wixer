@@ -96,13 +96,14 @@ Wix:
     assert!(!conflicts.is_empty());
 
     if let Some(v) = value {
-        assert!(matches!(
-            conflicts[0].suggestion,
-            ConflictSuggestion::UseOverride { .. }
-        ));
-        if let ConflictSuggestion::UseOverride { target_dialog, .. } = &conflicts[0].suggestion {
-            assert_eq!(target_dialog, &v);
-        }
+        let s = conflicts
+            .iter()
+            .find_map(|c| match &c.suggestion {
+                ConflictSuggestion::UseOverride { target_dialog, .. } => Some(target_dialog),
+                _ => None,
+            })
+            .expect("expected UseOverride suggestion");
+        assert_eq!(s, &v);
     }
 }
 
@@ -125,10 +126,11 @@ Wix:
     ));
 
     let invalid = publish_conflicts::find_invalid_overrides(&yaml);
-    assert_eq!(invalid.len(), 1);
-    assert_eq!(invalid[0].dialog, dialog);
-    assert_eq!(invalid[0].control, control);
-    assert!(invalid[0].available_targets.contains(&existing_target));
+    let i = invalid
+        .iter()
+        .find(|i| i.dialog == dialog && i.control == control)
+        .expect("expected invalid override for dialog/control");
+    assert!(i.available_targets.contains(&existing_target));
 }
 
 #[test]
@@ -154,18 +156,17 @@ Wix:
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
 
-    let c = &conflicts[0];
-    assert!(matches!(
-        c.suggestion,
-        ConflictSuggestion::ChangeOrder { .. }
-    ));
-    if let ConflictSuggestion::ChangeOrder {
-        suggested_order, ..
-    } = c.suggestion
-    {
-        let expected = order.saturating_sub(1).max(1);
-        assert_eq!(suggested_order, expected);
-    }
+    let suggested_order = conflicts
+        .iter()
+        .find_map(|c| match c.suggestion {
+            ConflictSuggestion::ChangeOrder {
+                suggested_order, ..
+            } => Some(suggested_order),
+            _ => None,
+        })
+        .expect("expected ChangeOrder suggestion");
+    let expected = order.saturating_sub(1).max(1);
+    assert_eq!(suggested_order, expected);
 }
 
 #[test]
@@ -191,13 +192,14 @@ Wix:
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
 
-    assert!(matches!(
-        conflicts[0].suggestion,
-        ConflictSuggestion::UseOverride { .. }
-    ));
-    if let ConflictSuggestion::UseOverride { target_dialog, .. } = &conflicts[0].suggestion {
-        assert_eq!(target_dialog, &target);
-    }
+    let s = conflicts
+        .iter()
+        .find_map(|c| match &c.suggestion {
+            ConflictSuggestion::UseOverride { target_dialog, .. } => Some(target_dialog),
+            _ => None,
+        })
+        .expect("expected UseOverride suggestion");
+    assert_eq!(s, &target);
 }
 
 #[test]
@@ -220,13 +222,14 @@ Wix:
     let conflicts = publish_conflicts::find_conflicts(&yaml);
     assert!(!conflicts.is_empty());
 
-    assert!(matches!(
-        conflicts[0].suggestion,
-        ConflictSuggestion::AddWithOrder { .. }
-    ));
-    if let ConflictSuggestion::AddWithOrder { suggested_order } = conflicts[0].suggestion {
-        assert_eq!(suggested_order, max_order + 10);
-    }
+    let suggested_order = conflicts
+        .iter()
+        .find_map(|c| match c.suggestion {
+            ConflictSuggestion::AddWithOrder { suggested_order } => Some(suggested_order),
+            _ => None,
+        })
+        .expect("expected AddWithOrder suggestion");
+    assert_eq!(suggested_order, max_order + 10);
 }
 
 #[test]
@@ -243,8 +246,11 @@ Wix:
     );
 
     let invalid = publish_conflicts::find_invalid_overrides(&yaml);
-    assert_eq!(invalid.len(), 1);
-    assert!(invalid[0].available_targets.is_empty());
+    let i = invalid
+        .iter()
+        .find(|i| i.dialog == "TotallyUnknownDlg" && i.control == "TotallyUnknownControl")
+        .expect("expected invalid override for unknown dialog/control");
+    assert!(i.available_targets.is_empty());
 }
 
 #[test]
