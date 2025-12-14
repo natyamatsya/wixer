@@ -16,7 +16,13 @@
     "Programming Languages",
     "Linters"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:wix-yaml",
+    "workspaceContains:**/*.wxs.yaml",
+    "workspaceContains:**/*.wxi.yaml",
+    "workspaceContains:**/*.wxl.yaml",
+    "workspaceContains:**/*.wsi.yaml"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [

@@ -99,7 +99,7 @@ dependencies = ["vscode-compile"]
 script_runner = "@shell"
 script = '''
 cd wixer-vscode
-npx @vscode/vsce package --no-dependencies
+npx @vscode/vsce package
 '''
 
 # =============================================================================

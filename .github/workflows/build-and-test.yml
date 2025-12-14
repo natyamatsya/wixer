@@ -135,6 +135,13 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+      - name: Generate documentation (HTML)
+        shell: pwsh
+        run: |
+          $version = "${{ steps.pkg.outputs.version }}"
+          $sha = "${{ steps.pkg.outputs.sha }}"
+          cargo run --release --bin wixer -- doc --output-dir "target/wix-docs-$version-$sha" --format html
+
       - name: Rename artifacts with version + git hash
         shell: pwsh
         run: |
@@ -142,6 +149,13 @@ jobs:
           $sha = "${{ steps.pkg.outputs.sha }}"
           Copy-Item -Path "target/wixer.msi" -Destination "target/wixer-$version-$sha.msi" -Force
           Copy-Item -Path "target/wixer.msix" -Destination "target/wixer-$version-$sha.msix" -Force
+
+          $vsix = Get-ChildItem -Path "wixer-vscode/wixer-vscode-*.vsix" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($vsix) {
+            Copy-Item -Path $vsix.FullName -Destination "target/wixer-vscode-$version-$sha.vsix" -Force
+          } else {
+            Write-Warning "VS Code extension .vsix not found under wixer-vscode/. Skipping standalone VSIX upload."
+          }
 
           if (Test-Path "target/.wixer-tmp/codesign/wixer-dev-codesign.cer") {
             Copy-Item -Path "target/.wixer-tmp/codesign/wixer-dev-codesign.cer" -Destination "target/wixer-$version-$sha.cer" -Force
@@ -160,9 +174,11 @@ jobs:
           path: |
             target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.msi
             target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.msix
+            target/wixer-vscode-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.vsix
             target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.cer
             target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.codesign-subject.txt
             target/wixer-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}.codesign-thumbprint.txt
+            target/wix-docs-${{ steps.pkg.outputs.version }}-${{ steps.pkg.outputs.sha }}/
           if-no-files-found: warn
 #      - name: Test with coverage
 #        run: cargo llvm-cov nextest --workspace --profile ci --lcov --output-path lcov.info

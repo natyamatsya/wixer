@@ -1,6 +1,7 @@
 Wix:
   xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
   xmlns:util: 'http://wixtoolset.org/schemas/v4/wxs/util'
+  xmlns:ui: 'http://wixtoolset.org/schemas/v4/wxs/ui'
   Package:
     Name: 'Wixer'
     Language: '1033'
@@ -17,22 +18,34 @@ Wix:
     Property:
       - Id: 'VSCODE_PATH'
         Secure: 'yes'
+      - Id: 'VSCODE_CMD'
+        Secure: 'yes'
+    UI:
+      Id: 'WixerUI'
+      ui:WixUI:
+        Id: 'WixUI_FeatureTree'
+        InstallDirectory: 'INSTALLFOLDER'
     # Custom action to install VS Code extension
     CustomAction:
       - Id: 'InstallVSCodeExtension'
         Directory: 'INSTALLFOLDER'
-        ExeCommand: '"[VSCODE_PATH]bin\code.cmd" --install-extension "[#VSCodeExtVsix]"'
-        Execute: 'deferred'
+        ExeCommand: '"[VSCODE_CMD]" --install-extension "[#VSCodeExtVsix]"'
+        Execute: 'immediate'
         Impersonate: 'yes'
         Return: 'ignore'
     InstallExecuteSequence:
       Custom:
         Action: 'InstallVSCodeExtension'
-        After: 'InstallFiles'
+        Before: 'InstallFinalize'
         Condition: 'VSCODE_PATH AND &VSCodeExtension=3'
     util:BroadcastEnvironmentChange: {}
     # Set VS Code extension feature to Level 1 (enabled) when VS Code is detected
     SetProperty:
+      - Id: 'VSCODE_CMD'
+        Value: '[VSCODE_PATH]\bin\code.cmd'
+        Sequence: 'first'
+        After: 'AppSearch'
+        Condition: 'VSCODE_PATH'
       - Id: 'VSCodeExtension'
         Value: '1'
         Sequence: 'first'
@@ -49,7 +62,7 @@ Wix:
       - Id: 'VSCodeExtension'
         Title: 'VS Code Extension'
         Description: 'Language support for WiX YAML files in Visual Studio Code (requires VS Code)'
-        Level: '1000'
+        Level: '1'
         AllowAbsent: 'yes'
         ComponentGroupRef:
           Id: 'VSCodeComponents'
