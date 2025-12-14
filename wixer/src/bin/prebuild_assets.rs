@@ -122,18 +122,21 @@ async fn main() -> Result<()> {
         {
             let schema_name = path.file_stem().unwrap().to_string_lossy();
             for (name, def) in definitions {
-                let description = def
+                let Some(description) = def
                     .get("description")
                     .and_then(|d| d.as_str())
-                    .unwrap_or("No description available.")
-                    .to_string();
+                    .map(|d| d.trim())
+                    .filter(|d| !d.is_empty())
+                else {
+                    continue;
+                };
 
                 let tags = vec!["Element".to_string(), schema_name.replace(".schema", "")];
 
                 properties.push(wixer::describe_db::WixProperty {
                     name: name.clone(),
                     kind: "Element".to_string(),
-                    description,
+                    description: description.to_string(),
                     docs_url: None,
                     tags,
                 });

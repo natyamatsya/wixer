@@ -586,9 +586,13 @@ impl XsdConverter {
     fn convert_element(&self, node: Node) -> Value {
         let mut schema = Map::new();
 
-        if self.include_descriptions
-            && let Some(desc) = self.get_annotation(node)
-        {
+        let element_desc = if self.include_descriptions {
+            self.get_annotation(node)
+        } else {
+            None
+        };
+
+        if let Some(desc) = &element_desc {
             schema.insert("description".to_string(), json!(desc));
         }
 
@@ -616,13 +620,25 @@ impl XsdConverter {
                 .children()
                 .find(|n| n.tag_name().name() == "complexType")
             {
-                let complex_schema = self.convert_complex_type(complex);
+                let mut complex_schema = self.convert_complex_type(complex);
+                if let Some(desc) = &element_desc
+                    && let Value::Object(obj) = &mut complex_schema
+                {
+                    obj.entry("description".to_string())
+                        .or_insert_with(|| json!(desc.clone()));
+                }
                 return complex_schema;
             } else if let Some(simple) = node
                 .children()
                 .find(|n| n.tag_name().name() == "simpleType")
             {
-                let simple_schema = self.convert_simple_type(simple);
+                let mut simple_schema = self.convert_simple_type(simple);
+                if let Some(desc) = &element_desc
+                    && let Value::Object(obj) = &mut simple_schema
+                {
+                    obj.entry("description".to_string())
+                        .or_insert_with(|| json!(desc.clone()));
+                }
                 return simple_schema;
             } else {
                 schema.insert("type".to_string(), json!("string"));
@@ -691,5 +707,69 @@ impl XsdConverter {
             ),
             _ => (vec![json!("string")], None), // Default to string
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_element_documentation_for_inline_complex_type() {
+        let xsd = r#"
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="CustomAction">
+    <xs:annotation>
+      <xs:documentation>Element doc</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence />
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+"#;
+
+        let converter = XsdConverter::new(AttributeStrategy::Prefix, true, false);
+        let schema = converter.convert(xsd, None).unwrap();
+
+        let desc = schema
+            .get("definitions")
+            .and_then(|d| d.get("CustomAction"))
+            .and_then(|d| d.get("description"))
+            .and_then(|d| d.as_str())
+            .unwrap();
+
+        assert_eq!(desc, "Element doc");
+    }
+
+    #[test]
+    fn does_not_override_complex_type_documentation_with_element_documentation() {
+        let xsd = r#"
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="CustomAction">
+    <xs:annotation>
+      <xs:documentation>Element doc</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:annotation>
+        <xs:documentation>Type doc</xs:documentation>
+      </xs:annotation>
+      <xs:sequence />
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+"#;
+
+        let converter = XsdConverter::new(AttributeStrategy::Prefix, true, false);
+        let schema = converter.convert(xsd, None).unwrap();
+
+        let desc = schema
+            .get("definitions")
+            .and_then(|d| d.get("CustomAction"))
+            .and_then(|d| d.get("description"))
+            .and_then(|d| d.as_str())
+            .unwrap();
+
+        assert_eq!(desc, "Type doc");
     }
 }
