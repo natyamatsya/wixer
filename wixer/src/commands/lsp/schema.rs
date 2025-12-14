@@ -14,6 +14,8 @@ struct IndexContext<'a> {
     schema_name: &'a str,
     docs: &'a mut HashMap<String, String>,
     docs_urls: &'a mut HashMap<String, String>,
+    msi_tables: &'a mut HashMap<String, String>,
+    see_also: &'a mut HashMap<String, Vec<String>>,
     doc_paths: &'a mut HashMap<String, Vec<String>>,
     completions: &'a mut Vec<CompletionItem>,
     symbols: &'a mut HashMap<String, SchemaSymbolInfo>,
@@ -116,6 +118,8 @@ pub async fn load_schemas(lsp: &WixerLsp) {
     let mut schemas = lsp.schemas.write().await;
     let mut docs = lsp.docs.write().await;
     let mut docs_urls = lsp.docs_urls.write().await;
+    let mut msi_tables = lsp.msi_tables.write().await;
+    let mut see_also = lsp.see_also.write().await;
     let mut doc_paths = lsp.doc_paths.write().await;
     let mut completions = lsp.completions.write().await;
     let mut symbols = lsp.symbols.write().await;
@@ -142,21 +146,31 @@ pub async fn load_schemas(lsp: &WixerLsp) {
         }
 
         let mut schema_symbols = HashMap::new();
-        index_schema(
-            &json,
-            schema_base,
-            &mut docs,
-            &mut docs_urls,
-            &mut doc_paths,
-            &mut completions,
-            &mut schema_symbols,
-        );
+
+        let mut ctx = IndexContext {
+            schema_name: schema_base,
+            docs: &mut docs,
+            docs_urls: &mut docs_urls,
+            msi_tables: &mut msi_tables,
+            see_also: &mut see_also,
+            doc_paths: &mut doc_paths,
+            completions: &mut completions,
+            symbols: &mut schema_symbols,
+        };
+
+        index_schema(&json, &mut ctx);
         symbols.insert(name, schema_symbols);
     }
 
     // Load from unified describe_db (knowledge base + schemas + extensions)
-    let db_count =
-        load_from_describe_db(&mut docs, &mut docs_urls, &mut doc_paths, &mut completions);
+    let db_count = load_from_describe_db(
+        &mut docs,
+        &mut docs_urls,
+        &mut msi_tables,
+        &mut see_also,
+        &mut doc_paths,
+        &mut completions,
+    );
 
     completions.sort_by(|a, b| a.label.cmp(&b.label));
     completions.dedup_by(|a, b| a.label == b.label);
@@ -177,6 +191,8 @@ pub async fn load_schemas(lsp: &WixerLsp) {
 fn load_from_describe_db(
     docs: &mut HashMap<String, String>,
     docs_urls: &mut HashMap<String, String>,
+    _msi_tables: &mut HashMap<String, String>,
+    _see_also: &mut HashMap<String, Vec<String>>,
     doc_paths: &mut HashMap<String, Vec<String>>,
     completions: &mut Vec<CompletionItem>,
 ) -> usize {
@@ -275,36 +291,13 @@ fn compile_schema(
     true
 }
 
-fn index_schema(
-    json: &Value,
-    schema_name: &str,
-    docs: &mut HashMap<String, String>,
-    docs_urls: &mut HashMap<String, String>,
-    doc_paths: &mut HashMap<String, Vec<String>>,
-    completions: &mut Vec<CompletionItem>,
-    symbols: &mut HashMap<String, SchemaSymbolInfo>,
-) {
-    let mut ctx = IndexContext {
-        schema_name,
-        docs,
-        docs_urls,
-        doc_paths,
-        completions,
-        symbols,
-    };
-
+fn index_schema(json: &Value, ctx: &mut IndexContext<'_>) {
     let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) else {
         return;
     };
 
     for (def_name, def_schema) in definitions {
-        record_symbol(
-            &mut ctx,
-            def_name,
-            def_schema,
-            SchemaSymbolKind::Element,
-            None,
-        );
+        record_symbol(ctx, def_name, def_schema, SchemaSymbolKind::Element, None);
 
         let Some(props) = def_schema.get("properties").and_then(|p| p.as_object()) else {
             continue;
@@ -312,7 +305,7 @@ fn index_schema(
 
         for (prop_name, prop_schema) in props {
             record_symbol(
-                &mut ctx,
+                ctx,
                 prop_name,
                 prop_schema,
                 SchemaSymbolKind::Attribute,
@@ -338,7 +331,7 @@ fn index_schema(
             if let Some(props) = ref_schema.get("properties").and_then(|p| p.as_object()) {
                 for (prop_name, prop_schema) in props {
                     record_symbol(
-                        &mut ctx,
+                        ctx,
                         prop_name,
                         prop_schema,
                         SchemaSymbolKind::Attribute,
@@ -363,7 +356,23 @@ fn record_symbol(
         .and_then(|d| d.as_str())
         .map(|s| s.to_string());
 
-    let should_index = desc.is_some() || docs_url.is_some();
+    let msi_table = schema
+        .get("x-wixer-msi-table")
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+
+    let see_also = schema
+        .get("x-wixer-see-also")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Vec<String>>()
+        })
+        .unwrap_or_default();
+
+    let should_index =
+        desc.is_some() || docs_url.is_some() || msi_table.is_some() || !see_also.is_empty();
 
     let base_key = if let Some(parent) = parent {
         format!("{}.{}", parent, name)
@@ -394,6 +403,30 @@ fn record_symbol(
         ctx.docs_urls
             .entry(schema_key.clone())
             .or_insert_with(|| url);
+    }
+
+    if let Some(table) = msi_table {
+        ctx.msi_tables
+            .entry(name.to_string())
+            .or_insert_with(|| table.clone());
+        ctx.msi_tables
+            .entry(base_key.clone())
+            .or_insert_with(|| table.clone());
+        ctx.msi_tables
+            .entry(schema_key.clone())
+            .or_insert_with(|| table);
+    }
+
+    if !see_also.is_empty() {
+        ctx.see_also
+            .entry(name.to_string())
+            .or_insert_with(|| see_also.clone());
+        ctx.see_also
+            .entry(base_key.clone())
+            .or_insert_with(|| see_also.clone());
+        ctx.see_also
+            .entry(schema_key.clone())
+            .or_insert_with(|| see_also);
     }
 
     if should_index {

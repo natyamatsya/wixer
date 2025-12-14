@@ -31,6 +31,8 @@ pub struct WixerLsp {
     schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
     docs: Arc<RwLock<HashMap<String, String>>>,
     docs_urls: Arc<RwLock<HashMap<String, String>>>,
+    msi_tables: Arc<RwLock<HashMap<String, String>>>,
+    see_also: Arc<RwLock<HashMap<String, Vec<String>>>>,
     doc_paths: Arc<RwLock<HashMap<String, Vec<String>>>>,
     hover_cache: Arc<RwLock<HoverCache>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
@@ -112,6 +114,8 @@ impl WixerLsp {
             schemas: Arc::new(RwLock::new(HashMap::new())),
             docs: Arc::new(RwLock::new(HashMap::new())),
             docs_urls: Arc::new(RwLock::new(HashMap::new())),
+            msi_tables: Arc::new(RwLock::new(HashMap::new())),
+            see_also: Arc::new(RwLock::new(HashMap::new())),
             doc_paths: Arc::new(RwLock::new(HashMap::new())),
             hover_cache: Arc::new(RwLock::new(HashMap::new())),
             completions: Arc::new(RwLock::new(Vec::new())),
@@ -278,6 +282,8 @@ impl LanguageServer for WixerLsp {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let docs_map = self.docs.read().await;
         let docs_urls = self.docs_urls.read().await;
+        let msi_tables = self.msi_tables.read().await;
+        let see_also = self.see_also.read().await;
         let doc_paths = self.doc_paths.read().await;
         let documents = self.documents.read().await;
         let hover_cache = self.hover_cache.read().await;
@@ -349,7 +355,14 @@ impl LanguageServer for WixerLsp {
                 for key in &candidates {
                     let desc = docs_map.get(key);
                     let docs_url = docs_urls.get(key);
-                    if desc.is_some() || docs_url.is_some() {
+                    let msi_table = msi_tables.get(key);
+                    let see_also = see_also.get(key);
+
+                    if desc.is_some()
+                        || docs_url.is_some()
+                        || msi_table.is_some()
+                        || see_also.is_some()
+                    {
                         let yaml_path_str =
                             yaml_path.as_ref().map(|p| p.join(".")).unwrap_or_default();
 
@@ -369,6 +382,22 @@ impl LanguageServer for WixerLsp {
                         if let Some(url) = docs_url {
                             markdown.push_str("\n\n**Docs**: ");
                             markdown.push_str(url);
+                        }
+
+                        if let Some(table) = msi_table {
+                            markdown.push_str("\n\n**MSI Table**: ");
+                            markdown.push_str(table);
+                        }
+
+                        if let Some(see_also) = see_also
+                            && !see_also.is_empty()
+                        {
+                            markdown.push_str("\n\n**See also**:\n");
+                            for r in see_also.iter().take(10) {
+                                markdown.push_str("- `");
+                                markdown.push_str(r);
+                                markdown.push_str("`\n");
+                            }
                         }
                         drop(hover_cache);
                         let mut hover_cache = self.hover_cache.write().await;
@@ -415,7 +444,11 @@ impl LanguageServer for WixerLsp {
 
                 let desc = docs_map.get(word);
                 let docs_url = docs_urls.get(word);
-                if desc.is_some() || docs_url.is_some() {
+                let msi_table = msi_tables.get(word);
+                let see_also = see_also.get(word);
+
+                if desc.is_some() || docs_url.is_some() || msi_table.is_some() || see_also.is_some()
+                {
                     let mut markdown = format!("**{}**\n\n**Resolved Path**: `{}`", word, word);
                     if let Some(desc) = desc {
                         markdown.push_str("\n\n");
@@ -424,6 +457,22 @@ impl LanguageServer for WixerLsp {
                     if let Some(url) = docs_url {
                         markdown.push_str("\n\n**Docs**: ");
                         markdown.push_str(url);
+                    }
+
+                    if let Some(table) = msi_table {
+                        markdown.push_str("\n\n**MSI Table**: ");
+                        markdown.push_str(table);
+                    }
+
+                    if let Some(see_also) = see_also
+                        && !see_also.is_empty()
+                    {
+                        markdown.push_str("\n\n**See also**:\n");
+                        for r in see_also.iter().take(10) {
+                            markdown.push_str("- `");
+                            markdown.push_str(r);
+                            markdown.push_str("`\n");
+                        }
                     }
                     drop(hover_cache);
                     let mut hover_cache = self.hover_cache.write().await;

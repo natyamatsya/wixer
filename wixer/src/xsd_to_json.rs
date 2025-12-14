@@ -310,6 +310,19 @@ impl XsdConverter {
             schema.insert("x-wixer-docs-url".to_string(), json!(url));
         }
 
+        if self.include_descriptions
+            && let Some(table) = self.get_msi_table(node)
+        {
+            schema.insert("x-wixer-msi-table".to_string(), json!(table));
+        }
+
+        if self.include_descriptions {
+            let see_also = self.get_see_also_refs(node);
+            if !see_also.is_empty() {
+                schema.insert("x-wixer-see-also".to_string(), json!(see_also));
+            }
+        }
+
         let mut properties = Map::new();
         let mut required = Vec::new();
 
@@ -558,6 +571,19 @@ impl XsdConverter {
             schema.insert("x-wixer-docs-url".to_string(), json!(url));
         }
 
+        if self.include_descriptions
+            && let Some(table) = self.get_msi_table(node)
+        {
+            schema.insert("x-wixer-msi-table".to_string(), json!(table));
+        }
+
+        if self.include_descriptions {
+            let see_also = self.get_see_also_refs(node);
+            if !see_also.is_empty() {
+                schema.insert("x-wixer-see-also".to_string(), json!(see_also));
+            }
+        }
+
         if let Some(restriction) = node
             .children()
             .find(|n| n.tag_name().name() == "restriction")
@@ -610,12 +636,32 @@ impl XsdConverter {
             None
         };
 
+        let element_msi_table = if self.include_descriptions {
+            self.get_msi_table(node)
+        } else {
+            None
+        };
+
+        let element_see_also = if self.include_descriptions {
+            self.get_see_also_refs(node)
+        } else {
+            Vec::new()
+        };
+
         if let Some(desc) = &element_desc {
             schema.insert("description".to_string(), json!(desc));
         }
 
         if let Some(url) = &element_docs_url {
             schema.insert("x-wixer-docs-url".to_string(), json!(url));
+        }
+
+        if let Some(table) = &element_msi_table {
+            schema.insert("x-wixer-msi-table".to_string(), json!(table));
+        }
+
+        if !element_see_also.is_empty() {
+            schema.insert("x-wixer-see-also".to_string(), json!(element_see_also));
         }
 
         if let Some(type_name) = node.attribute("type") {
@@ -655,6 +701,18 @@ impl XsdConverter {
                     obj.entry("x-wixer-docs-url".to_string())
                         .or_insert_with(|| json!(url.clone()));
                 }
+                if let Some(table) = &element_msi_table
+                    && let Value::Object(obj) = &mut complex_schema
+                {
+                    obj.entry("x-wixer-msi-table".to_string())
+                        .or_insert_with(|| json!(table.clone()));
+                }
+                if !element_see_also.is_empty()
+                    && let Value::Object(obj) = &mut complex_schema
+                {
+                    obj.entry("x-wixer-see-also".to_string())
+                        .or_insert_with(|| json!(element_see_also.clone()));
+                }
                 return complex_schema;
             } else if let Some(simple) = node
                 .children()
@@ -672,6 +730,18 @@ impl XsdConverter {
                 {
                     obj.entry("x-wixer-docs-url".to_string())
                         .or_insert_with(|| json!(url.clone()));
+                }
+                if let Some(table) = &element_msi_table
+                    && let Value::Object(obj) = &mut simple_schema
+                {
+                    obj.entry("x-wixer-msi-table".to_string())
+                        .or_insert_with(|| json!(table.clone()));
+                }
+                if !element_see_also.is_empty()
+                    && let Value::Object(obj) = &mut simple_schema
+                {
+                    obj.entry("x-wixer-see-also".to_string())
+                        .or_insert_with(|| json!(element_see_also.clone()));
                 }
                 return simple_schema;
             } else {
@@ -695,6 +765,19 @@ impl XsdConverter {
             && let Some(url) = self.get_docs_url(node)
         {
             schema.insert("x-wixer-docs-url".to_string(), json!(url));
+        }
+
+        if self.include_descriptions
+            && let Some(table) = self.get_msi_table(node)
+        {
+            schema.insert("x-wixer-msi-table".to_string(), json!(table));
+        }
+
+        if self.include_descriptions {
+            let see_also = self.get_see_also_refs(node);
+            if !see_also.is_empty() {
+                schema.insert("x-wixer-see-also".to_string(), json!(see_also));
+            }
         }
 
         if let Some(type_name) = node.attribute("type") {
@@ -731,6 +814,36 @@ impl XsdConverter {
             .and_then(|n| n.descendants().find(|c| c.tag_name().name() == "msiRef"))
             .and_then(|n| n.attribute("href"))
             .map(|s| s.to_string())
+    }
+
+    fn get_msi_table(&self, node: Node) -> Option<String> {
+        node.children()
+            .find(|n| n.tag_name().name() == "annotation")
+            .and_then(|n| n.children().find(|c| c.tag_name().name() == "appinfo"))
+            .and_then(|n| n.descendants().find(|c| c.tag_name().name() == "msiRef"))
+            .and_then(|n| n.attribute("table"))
+            .map(|s| s.to_string())
+    }
+
+    fn get_see_also_refs(&self, node: Node) -> Vec<String> {
+        let mut refs = Vec::new();
+        let Some(appinfo) = node
+            .children()
+            .find(|n| n.tag_name().name() == "annotation")
+            .and_then(|n| n.children().find(|c| c.tag_name().name() == "appinfo"))
+        else {
+            return refs;
+        };
+
+        for n in appinfo.descendants() {
+            if n.tag_name().name() == "seeAlso"
+                && let Some(r) = n.attribute("ref")
+            {
+                refs.push(r.to_string());
+            }
+        }
+
+        refs
     }
 
     fn map_xsd_type(&self, xsd_type: &str) -> (Vec<Value>, Option<&'static str>) {
@@ -850,5 +963,46 @@ mod tests {
             .unwrap();
 
         assert_eq!(url, "https://example.invalid/customaction");
+    }
+
+    #[test]
+    fn preserves_msi_table_and_see_also_from_appinfo() {
+        let xsd = r#"
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xse="http://wixtoolset.org/schemas/v4/xsd/extension">
+  <xs:element name="CustomAction">
+    <xs:annotation>
+      <xs:appinfo>
+        <xse:seeAlso ref="Custom" />
+        <xse:seeAlso ref="CustomActionRef" />
+        <xse:msiRef table="CustomAction" href="https://example.invalid/customaction" />
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence />
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+"#;
+
+        let converter = XsdConverter::new(AttributeStrategy::Prefix, true, false);
+        let schema = converter.convert(xsd, None).unwrap();
+
+        let def = schema
+            .get("definitions")
+            .and_then(|d| d.get("CustomAction"))
+            .unwrap();
+
+        let table = def
+            .get("x-wixer-msi-table")
+            .and_then(|d| d.as_str())
+            .unwrap();
+        assert_eq!(table, "CustomAction");
+
+        let see_also = def
+            .get("x-wixer-see-also")
+            .and_then(|d| d.as_array())
+            .unwrap();
+        let items: Vec<&str> = see_also.iter().filter_map(|v| v.as_str()).collect();
+        assert_eq!(items, vec!["Custom", "CustomActionRef"]);
     }
 }
