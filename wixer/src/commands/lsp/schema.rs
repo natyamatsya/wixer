@@ -10,6 +10,14 @@ use tower_lsp::lsp_types::*;
 
 use super::WixerLsp;
 
+struct IndexContext<'a> {
+    schema_name: &'a str,
+    docs: &'a mut HashMap<String, String>,
+    doc_paths: &'a mut HashMap<String, Vec<String>>,
+    completions: &'a mut Vec<CompletionItem>,
+    symbols: &'a mut HashMap<String, SchemaSymbolInfo>,
+}
+
 #[derive(Clone, Copy)]
 pub enum SchemaSymbolKind {
     Element,
@@ -106,6 +114,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
 
     let mut schemas = lsp.schemas.write().await;
     let mut docs = lsp.docs.write().await;
+    let mut doc_paths = lsp.doc_paths.write().await;
     let mut completions = lsp.completions.write().await;
     let mut symbols = lsp.symbols.write().await;
 
@@ -122,13 +131,28 @@ pub async fn load_schemas(lsp: &WixerLsp) {
             continue;
         }
 
+        let mut schema_base = name.as_str();
+        if let Some(stripped) = schema_base.strip_suffix(".json") {
+            schema_base = stripped;
+        }
+        if let Some(stripped) = schema_base.strip_suffix(".schema") {
+            schema_base = stripped;
+        }
+
         let mut schema_symbols = HashMap::new();
-        index_schema(&json, &mut docs, &mut completions, &mut schema_symbols);
+        index_schema(
+            &json,
+            schema_base,
+            &mut docs,
+            &mut doc_paths,
+            &mut completions,
+            &mut schema_symbols,
+        );
         symbols.insert(name, schema_symbols);
     }
 
     // Load from unified describe_db (knowledge base + schemas + extensions)
-    let db_count = load_from_describe_db(&mut docs, &mut completions);
+    let db_count = load_from_describe_db(&mut docs, &mut doc_paths, &mut completions);
 
     completions.sort_by(|a, b| a.label.cmp(&b.label));
     completions.dedup_by(|a, b| a.label == b.label);
@@ -148,6 +172,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
 
 fn load_from_describe_db(
     docs: &mut HashMap<String, String>,
+    doc_paths: &mut HashMap<String, Vec<String>>,
     completions: &mut Vec<CompletionItem>,
 ) -> usize {
     let properties = match describe_db::load() {
@@ -163,6 +188,27 @@ fn load_from_describe_db(
         }
 
         docs.insert(prop.name.clone(), prop.description.clone());
+
+        doc_paths
+            .entry(prop.name.clone())
+            .or_default()
+            .push(prop.name.clone());
+
+        if prop.kind == "Element"
+            && let Some(schema_tag) = prop.tags.iter().find(|t| *t != "Element")
+        {
+            let qualified = format!("{}.{}", schema_tag, prop.name);
+            docs.entry(qualified.clone())
+                .or_insert_with(|| prop.description.clone());
+            doc_paths
+                .entry(prop.name.clone())
+                .or_default()
+                .push(qualified.clone());
+            doc_paths
+                .entry(qualified.clone())
+                .or_default()
+                .push(qualified);
+        }
 
         let kind = match prop.kind.as_str() {
             "CustomAction" | "SequenceEntry" => CompletionItemKind::FUNCTION,
@@ -210,22 +256,31 @@ fn compile_schema(
 
 fn index_schema(
     json: &Value,
+    schema_name: &str,
     docs: &mut HashMap<String, String>,
+    doc_paths: &mut HashMap<String, Vec<String>>,
     completions: &mut Vec<CompletionItem>,
     symbols: &mut HashMap<String, SchemaSymbolInfo>,
 ) {
+    let mut ctx = IndexContext {
+        schema_name,
+        docs,
+        doc_paths,
+        completions,
+        symbols,
+    };
+
     let Some(definitions) = json.get("definitions").and_then(|d| d.as_object()) else {
         return;
     };
 
     for (def_name, def_schema) in definitions {
         record_symbol(
+            &mut ctx,
             def_name,
             def_schema,
             SchemaSymbolKind::Element,
-            docs,
-            completions,
-            symbols,
+            None,
         );
 
         let Some(props) = def_schema.get("properties").and_then(|p| p.as_object()) else {
@@ -234,12 +289,11 @@ fn index_schema(
 
         for (prop_name, prop_schema) in props {
             record_symbol(
+                &mut ctx,
                 prop_name,
                 prop_schema,
                 SchemaSymbolKind::Attribute,
-                docs,
-                completions,
-                symbols,
+                Some(def_name),
             );
         }
     }
@@ -261,12 +315,11 @@ fn index_schema(
             if let Some(props) = ref_schema.get("properties").and_then(|p| p.as_object()) {
                 for (prop_name, prop_schema) in props {
                     record_symbol(
+                        &mut ctx,
                         prop_name,
                         prop_schema,
                         SchemaSymbolKind::Attribute,
-                        docs,
-                        completions,
-                        symbols,
+                        Some(ref_name),
                     );
                 }
             }
@@ -275,19 +328,46 @@ fn index_schema(
 }
 
 fn record_symbol(
+    ctx: &mut IndexContext<'_>,
     name: &str,
     schema: &Value,
     kind: SchemaSymbolKind,
-    docs: &mut HashMap<String, String>,
-    completions: &mut Vec<CompletionItem>,
-    symbols: &mut HashMap<String, SchemaSymbolInfo>,
+    parent: Option<&str>,
 ) {
     if let Some(desc) = schema.get("description").and_then(|d| d.as_str()) {
-        docs.entry(name.to_string())
+        ctx.docs
+            .entry(name.to_string())
             .or_insert_with(|| desc.to_string());
+
+        let base_key = if let Some(parent) = parent {
+            format!("{}.{}", parent, name)
+        } else {
+            name.to_string()
+        };
+        let schema_key = format!("{}.{}", ctx.schema_name, base_key);
+
+        ctx.docs
+            .entry(base_key.clone())
+            .or_insert_with(|| desc.to_string());
+        ctx.docs
+            .entry(schema_key.clone())
+            .or_insert_with(|| desc.to_string());
+
+        ctx.doc_paths
+            .entry(name.to_string())
+            .or_default()
+            .push(schema_key.clone());
+        ctx.doc_paths
+            .entry(base_key.clone())
+            .or_default()
+            .push(schema_key.clone());
+        ctx.doc_paths
+            .entry(schema_key.clone())
+            .or_default()
+            .push(schema_key);
     }
 
-    symbols
+    ctx.symbols
         .entry(name.to_string())
         .and_modify(|info| info.update_from_schema(kind, name, schema))
         .or_insert_with(|| SchemaSymbolInfo::from_schema(kind, name, schema));
@@ -297,7 +377,7 @@ fn record_symbol(
         SchemaSymbolKind::Attribute | SchemaSymbolKind::EnumValue => CompletionItemKind::PROPERTY,
     };
 
-    completions.push(CompletionItem {
+    ctx.completions.push(CompletionItem {
         label: name.to_string(),
         kind: Some(completion_kind),
         documentation: schema.get("description").and_then(|d| d.as_str()).map(|d| {

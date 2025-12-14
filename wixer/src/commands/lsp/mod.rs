@@ -23,15 +23,85 @@ use tower_lsp::{Client, LanguageServer};
 
 pub use schema::{SchemaSymbolInfo, SchemaSymbolKind, SchemaValueType};
 
+type HoverDocCache = HashMap<String, Option<String>>;
+type HoverCache = HashMap<Url, HoverDocCache>;
+
 pub struct WixerLsp {
     client: Client,
     schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
     docs: Arc<RwLock<HashMap<String, String>>>,
+    doc_paths: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    hover_cache: Arc<RwLock<HoverCache>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
     symbols: Arc<RwLock<HashMap<String, HashMap<String, SchemaSymbolInfo>>>>,
     documents: Arc<RwLock<HashMap<Url, String>>>,
     /// Cache for resolved YAML (with includes merged)
     resolved_cache: Arc<RwLock<HashMap<PathBuf, serde_yaml::Value>>>,
+}
+
+fn compute_yaml_path(text: &str, line_index: usize) -> Option<Vec<String>> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut current_indent: Option<usize> = None;
+    let mut keys: Vec<String> = Vec::new();
+
+    for i in (0..=line_index).rev() {
+        let l = lines.get(i)?;
+        let trimmed = l.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let indent = l.len().saturating_sub(trimmed.len());
+
+        let key = if let Some(rest) = trimmed.strip_prefix("-") {
+            let rest = rest.trim_start();
+            extract_yaml_key(rest)
+        } else {
+            extract_yaml_key(trimmed)
+        };
+
+        let Some(key) = key else {
+            continue;
+        };
+
+        if current_indent.is_none() {
+            current_indent = Some(indent);
+            keys.push(key);
+            continue;
+        }
+
+        if let Some(ci) = current_indent
+            && indent < ci
+        {
+            current_indent = Some(indent);
+            keys.push(key);
+        }
+    }
+
+    if keys.is_empty() {
+        return None;
+    }
+
+    keys.reverse();
+    Some(keys)
+}
+
+fn extract_yaml_key(s: &str) -> Option<String> {
+    let mut key = String::new();
+    for c in s.chars() {
+        if c == ':' {
+            break;
+        }
+        if c.is_whitespace() {
+            continue;
+        }
+        if c.is_alphanumeric() || c == '_' {
+            key.push(c);
+        } else {
+            return None;
+        }
+    }
+    if key.is_empty() { None } else { Some(key) }
 }
 
 impl WixerLsp {
@@ -40,6 +110,8 @@ impl WixerLsp {
             client,
             schemas: Arc::new(RwLock::new(HashMap::new())),
             docs: Arc::new(RwLock::new(HashMap::new())),
+            doc_paths: Arc::new(RwLock::new(HashMap::new())),
+            hover_cache: Arc::new(RwLock::new(HashMap::new())),
             completions: Arc::new(RwLock::new(Vec::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             documents: Arc::new(RwLock::new(HashMap::new())),
@@ -161,6 +233,12 @@ impl LanguageServer for WixerLsp {
                 params.text_document.text.clone(),
             );
         }
+
+        {
+            let mut hover_cache = self.hover_cache.write().await;
+            hover_cache.remove(&params.text_document.uri);
+        }
+
         diagnostics::validate_document(
             self,
             params.text_document.uri,
@@ -175,6 +253,11 @@ impl LanguageServer for WixerLsp {
             // Invalidate resolved include cache for this file
             let path = PathBuf::from(params.text_document.uri.path());
             self.invalidate_cache(&path).await;
+
+            {
+                let mut hover_cache = self.hover_cache.write().await;
+                hover_cache.remove(&params.text_document.uri);
+            }
 
             {
                 let mut docs = self.documents.write().await;
@@ -192,7 +275,9 @@ impl LanguageServer for WixerLsp {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let docs_map = self.docs.read().await;
+        let doc_paths = self.doc_paths.read().await;
         let documents = self.documents.read().await;
+        let hover_cache = self.hover_cache.read().await;
 
         let uri = &params.text_document_position_params.text_document.uri;
         if let Some(text) = documents.get(uri) {
@@ -216,15 +301,129 @@ impl LanguageServer for WixerLsp {
 
                 let word = &line[start..end];
 
-                if let Some(desc) = docs_map.get(word) {
+                let cache_key = format!("{}:{}:{}", pos.line, start, end);
+                if let Some(doc_cache) = hover_cache.get(uri)
+                    && let Some(cached) = doc_cache.get(&cache_key)
+                {
+                    if let Some(markdown) = cached {
+                        return Ok(Some(Hover {
+                            contents: HoverContents::Markup(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: markdown.clone(),
+                            }),
+                            range: None,
+                        }));
+                    }
+                    return Ok(None);
+                }
+
+                let schema_name = self.get_schema_name(uri);
+                let yaml_path = compute_yaml_path(text, pos.line as usize);
+
+                let mut candidates = Vec::new();
+                if word.contains('.') {
+                    candidates.push(word.to_string());
+                    if !word.starts_with(schema_name)
+                        && !word.starts_with(&format!("{}.", schema_name))
+                    {
+                        candidates.push(format!("{}.{}", schema_name, word));
+                    }
+                } else {
+                    if let Some(path) = yaml_path.as_ref() {
+                        // Try suffixes of the YAML path so we can match schema keys even when
+                        // the YAML contains container nodes like `Wix`, `Package`, etc.
+                        let max_suffix = 4usize.min(path.len());
+                        for n in 1..=max_suffix {
+                            let suffix = path[path.len() - n..].join(".");
+                            candidates.push(format!("{}.{}", schema_name, suffix));
+                            candidates.push(suffix);
+                        }
+                    }
+                    candidates.push(format!("{}.{}", schema_name, word));
+                    candidates.push(word.to_string());
+                }
+
+                for key in &candidates {
+                    if let Some(desc) = docs_map.get(key) {
+                        let yaml_path_str =
+                            yaml_path.as_ref().map(|p| p.join(".")).unwrap_or_default();
+
+                        let path_block = if yaml_path_str.is_empty() {
+                            format!("**Resolved Path**: `{}`", key)
+                        } else {
+                            format!(
+                                "**YAML Path**: `{}`\n\n**Resolved Path**: `{}`",
+                                yaml_path_str, key
+                            )
+                        };
+                        let markdown = format!("**{}**\n\n{}\n\n{}", word, path_block, desc);
+                        drop(hover_cache);
+                        let mut hover_cache = self.hover_cache.write().await;
+                        hover_cache
+                            .entry(uri.clone())
+                            .or_default()
+                            .insert(cache_key.clone(), Some(markdown.clone()));
+                        return Ok(Some(Hover {
+                            contents: HoverContents::Markup(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: markdown,
+                            }),
+                            range: None,
+                        }));
+                    }
+                }
+
+                if let Some(paths) = doc_paths.get(word)
+                    && paths.len() > 1
+                {
+                    let mut lines = Vec::new();
+                    lines.push(format!("**{}**", word));
+                    lines.push("".to_string());
+                    lines.push("Multiple matches. Use a qualified path:".to_string());
+                    lines.push("".to_string());
+                    for p in paths.iter().take(20) {
+                        lines.push(format!("- **Path** `{}`", p));
+                    }
+                    let markdown = lines.join("\n");
+                    drop(hover_cache);
+                    let mut hover_cache = self.hover_cache.write().await;
+                    hover_cache
+                        .entry(uri.clone())
+                        .or_default()
+                        .insert(cache_key.clone(), Some(markdown.clone()));
                     return Ok(Some(Hover {
                         contents: HoverContents::Markup(MarkupContent {
                             kind: MarkupKind::Markdown,
-                            value: format!("**{}**\n\n{}", word, desc),
+                            value: markdown,
                         }),
                         range: None,
                     }));
                 }
+
+                if let Some(desc) = docs_map.get(word) {
+                    let markdown =
+                        format!("**{}**\n\n**Resolved Path**: `{}`\n\n{}", word, word, desc);
+                    drop(hover_cache);
+                    let mut hover_cache = self.hover_cache.write().await;
+                    hover_cache
+                        .entry(uri.clone())
+                        .or_default()
+                        .insert(cache_key.clone(), Some(markdown.clone()));
+                    return Ok(Some(Hover {
+                        contents: HoverContents::Markup(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: markdown,
+                        }),
+                        range: None,
+                    }));
+                }
+
+                drop(hover_cache);
+                let mut hover_cache = self.hover_cache.write().await;
+                hover_cache
+                    .entry(uri.clone())
+                    .or_default()
+                    .insert(cache_key, None);
             }
         }
         Ok(None)
@@ -251,4 +450,67 @@ pub async fn run() -> anyhow::Result<()> {
         .serve(service)
         .await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_yaml_path_nested_mapping() {
+        let text = r#"
+Wix:
+  Package:
+    CustomAction:
+      Id: CA1
+"#;
+
+        // 0-based line index: "      Id: CA1" is line 4
+        let path = compute_yaml_path(text, 4).unwrap();
+        assert_eq!(path, vec!["Wix", "Package", "CustomAction", "Id"]);
+    }
+
+    #[test]
+    fn compute_yaml_path_sequence_item() {
+        let text = r#"
+Wix:
+  Package:
+    CustomAction:
+      - Id: CA1
+        Execute: immediate
+"#;
+
+        // "        Execute: immediate" is line 5
+        let path = compute_yaml_path(text, 5).unwrap();
+        assert_eq!(
+            path,
+            vec!["Wix", "Package", "CustomAction", "Id", "Execute"]
+        );
+    }
+
+    #[test]
+    fn compute_yaml_path_skips_comments_and_blank_lines() {
+        let text = r#"
+Wix:
+
+  # comment
+  Package:
+    CustomAction:
+      Id: CA1
+"#;
+
+        // "      Id: CA1" is line 6
+        let path = compute_yaml_path(text, 6).unwrap();
+        assert_eq!(path, vec!["Wix", "Package", "CustomAction", "Id"]);
+    }
+
+    #[test]
+    fn extract_yaml_key_rejects_non_key_lines() {
+        assert_eq!(extract_yaml_key(""), None);
+        assert_eq!(extract_yaml_key("-"), None);
+        assert_eq!(extract_yaml_key("123"), Some("123".to_string()));
+        assert_eq!(extract_yaml_key("Key:"), Some("Key".to_string()));
+        assert_eq!(extract_yaml_key("Key: value"), Some("Key".to_string()));
+        assert_eq!(extract_yaml_key("Key-WithDash:"), None);
+    }
 }
