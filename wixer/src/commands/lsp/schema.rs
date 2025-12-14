@@ -10,12 +10,36 @@ use tower_lsp::lsp_types::*;
 
 use super::WixerLsp;
 
+#[derive(Clone, Debug, Default)]
+pub struct SchemaConstraints {
+    pub type_hint: Option<String>,
+    pub enum_values: Vec<String>,
+    pub pattern: Option<String>,
+    pub required: bool,
+    pub repeatable: bool,
+    pub deprecated: bool,
+    pub is_id: bool,
+}
+
+impl SchemaConstraints {
+    fn is_empty(&self) -> bool {
+        self.type_hint.is_none()
+            && self.enum_values.is_empty()
+            && self.pattern.is_none()
+            && !self.required
+            && !self.repeatable
+            && !self.deprecated
+            && !self.is_id
+    }
+}
+
 struct IndexContext<'a> {
     schema_name: &'a str,
     docs: &'a mut HashMap<String, String>,
     docs_urls: &'a mut HashMap<String, String>,
     msi_tables: &'a mut HashMap<String, String>,
     see_also: &'a mut HashMap<String, Vec<String>>,
+    constraints: &'a mut HashMap<String, SchemaConstraints>,
     doc_paths: &'a mut HashMap<String, Vec<String>>,
     completions: &'a mut Vec<CompletionItem>,
     symbols: &'a mut HashMap<String, SchemaSymbolInfo>,
@@ -120,6 +144,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
     let mut docs_urls = lsp.docs_urls.write().await;
     let mut msi_tables = lsp.msi_tables.write().await;
     let mut see_also = lsp.see_also.write().await;
+    let mut constraints = lsp.constraints.write().await;
     let mut doc_paths = lsp.doc_paths.write().await;
     let mut completions = lsp.completions.write().await;
     let mut symbols = lsp.symbols.write().await;
@@ -153,6 +178,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
             docs_urls: &mut docs_urls,
             msi_tables: &mut msi_tables,
             see_also: &mut see_also,
+            constraints: &mut constraints,
             doc_paths: &mut doc_paths,
             completions: &mut completions,
             symbols: &mut schema_symbols,
@@ -297,19 +323,38 @@ fn index_schema(json: &Value, ctx: &mut IndexContext<'_>) {
     };
 
     for (def_name, def_schema) in definitions {
-        record_symbol(ctx, def_name, def_schema, SchemaSymbolKind::Element, None);
+        record_symbol(
+            ctx,
+            def_name,
+            def_schema,
+            SchemaSymbolKind::Element,
+            None,
+            false,
+        );
 
         let Some(props) = def_schema.get("properties").and_then(|p| p.as_object()) else {
             continue;
         };
 
+        let required_props = def_schema
+            .get("required")
+            .and_then(|r| r.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<HashSet<&str>>()
+            })
+            .unwrap_or_default();
+
         for (prop_name, prop_schema) in props {
+            let is_required = required_props.contains(prop_name.as_str());
             record_symbol(
                 ctx,
                 prop_name,
                 prop_schema,
                 SchemaSymbolKind::Attribute,
                 Some(def_name),
+                is_required,
             );
         }
     }
@@ -330,12 +375,24 @@ fn index_schema(json: &Value, ctx: &mut IndexContext<'_>) {
 
             if let Some(props) = ref_schema.get("properties").and_then(|p| p.as_object()) {
                 for (prop_name, prop_schema) in props {
+                    let required_props = ref_schema
+                        .get("required")
+                        .and_then(|r| r.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str())
+                                .collect::<HashSet<&str>>()
+                        })
+                        .unwrap_or_default();
+
+                    let is_required = required_props.contains(prop_name.as_str());
                     record_symbol(
                         ctx,
                         prop_name,
                         prop_schema,
                         SchemaSymbolKind::Attribute,
                         Some(ref_name),
+                        is_required,
                     );
                 }
             }
@@ -349,6 +406,7 @@ fn record_symbol(
     schema: &Value,
     kind: SchemaSymbolKind,
     parent: Option<&str>,
+    required: bool,
 ) {
     let desc = schema.get("description").and_then(|d| d.as_str());
     let docs_url = schema
@@ -371,8 +429,18 @@ fn record_symbol(
         })
         .unwrap_or_default();
 
-    let should_index =
-        desc.is_some() || docs_url.is_some() || msi_table.is_some() || !see_also.is_empty();
+    let mut constraints = extract_constraints(name, schema, required);
+    constraints.deprecated = schema
+        .get("deprecated")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    constraints.is_id = schema_indicates_id(name, schema);
+
+    let should_index = desc.is_some()
+        || docs_url.is_some()
+        || msi_table.is_some()
+        || !see_also.is_empty()
+        || !constraints.is_empty();
 
     let base_key = if let Some(parent) = parent {
         format!("{}.{}", parent, name)
@@ -380,6 +448,18 @@ fn record_symbol(
         name.to_string()
     };
     let schema_key = format!("{}.{}", ctx.schema_name, base_key);
+
+    if !constraints.is_empty() {
+        ctx.constraints
+            .entry(name.to_string())
+            .or_insert_with(|| constraints.clone());
+        ctx.constraints
+            .entry(base_key.clone())
+            .or_insert_with(|| constraints.clone());
+        ctx.constraints
+            .entry(schema_key.clone())
+            .or_insert_with(|| constraints.clone());
+    }
 
     if let Some(desc) = desc {
         ctx.docs
@@ -465,6 +545,159 @@ fn record_symbol(
         }),
         ..Default::default()
     });
+}
+
+fn extract_constraints(name: &str, schema: &Value, required: bool) -> SchemaConstraints {
+    let mut c = SchemaConstraints {
+        required,
+        ..Default::default()
+    };
+
+    c.type_hint = schema_type_hint(name, schema);
+
+    if let Some(pattern) = schema.get("pattern").and_then(|p| p.as_str()) {
+        c.pattern = Some(pattern.to_string());
+    }
+
+    if let Some(en) = schema.get("enum").and_then(|e| e.as_array()) {
+        c.enum_values = en
+            .iter()
+            .filter_map(|v| match v {
+                Value::String(s) => Some(s.clone()),
+                Value::Number(n) => Some(n.to_string()),
+                Value::Bool(b) => Some(b.to_string()),
+                _ => None,
+            })
+            .collect();
+    }
+
+    c.repeatable = schema
+        .get("oneOf")
+        .and_then(|v| v.as_array())
+        .is_some_and(|arr| {
+            arr.iter().any(|entry| {
+                entry
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .is_some_and(|t| t == "array")
+            })
+        });
+
+    c
+}
+
+fn schema_type_hint(name: &str, schema: &Value) -> Option<String> {
+    if let Some(t) = schema.get("type") {
+        if let Some(s) = t.as_str() {
+            return Some(s.to_string());
+        }
+        if let Some(arr) = t.as_array() {
+            let mut parts: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect();
+            parts.sort();
+            parts.dedup();
+            if !parts.is_empty() {
+                return Some(parts.join(" | "));
+            }
+        }
+    }
+
+    if schema.get("enum").and_then(|e| e.as_array()).is_some() {
+        return Some("enum".to_string());
+    }
+
+    if schema.get("pattern").and_then(|p| p.as_str()).is_some() {
+        return Some("string".to_string());
+    }
+
+    if schema.get("$ref").and_then(|r| r.as_str()).is_some() {
+        return Some(format!("ref({})", name));
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod constraints_tests {
+    use super::*;
+
+    #[test]
+    fn extract_constraints_required_enum_pattern_repeatable() {
+        let schema = serde_json::json!({
+            "type": "string",
+            "enum": ["a", "b"],
+            "pattern": "^a|b$",
+            "oneOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "string"}
+            ]
+        });
+
+        let c = extract_constraints("Test", &schema, true);
+        assert_eq!(c.type_hint.as_deref(), Some("string"));
+        assert!(c.required);
+        assert!(c.repeatable);
+        assert_eq!(c.enum_values, vec!["a", "b"]);
+        assert_eq!(c.pattern.as_deref(), Some("^a|b$"));
+    }
+
+    #[test]
+    fn indexes_constraints_under_qualified_keys() {
+        let json = serde_json::json!({
+            "definitions": {
+                "Foo": {
+                    "type": "object",
+                    "properties": {
+                        "Bar": {
+                            "type": "string",
+                            "enum": ["x", "y"],
+                            "pattern": "^[xy]$",
+                            "oneOf": [
+                                {"type": "array", "items": {"type": "string"}},
+                                {"type": "string"}
+                            ]
+                        }
+                    },
+                    "required": ["Bar"]
+                }
+            }
+        });
+
+        let mut docs = HashMap::new();
+        let mut docs_urls = HashMap::new();
+        let mut msi_tables = HashMap::new();
+        let mut see_also = HashMap::new();
+        let mut constraints = HashMap::new();
+        let mut doc_paths = HashMap::new();
+        let mut completions = Vec::new();
+        let mut symbols = HashMap::new();
+
+        let mut ctx = IndexContext {
+            schema_name: "wix",
+            docs: &mut docs,
+            docs_urls: &mut docs_urls,
+            msi_tables: &mut msi_tables,
+            see_also: &mut see_also,
+            constraints: &mut constraints,
+            doc_paths: &mut doc_paths,
+            completions: &mut completions,
+            symbols: &mut symbols,
+        };
+
+        index_schema(&json, &mut ctx);
+
+        let c = ctx.constraints.get("wix.Foo.Bar").unwrap();
+        assert!(c.required);
+        assert!(c.repeatable);
+        assert_eq!(c.type_hint.as_deref(), Some("string"));
+        assert_eq!(c.enum_values, vec!["x", "y"]);
+        assert_eq!(c.pattern.as_deref(), Some("^[xy]$"));
+
+        assert!(ctx.constraints.contains_key("Foo.Bar"));
+        assert!(ctx.constraints.contains_key("Bar"));
+    }
 }
 
 pub fn determine_value_type(schema: &Value) -> Option<SchemaValueType> {

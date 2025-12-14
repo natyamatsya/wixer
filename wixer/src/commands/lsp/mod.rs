@@ -21,6 +21,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
+use schema::SchemaConstraints;
 pub use schema::{SchemaSymbolInfo, SchemaSymbolKind, SchemaValueType};
 
 type HoverDocCache = HashMap<String, Option<String>>;
@@ -33,6 +34,7 @@ pub struct WixerLsp {
     docs_urls: Arc<RwLock<HashMap<String, String>>>,
     msi_tables: Arc<RwLock<HashMap<String, String>>>,
     see_also: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    constraints: Arc<RwLock<HashMap<String, SchemaConstraints>>>,
     doc_paths: Arc<RwLock<HashMap<String, Vec<String>>>>,
     hover_cache: Arc<RwLock<HoverCache>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
@@ -107,6 +109,44 @@ fn extract_yaml_key(s: &str) -> Option<String> {
     if key.is_empty() { None } else { Some(key) }
 }
 
+fn format_constraints_block(c: &SchemaConstraints) -> Option<String> {
+    let mut lines = Vec::new();
+
+    if let Some(t) = &c.type_hint {
+        lines.push(format!("- **Type**: `{}`", t));
+    }
+    if c.required {
+        lines.push("- **Required**".to_string());
+    }
+    if c.repeatable {
+        lines.push("- **Repeatable**".to_string());
+    }
+    if c.deprecated {
+        lines.push("- **Deprecated**".to_string());
+    }
+    if c.is_id {
+        lines.push("- **Identifier**".to_string());
+    }
+    if let Some(p) = &c.pattern {
+        let p = if p.len() > 160 { &p[..160] } else { p.as_str() };
+        lines.push(format!("- **Pattern**: `{}`", p));
+    }
+    if !c.enum_values.is_empty() {
+        let shown = c.enum_values.iter().take(10).cloned().collect::<Vec<_>>();
+        let mut v = format!("- **Allowed values**: `{}`", shown.join("`, `"));
+        if c.enum_values.len() > 10 {
+            v.push_str(" …");
+        }
+        lines.push(v);
+    }
+
+    if lines.is_empty() {
+        return None;
+    }
+
+    Some(format!("\n\n**Constraints**:\n{}", lines.join("\n")))
+}
+
 impl WixerLsp {
     pub fn new(client: Client) -> Self {
         Self {
@@ -116,6 +156,7 @@ impl WixerLsp {
             docs_urls: Arc::new(RwLock::new(HashMap::new())),
             msi_tables: Arc::new(RwLock::new(HashMap::new())),
             see_also: Arc::new(RwLock::new(HashMap::new())),
+            constraints: Arc::new(RwLock::new(HashMap::new())),
             doc_paths: Arc::new(RwLock::new(HashMap::new())),
             hover_cache: Arc::new(RwLock::new(HashMap::new())),
             completions: Arc::new(RwLock::new(Vec::new())),
@@ -284,6 +325,7 @@ impl LanguageServer for WixerLsp {
         let docs_urls = self.docs_urls.read().await;
         let msi_tables = self.msi_tables.read().await;
         let see_also = self.see_also.read().await;
+        let constraints = self.constraints.read().await;
         let doc_paths = self.doc_paths.read().await;
         let documents = self.documents.read().await;
         let hover_cache = self.hover_cache.read().await;
@@ -357,11 +399,13 @@ impl LanguageServer for WixerLsp {
                     let docs_url = docs_urls.get(key);
                     let msi_table = msi_tables.get(key);
                     let see_also = see_also.get(key);
+                    let constraints = constraints.get(key);
 
                     if desc.is_some()
                         || docs_url.is_some()
                         || msi_table.is_some()
                         || see_also.is_some()
+                        || constraints.is_some()
                     {
                         let yaml_path_str =
                             yaml_path.as_ref().map(|p| p.join(".")).unwrap_or_default();
@@ -398,6 +442,12 @@ impl LanguageServer for WixerLsp {
                                 markdown.push_str(r);
                                 markdown.push_str("`\n");
                             }
+                        }
+
+                        if let Some(c) = constraints
+                            && let Some(block) = format_constraints_block(c)
+                        {
+                            markdown.push_str(&block);
                         }
                         drop(hover_cache);
                         let mut hover_cache = self.hover_cache.write().await;
@@ -446,10 +496,16 @@ impl LanguageServer for WixerLsp {
                 let docs_url = docs_urls.get(word);
                 let msi_table = msi_tables.get(word);
                 let see_also = see_also.get(word);
+                let constraints_for_word = constraints.get(word);
 
-                if desc.is_some() || docs_url.is_some() || msi_table.is_some() || see_also.is_some()
+                if desc.is_some()
+                    || docs_url.is_some()
+                    || msi_table.is_some()
+                    || see_also.is_some()
+                    || constraints_for_word.is_some()
                 {
                     let mut markdown = format!("**{}**\n\n**Resolved Path**: `{}`", word, word);
+
                     if let Some(desc) = desc {
                         markdown.push_str("\n\n");
                         markdown.push_str(desc);
@@ -458,12 +514,10 @@ impl LanguageServer for WixerLsp {
                         markdown.push_str("\n\n**Docs**: ");
                         markdown.push_str(url);
                     }
-
                     if let Some(table) = msi_table {
                         markdown.push_str("\n\n**MSI Table**: ");
                         markdown.push_str(table);
                     }
-
                     if let Some(see_also) = see_also
                         && !see_also.is_empty()
                     {
@@ -474,6 +528,13 @@ impl LanguageServer for WixerLsp {
                             markdown.push_str("`\n");
                         }
                     }
+
+                    if let Some(c) = constraints_for_word
+                        && let Some(block) = format_constraints_block(c)
+                    {
+                        markdown.push_str(&block);
+                    }
+
                     drop(hover_cache);
                     let mut hover_cache = self.hover_cache.write().await;
                     hover_cache
@@ -583,5 +644,34 @@ Wix:
         assert_eq!(extract_yaml_key("Key:"), Some("Key".to_string()));
         assert_eq!(extract_yaml_key("Key: value"), Some("Key".to_string()));
         assert_eq!(extract_yaml_key("Key-WithDash:"), None);
+    }
+
+    #[test]
+    fn format_constraints_block_empty_is_none() {
+        let c = SchemaConstraints::default();
+        assert_eq!(format_constraints_block(&c), None);
+    }
+
+    #[test]
+    fn format_constraints_block_renders_expected_fields() {
+        let c = SchemaConstraints {
+            type_hint: Some("string".to_string()),
+            enum_values: vec!["x".to_string(), "y".to_string()],
+            pattern: Some("^[xy]$".to_string()),
+            required: true,
+            repeatable: true,
+            deprecated: true,
+            is_id: true,
+        };
+
+        let md = format_constraints_block(&c).unwrap();
+        assert!(md.contains("**Constraints**"));
+        assert!(md.contains("**Type**: `string`"));
+        assert!(md.contains("**Required**"));
+        assert!(md.contains("**Repeatable**"));
+        assert!(md.contains("**Deprecated**"));
+        assert!(md.contains("**Identifier**"));
+        assert!(md.contains("**Pattern**: `^[xy]$`"));
+        assert!(md.contains("**Allowed values**: `x`, `y`"));
     }
 }
