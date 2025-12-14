@@ -13,6 +13,7 @@ use super::WixerLsp;
 struct IndexContext<'a> {
     schema_name: &'a str,
     docs: &'a mut HashMap<String, String>,
+    docs_urls: &'a mut HashMap<String, String>,
     doc_paths: &'a mut HashMap<String, Vec<String>>,
     completions: &'a mut Vec<CompletionItem>,
     symbols: &'a mut HashMap<String, SchemaSymbolInfo>,
@@ -114,6 +115,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
 
     let mut schemas = lsp.schemas.write().await;
     let mut docs = lsp.docs.write().await;
+    let mut docs_urls = lsp.docs_urls.write().await;
     let mut doc_paths = lsp.doc_paths.write().await;
     let mut completions = lsp.completions.write().await;
     let mut symbols = lsp.symbols.write().await;
@@ -144,6 +146,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
             &json,
             schema_base,
             &mut docs,
+            &mut docs_urls,
             &mut doc_paths,
             &mut completions,
             &mut schema_symbols,
@@ -152,7 +155,8 @@ pub async fn load_schemas(lsp: &WixerLsp) {
     }
 
     // Load from unified describe_db (knowledge base + schemas + extensions)
-    let db_count = load_from_describe_db(&mut docs, &mut doc_paths, &mut completions);
+    let db_count =
+        load_from_describe_db(&mut docs, &mut docs_urls, &mut doc_paths, &mut completions);
 
     completions.sort_by(|a, b| a.label.cmp(&b.label));
     completions.dedup_by(|a, b| a.label == b.label);
@@ -172,6 +176,7 @@ pub async fn load_schemas(lsp: &WixerLsp) {
 
 fn load_from_describe_db(
     docs: &mut HashMap<String, String>,
+    docs_urls: &mut HashMap<String, String>,
     doc_paths: &mut HashMap<String, Vec<String>>,
     completions: &mut Vec<CompletionItem>,
 ) -> usize {
@@ -182,32 +187,48 @@ fn load_from_describe_db(
 
     let mut count = 0;
     for prop in properties {
-        // Skip if already loaded from schema
-        if docs.contains_key(&prop.name) {
-            continue;
+        // If already loaded from schema, still allow backfilling docs URLs.
+        let already_loaded = docs.contains_key(&prop.name);
+
+        if !already_loaded {
+            docs.insert(prop.name.clone(), prop.description.clone());
+
+            doc_paths
+                .entry(prop.name.clone())
+                .or_default()
+                .push(prop.name.clone());
         }
 
-        docs.insert(prop.name.clone(), prop.description.clone());
-
-        doc_paths
-            .entry(prop.name.clone())
-            .or_default()
-            .push(prop.name.clone());
+        if let Some(url) = &prop.docs_url {
+            docs_urls
+                .entry(prop.name.clone())
+                .or_insert_with(|| url.clone());
+        }
 
         if prop.kind == "Element"
             && let Some(schema_tag) = prop.tags.iter().find(|t| *t != "Element")
         {
             let qualified = format!("{}.{}", schema_tag, prop.name);
-            docs.entry(qualified.clone())
-                .or_insert_with(|| prop.description.clone());
-            doc_paths
-                .entry(prop.name.clone())
-                .or_default()
-                .push(qualified.clone());
-            doc_paths
-                .entry(qualified.clone())
-                .or_default()
-                .push(qualified);
+
+            if !already_loaded {
+                docs.entry(qualified.clone())
+                    .or_insert_with(|| prop.description.clone());
+
+                doc_paths
+                    .entry(prop.name.clone())
+                    .or_default()
+                    .push(qualified.clone());
+                doc_paths
+                    .entry(qualified.clone())
+                    .or_default()
+                    .push(qualified.clone());
+            }
+
+            if let Some(url) = &prop.docs_url {
+                docs_urls
+                    .entry(qualified.clone())
+                    .or_insert_with(|| url.clone());
+            }
         }
 
         let kind = match prop.kind.as_str() {
@@ -258,6 +279,7 @@ fn index_schema(
     json: &Value,
     schema_name: &str,
     docs: &mut HashMap<String, String>,
+    docs_urls: &mut HashMap<String, String>,
     doc_paths: &mut HashMap<String, Vec<String>>,
     completions: &mut Vec<CompletionItem>,
     symbols: &mut HashMap<String, SchemaSymbolInfo>,
@@ -265,6 +287,7 @@ fn index_schema(
     let mut ctx = IndexContext {
         schema_name,
         docs,
+        docs_urls,
         doc_paths,
         completions,
         symbols,
@@ -334,25 +357,46 @@ fn record_symbol(
     kind: SchemaSymbolKind,
     parent: Option<&str>,
 ) {
-    if let Some(desc) = schema.get("description").and_then(|d| d.as_str()) {
+    let desc = schema.get("description").and_then(|d| d.as_str());
+    let docs_url = schema
+        .get("x-wixer-docs-url")
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+
+    let should_index = desc.is_some() || docs_url.is_some();
+
+    let base_key = if let Some(parent) = parent {
+        format!("{}.{}", parent, name)
+    } else {
+        name.to_string()
+    };
+    let schema_key = format!("{}.{}", ctx.schema_name, base_key);
+
+    if let Some(desc) = desc {
         ctx.docs
             .entry(name.to_string())
             .or_insert_with(|| desc.to_string());
-
-        let base_key = if let Some(parent) = parent {
-            format!("{}.{}", parent, name)
-        } else {
-            name.to_string()
-        };
-        let schema_key = format!("{}.{}", ctx.schema_name, base_key);
-
         ctx.docs
             .entry(base_key.clone())
             .or_insert_with(|| desc.to_string());
         ctx.docs
             .entry(schema_key.clone())
             .or_insert_with(|| desc.to_string());
+    }
 
+    if let Some(url) = docs_url {
+        ctx.docs_urls
+            .entry(name.to_string())
+            .or_insert_with(|| url.clone());
+        ctx.docs_urls
+            .entry(base_key.clone())
+            .or_insert_with(|| url.clone());
+        ctx.docs_urls
+            .entry(schema_key.clone())
+            .or_insert_with(|| url);
+    }
+
+    if should_index {
         ctx.doc_paths
             .entry(name.to_string())
             .or_default()

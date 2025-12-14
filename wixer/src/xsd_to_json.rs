@@ -304,6 +304,12 @@ impl XsdConverter {
             schema.insert("description".to_string(), json!(desc));
         }
 
+        if self.include_descriptions
+            && let Some(url) = self.get_docs_url(node)
+        {
+            schema.insert("x-wixer-docs-url".to_string(), json!(url));
+        }
+
         let mut properties = Map::new();
         let mut required = Vec::new();
 
@@ -546,6 +552,12 @@ impl XsdConverter {
             schema.insert("description".to_string(), json!(desc));
         }
 
+        if self.include_descriptions
+            && let Some(url) = self.get_docs_url(node)
+        {
+            schema.insert("x-wixer-docs-url".to_string(), json!(url));
+        }
+
         if let Some(restriction) = node
             .children()
             .find(|n| n.tag_name().name() == "restriction")
@@ -592,8 +604,18 @@ impl XsdConverter {
             None
         };
 
+        let element_docs_url = if self.include_descriptions {
+            self.get_docs_url(node)
+        } else {
+            None
+        };
+
         if let Some(desc) = &element_desc {
             schema.insert("description".to_string(), json!(desc));
+        }
+
+        if let Some(url) = &element_docs_url {
+            schema.insert("x-wixer-docs-url".to_string(), json!(url));
         }
 
         if let Some(type_name) = node.attribute("type") {
@@ -627,6 +649,12 @@ impl XsdConverter {
                     obj.entry("description".to_string())
                         .or_insert_with(|| json!(desc.clone()));
                 }
+                if let Some(url) = &element_docs_url
+                    && let Value::Object(obj) = &mut complex_schema
+                {
+                    obj.entry("x-wixer-docs-url".to_string())
+                        .or_insert_with(|| json!(url.clone()));
+                }
                 return complex_schema;
             } else if let Some(simple) = node
                 .children()
@@ -638,6 +666,12 @@ impl XsdConverter {
                 {
                     obj.entry("description".to_string())
                         .or_insert_with(|| json!(desc.clone()));
+                }
+                if let Some(url) = &element_docs_url
+                    && let Value::Object(obj) = &mut simple_schema
+                {
+                    obj.entry("x-wixer-docs-url".to_string())
+                        .or_insert_with(|| json!(url.clone()));
                 }
                 return simple_schema;
             } else {
@@ -655,6 +689,12 @@ impl XsdConverter {
             && let Some(desc) = self.get_annotation(node)
         {
             schema.insert("description".to_string(), json!(desc));
+        }
+
+        if self.include_descriptions
+            && let Some(url) = self.get_docs_url(node)
+        {
+            schema.insert("x-wixer-docs-url".to_string(), json!(url));
         }
 
         if let Some(type_name) = node.attribute("type") {
@@ -682,6 +722,15 @@ impl XsdConverter {
                     .find(|c| c.tag_name().name() == "documentation")
             })
             .and_then(|n| n.text().map(|t| t.trim().to_string()))
+    }
+
+    fn get_docs_url(&self, node: Node) -> Option<String> {
+        node.children()
+            .find(|n| n.tag_name().name() == "annotation")
+            .and_then(|n| n.children().find(|c| c.tag_name().name() == "appinfo"))
+            .and_then(|n| n.descendants().find(|c| c.tag_name().name() == "msiRef"))
+            .and_then(|n| n.attribute("href"))
+            .map(|s| s.to_string())
     }
 
     fn map_xsd_type(&self, xsd_type: &str) -> (Vec<Value>, Option<&'static str>) {
@@ -771,5 +820,35 @@ mod tests {
             .unwrap();
 
         assert_eq!(desc, "Type doc");
+    }
+
+    #[test]
+    fn preserves_docs_url_from_appinfo_msi_ref() {
+        let xsd = r#"
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xse="http://wixtoolset.org/schemas/v4/xsd/extension">
+  <xs:element name="CustomAction">
+    <xs:annotation>
+      <xs:appinfo>
+        <xse:msiRef table="CustomAction" href="https://example.invalid/customaction" />
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence />
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+"#;
+
+        let converter = XsdConverter::new(AttributeStrategy::Prefix, true, false);
+        let schema = converter.convert(xsd, None).unwrap();
+
+        let url = schema
+            .get("definitions")
+            .and_then(|d| d.get("CustomAction"))
+            .and_then(|d| d.get("x-wixer-docs-url"))
+            .and_then(|d| d.as_str())
+            .unwrap();
+
+        assert_eq!(url, "https://example.invalid/customaction");
     }
 }

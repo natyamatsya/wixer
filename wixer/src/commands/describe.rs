@@ -174,15 +174,22 @@ fn resolve_in_schema(schema: &str, parts: &[&str]) -> Result<Option<WixProperty>
         return Ok(None);
     };
 
-    let (name, kind, description) = match parts.len() {
+    let (name, kind, description, docs_url) = match parts.len() {
         1 => {
-            let Some(desc) = def.get("description").and_then(|d| d.as_str()) else {
+            let desc = def.get("description").and_then(|d| d.as_str());
+            let docs_url = def
+                .get("x-wixer-docs-url")
+                .and_then(|d| d.as_str())
+                .map(|s| s.to_string());
+
+            if desc.is_none() && docs_url.is_none() {
                 return Ok(None);
-            };
+            }
             (
                 format!("{}.{}", schema, element),
                 "Element".to_string(),
-                desc.to_string(),
+                desc.unwrap_or("").to_string(),
+                docs_url,
             )
         }
         2 => {
@@ -193,13 +200,20 @@ fn resolve_in_schema(schema: &str, parts: &[&str]) -> Result<Option<WixProperty>
             let Some(attr_schema) = props.get(attr) else {
                 return Ok(None);
             };
-            let Some(desc) = attr_schema.get("description").and_then(|d| d.as_str()) else {
+            let desc = attr_schema.get("description").and_then(|d| d.as_str());
+            let docs_url = attr_schema
+                .get("x-wixer-docs-url")
+                .and_then(|d| d.as_str())
+                .map(|s| s.to_string());
+
+            if desc.is_none() && docs_url.is_none() {
                 return Ok(None);
-            };
+            }
             (
                 format!("{}.{}.{}", schema, element, attr),
                 "Attribute".to_string(),
-                desc.to_string(),
+                desc.unwrap_or("").to_string(),
+                docs_url,
             )
         }
         _ => {
@@ -211,7 +225,7 @@ fn resolve_in_schema(schema: &str, parts: &[&str]) -> Result<Option<WixProperty>
         name,
         kind,
         description,
-        docs_url: None,
+        docs_url,
         tags: vec![schema.to_string()],
     }))
 }

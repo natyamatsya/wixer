@@ -131,13 +131,18 @@ async fn main() -> Result<()> {
                     continue;
                 };
 
+                let docs_url = def
+                    .get("x-wixer-docs-url")
+                    .and_then(|d| d.as_str())
+                    .map(|s| s.to_string());
+
                 let tags = vec!["Element".to_string(), schema_name.replace(".schema", "")];
 
                 properties.push(wixer::describe_db::WixProperty {
                     name: name.clone(),
                     kind: "Element".to_string(),
                     description: description.to_string(),
-                    docs_url: None,
+                    docs_url,
                     tags,
                 });
             }

@@ -30,6 +30,7 @@ pub struct WixerLsp {
     client: Client,
     schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
     docs: Arc<RwLock<HashMap<String, String>>>,
+    docs_urls: Arc<RwLock<HashMap<String, String>>>,
     doc_paths: Arc<RwLock<HashMap<String, Vec<String>>>>,
     hover_cache: Arc<RwLock<HoverCache>>,
     completions: Arc<RwLock<Vec<CompletionItem>>>,
@@ -110,6 +111,7 @@ impl WixerLsp {
             client,
             schemas: Arc::new(RwLock::new(HashMap::new())),
             docs: Arc::new(RwLock::new(HashMap::new())),
+            docs_urls: Arc::new(RwLock::new(HashMap::new())),
             doc_paths: Arc::new(RwLock::new(HashMap::new())),
             hover_cache: Arc::new(RwLock::new(HashMap::new())),
             completions: Arc::new(RwLock::new(Vec::new())),
@@ -275,6 +277,7 @@ impl LanguageServer for WixerLsp {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let docs_map = self.docs.read().await;
+        let docs_urls = self.docs_urls.read().await;
         let doc_paths = self.doc_paths.read().await;
         let documents = self.documents.read().await;
         let hover_cache = self.hover_cache.read().await;
@@ -344,7 +347,9 @@ impl LanguageServer for WixerLsp {
                 }
 
                 for key in &candidates {
-                    if let Some(desc) = docs_map.get(key) {
+                    let desc = docs_map.get(key);
+                    let docs_url = docs_urls.get(key);
+                    if desc.is_some() || docs_url.is_some() {
                         let yaml_path_str =
                             yaml_path.as_ref().map(|p| p.join(".")).unwrap_or_default();
 
@@ -356,7 +361,15 @@ impl LanguageServer for WixerLsp {
                                 yaml_path_str, key
                             )
                         };
-                        let markdown = format!("**{}**\n\n{}\n\n{}", word, path_block, desc);
+                        let mut markdown = format!("**{}**\n\n{}", word, path_block);
+                        if let Some(desc) = desc {
+                            markdown.push_str("\n\n");
+                            markdown.push_str(desc);
+                        }
+                        if let Some(url) = docs_url {
+                            markdown.push_str("\n\n**Docs**: ");
+                            markdown.push_str(url);
+                        }
                         drop(hover_cache);
                         let mut hover_cache = self.hover_cache.write().await;
                         hover_cache
@@ -400,15 +413,24 @@ impl LanguageServer for WixerLsp {
                     }));
                 }
 
-                if let Some(desc) = docs_map.get(word) {
-                    let markdown =
-                        format!("**{}**\n\n**Resolved Path**: `{}`\n\n{}", word, word, desc);
+                let desc = docs_map.get(word);
+                let docs_url = docs_urls.get(word);
+                if desc.is_some() || docs_url.is_some() {
+                    let mut markdown = format!("**{}**\n\n**Resolved Path**: `{}`", word, word);
+                    if let Some(desc) = desc {
+                        markdown.push_str("\n\n");
+                        markdown.push_str(desc);
+                    }
+                    if let Some(url) = docs_url {
+                        markdown.push_str("\n\n**Docs**: ");
+                        markdown.push_str(url);
+                    }
                     drop(hover_cache);
                     let mut hover_cache = self.hover_cache.write().await;
                     hover_cache
                         .entry(uri.clone())
                         .or_default()
-                        .insert(cache_key.clone(), Some(markdown.clone()));
+                        .insert(cache_key, Some(markdown.clone()));
                     return Ok(Some(Hover {
                         contents: HoverContents::Markup(MarkupContent {
                             kind: MarkupKind::Markdown,
