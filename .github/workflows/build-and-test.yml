@@ -84,6 +84,10 @@ jobs:
 
           wix --version
 
+          # WiX v7 requires accepting the Open Source Maintenance Fee EULA
+          # (https://wixtoolset.org/osmf/); this writes the acceptance file
+          wix eula accept wix7
+
           # Extensions are separate packages; install them explicitly
           wix extension add --global WixToolset.Util.wixext
           wix extension add --global WixToolset.UI.wixext
