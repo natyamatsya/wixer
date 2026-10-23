@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
-  <Identity Name="Test.Pitfall_ActionAfterFinalize" Publisher="CN=Test" Version="1.0.0.0" ProcessorArchitecture="x64"/>
+  <Identity Name="Test.Pitfall_TypoInCondition" Publisher="CN=Test" Version="1.0.0.0" ProcessorArchitecture="x64"/>
   <Properties>
-    <DisplayName>Pitfall_ActionAfterFinalize</DisplayName>
+    <DisplayName>Pitfall_TypoInCondition</DisplayName>
     <PublisherDisplayName>Test</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -14,7 +14,7 @@
   </Resources>
   <Applications>
     <Application Id="App" Executable="App.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Pitfall_ActionAfterFinalize" Description="Pitfall_ActionAfterFinalize" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square150x150Logo.png"/>
+      <uap:VisualElements DisplayName="Pitfall_TypoInCondition" Description="Pitfall_TypoInCondition" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square150x150Logo.png"/>
     </Application>
   </Applications>
   <Capabilities>

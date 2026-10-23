@@ -57,6 +57,7 @@ pub(super) fn find_submodule_examples(
 
         // Find all .wxs and .wxi files in this example
         let wxs_files: Vec<PathBuf> = WalkDir::new(&path)
+            .sort_by_file_name()
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| {
@@ -125,6 +126,7 @@ pub(super) fn discover_build_examples(
 
             // Find main YAML source files (.wxs.yaml only - .wxi.yaml are includes)
             let yaml_main_files: Vec<PathBuf> = WalkDir::new(&path)
+                .sort_by_file_name()
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| {
@@ -136,6 +138,7 @@ pub(super) fn discover_build_examples(
 
             // Find YAML template files (.yaml.in) - these are templates for <?include?>
             let _yaml_template_files: Vec<PathBuf> = WalkDir::new(&path)
+                .sort_by_file_name()
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| {
@@ -147,6 +150,7 @@ pub(super) fn discover_build_examples(
 
             // Find XML files (for preprocessor examples)
             let xml_files: Vec<PathBuf> = WalkDir::new(&path)
+                .sort_by_file_name()
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| {
@@ -218,6 +222,7 @@ pub(super) fn discover_build_examples(
 
             // Find WXS files
             let wxs_files: Vec<PathBuf> = WalkDir::new(&path)
+                .sort_by_file_name()
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| {

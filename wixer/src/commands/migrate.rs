@@ -63,6 +63,8 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
 
     // Load Project - either from converted YAML or directly from XML
     let mut project = WixProject::new();
+    // File whose package describes the app (siblings are loaded too)
+    let mut primary_file = input.to_path_buf();
 
     if is_yaml {
         // Convert YAML to XML in temp directory
@@ -85,6 +87,7 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
         .with_context(|| format!("Failed to convert YAML file: {}", input.display()))?;
 
         info!("Converted YAML to XML: {}", xml_path.display());
+        primary_file = xml_path.clone();
 
         // Also convert any other YAML files in the same directory
         if let Some(parent) = input.parent()
@@ -130,7 +133,7 @@ fn migrate_to_msix(input: &Path, output_dir: &Path) -> Result<()> {
     }
 
     // Extract Info
-    let (p_name, p_ver, p_man) = project.find_product_info();
+    let (p_name, p_ver, p_man) = project.find_product_info(Some(&primary_file));
 
     // Use defaults if missing
     let name = p_name.unwrap_or_else(|| "MyApplication".to_string());

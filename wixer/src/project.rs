@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use regex::Regex;
 use roxmltree::Document;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -25,7 +25,8 @@ pub struct Symbol {
 }
 
 pub struct WixProject {
-    pub files: HashMap<PathBuf, WixFile>,
+    /// Ordered by path so that iteration (and everything derived from it) is deterministic
+    pub files: BTreeMap<PathBuf, WixFile>,
     pub symbols: HashMap<String, Symbol>,
 }
 
@@ -38,7 +39,7 @@ impl Default for WixProject {
 impl WixProject {
     pub fn new() -> Self {
         Self {
-            files: HashMap::new(),
+            files: BTreeMap::new(),
             symbols: HashMap::new(),
         }
     }
@@ -175,12 +176,24 @@ impl WixProject {
         targets
     }
 
-    pub fn find_product_info(&self) -> (Option<String>, Option<String>, Option<String>) {
+    /// Collects Name/Version/Manufacturer from the first Product/Package found,
+    /// looking at `primary` first (if loaded) and then at the other files in path order.
+    pub fn find_product_info(
+        &self,
+        primary: Option<&Path>,
+    ) -> (Option<String>, Option<String>, Option<String>) {
         let mut name = None;
         let mut version = None;
         let mut manufacturer = None;
 
-        for file in self.files.values() {
+        let primary_file = primary.and_then(|p| self.files.get(p));
+        let other_files = self
+            .files
+            .iter()
+            .filter(|(path, _)| Some(path.as_path()) != primary)
+            .map(|(_, file)| file);
+
+        for file in primary_file.into_iter().chain(other_files) {
             if let Ok(doc) = Document::parse(&file.content)
                 && let Some(node) = doc
                     .descendants()
@@ -380,6 +393,39 @@ pub struct FileTypeAssociation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn project_with_packages(names: &[&str]) -> WixProject {
+        let mut project = WixProject::new();
+        for name in names {
+            let path = PathBuf::from(format!("{name}.wxs"));
+            project.files.insert(
+                path.clone(),
+                WixFile {
+                    path,
+                    content: format!(
+                        r#"<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"><Package Name="{name}" Version="1.0.0.0" Manufacturer="M"/></Wix>"#
+                    ),
+                },
+            );
+        }
+        project
+    }
+
+    #[test]
+    fn find_product_info_prefers_primary_file() {
+        let project = project_with_packages(&["a", "b", "c"]);
+        let (name, _, _) = project.find_product_info(Some(Path::new("b.wxs")));
+        assert_eq!(name.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn find_product_info_without_primary_uses_path_order() {
+        let project = project_with_packages(&["c", "a", "b"]);
+        let (name, _, _) = project.find_product_info(None);
+        assert_eq!(name.as_deref(), Some("a"));
+        let (name, _, _) = project.find_product_info(Some(Path::new("missing.wxs")));
+        assert_eq!(name.as_deref(), Some("a"));
+    }
 
     #[test]
     fn test_is_v3_detection() {
