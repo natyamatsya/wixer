@@ -1,8 +1,8 @@
 # Wixer
 
-**Author WiX installers using YAML instead of XML.**
+**Author WiX installers in YAML instead of XML.**
 
-Wixer is a Rust CLI tool that wraps the official WiX Toolset, enabling you to write Windows installers in YAML while transparently converting to WiX XML at build time. It also supports migrating WiX projects to MSIX format.
+Wixer is a Rust CLI that wraps the official WiX Toolset (v4 and later; tested with v7). It converts `.wxs.yaml` sources to WiX XML at build time and adds tooling around them: validation, a language server, installer analysis and simulation, and MSIX migration.
 
 ## Important
 
@@ -12,186 +12,119 @@ If you need a **stable, production-grade installer toolchain**, please use the o
 
 ## Features
 
-- **YAML Authoring** — Write `.wxs.yaml` files instead of verbose XML
-- **Transparent Build** — Wixer intercepts `wix.exe` calls and handles YAML conversion automatically
-- **WiX v4/v6 Support** — Works with modern WiX Toolset versions
-- **MSIX Migration** — Generate `AppxManifest.xml` from WiX sources
-- **CMake Integration** — Seamless integration with CMake/CPack workflows
-- **Language Server** — LSP support for IDE integration
-- **VS Code Extension** — Syntax highlighting and language support for WiX YAML files
-- **Schema Validation** — Validate YAML against embedded WiX JSON schemas
-- **Auto Extension Detection** — Automatically detects required WiX extensions (Util, UI, etc.)
+- **YAML authoring** — `.wxs.yaml`, `.wxi.yaml` and `.wxl.yaml` map 1:1 to `.wxs`, `.wxi` and `.wxl`; import/export converts between them
+- **Drop-in build** — `wixer build` converts YAML and calls the real `wix.exe`, adding required extensions (Util, UI, …) automatically; renamed to `wix.exe`, Wixer passes all other commands through
+- **Validation** — against JSON schemas generated from the WiX XSDs, embedded in the binary (works offline)
+- **Language server + VS Code extension** — diagnostics, hover docs and syntax highlighting for WiX YAML
+- **Analysis** — pre-build checks, execution-sequence visualization, MSI install/upgrade/uninstall simulation and `.wixpdb` inspection
+- **Migration** — upgrade WiX v3 sources to v4+ and generate MSIX `AppxManifest.xml` from WiX projects
+- **CMake integration** — use YAML sources transparently with CPack's WIX generator
 
 ## Quick Start
 
 ```bash
-# Install (or build from source)
 cargo install --path wixer
-
-# Optional: show embedded assets information
-wixer assets --info
-
-# Build MSI from YAML
-wixer build myproject.wxs.yaml -o myproject.msi
-
-# Or convert YAML to XML and use wix.exe directly
-wixer export ./src ./build
-wix build ./build/myproject.wxs
 ```
 
-## File Extensions
+**myapp.wxs.yaml:**
 
-| YAML Source | WiX Target | Purpose |
-|-------------|------------|---------|
-| `.wxs.yaml` | `.wxs` | Main installer source |
-| `.wxi.yaml` | `.wxi` | Include files |
-| `.wxl.yaml` | `.wxl` | Localization |
-
-## Example
-
-**wixer.wxs.yaml:**
 ```yaml
 Wix:
-  xmlns: 'http://wixtoolset.org/schemas/v4/wxs'
+  xmlns: http://wixtoolset.org/schemas/v4/wxs
   Package:
-    Name: 'MyApp'
-    Version: '1.0.0.0'
-    Manufacturer: 'MyCompany'
-    UpgradeCode: 'd0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a'
-    Scope: 'perMachine'
+    Name: MyApp
+    Manufacturer: MyCompany
+    Version: 1.0.0.0
+    UpgradeCode: d0c5a0e0-5d2a-4b0e-9f0a-1c8b3d4e5f6a
+    MediaTemplate:
+      EmbedCab: yes
+    StandardDirectory:
+      Id: ProgramFiles64Folder
+      Directory:
+        Id: INSTALLFOLDER
+        Name: MyApp
+        Component:
+          Id: MainComponent
+          File:
+            Source: MyApp.exe
     Feature:
-      Id: 'Main'
-      Title: 'MyApp'
-      ComponentGroupRef:
-        Id: 'ProductComponents'
+      Id: Main
+      ComponentRef:
+        Id: MainComponent
+```
+
+```bash
+wixer validate myapp.wxs.yaml
+wixer build myapp.wxs.yaml -o myapp.msi   # accepts all `wix build` options
+
+# Or convert to XML and use wix.exe directly
+wixer export . ./xml
+wix build ./xml/myapp.wxs -o myapp.msi
 ```
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `build` | Build MSI from YAML (intercepts wix.exe) |
-| `export` | Convert YAML files to WiX XML |
-| `import` | Convert WiX XML files to YAML |
-| `migrate` | Migrate WiX project to MSIX |
-| `validate` | Validate YAML against embedded schemas |
-| `describe` | Lookup WiX properties and variables |
-| `upgrade` | Upgrade WiX v3 syntax to v4/v6 |
-| `lsp` | Start Language Server Protocol server |
-| `assets` | Inspect or extract embedded assets |
+| Command | Purpose |
+|---------|---------|
+| `build` | Convert YAML sources and run `wix build` |
+| `export` / `import` | Convert a directory of YAML ↔ WiX XML (`yaml-to-wix` / `wix-to-yaml` for single files) |
+| `validate` | Validate YAML against the embedded (or a given) JSON schema |
+| `upgrade` | Upgrade WiX v3 sources to v4+ |
+| `migrate --target msix` | Generate an MSIX `AppxManifest.xml` from a WiX project |
+| `analyze` | Pre-build checks for common authoring issues |
+| `sequence` / `simulate` | Visualize the execution sequence / simulate install modes |
+| `inspect-pdb` | Inspect a `.wixpdb` file |
+| `describe <term>` | Look up MSI properties, WiX elements and custom actions |
+| `lsp` | Start the language server |
+| `doc` | Generate documentation from the WiX schemas |
+| `assets` | Show or extract the embedded assets |
 
-See [docs/commands.md](docs/commands.md) for detailed command documentation.
+See [docs/commands.md](docs/commands.md) for options and examples.
+
+## Configuration
+
+Wixer reads `wixer.yaml` from the path in `WIXER_CONFIG`, else the first one found walking up from the current directory, else the global config directory (`%APPDATA%\natyamatsya\wixer\config` on Windows, `~/.config/wixer` on Linux, `~/Library/Application Support/com.natyamatsya.wixer` on macOS).
+
+```yaml
+build:
+  verbose: false
+  inspect_pdb: false
+  real_wix_path: "C:/Program Files/WiX Toolset v7.0/bin/wix.exe"  # default: wix on PATH
+profiles:
+  debug:            # select with --profile debug
+    verbose: true
+    inspect_pdb: true
+logging:
+  file: wixer.log
+```
 
 ## CMake Integration
-
-Wixer provides CMake modules for seamless CPack integration:
 
 ```cmake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(WixerImpersonate)
 
-# Set up wixer to intercept wix.exe calls
-wixer_impersonate(
-    WIXER_EXE "${CMAKE_SOURCE_DIR}/target/release/wixer.exe"
-    VERBOSE
-    INSPECT_PDB
-)
-
-# Export YAML to XML as a build step
-wixer_add_yaml_sources(wixer_yaml_export
-    "${CMAKE_SOURCE_DIR}"
-    "${CMAKE_BINARY_DIR}/wix"
-)
-
-# Auto-generate AppxManifest from YAML for MSIX
+wixer_impersonate(WIXER_EXE "${CMAKE_SOURCE_DIR}/target/release/wixer.exe")
+wixer_add_yaml_sources(wixer_yaml_export "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/wix")
 wixer_msix_package("${CMAKE_SOURCE_DIR}/myproject.wxs.yaml")
 ```
 
-See [docs/cmake-integration.md](docs/cmake-integration.md) for full CMake documentation.
-
-## Configuration
-
-Wixer reads `wixer.yaml` from:
-1. Walking up from the current directory (project-local)
-2. Global config directory
-
-**wixer.yaml:**
-```yaml
-build:
-  verbose: false
-  inspect_pdb: false
-  real_wix_path: "C:/Program Files/WiX Toolset v6.0/bin/wix.exe"
-
-profiles:
-  debug:
-    verbose: true
-    inspect_pdb: true
-
-logging:
-  file: "wixer.log"
-```
-
-### Config Locations
-
-| OS | Config Directory | Cache Directory |
-|----|------------------|-----------------|
-| Windows | `%APPDATA%\natyamatsya\wixer\config` | `%LOCALAPPDATA%\natyamatsya\wixer\cache` |
-| Linux | `~/.config/wixer` | `~/.cache/wixer` |
-| macOS | `~/Library/Application Support/com.natyamatsya.wixer` | `~/Library/Caches/com.natyamatsya.wixer` |
-
-### CI / Offline Usage
-
-Wixer embeds all required schemas and extension metadata at compile time. No network access or initialization step is required for normal operation.
+See [docs/cmake-integration.md](docs/cmake-integration.md).
 
 ## Building from Source
 
 ```bash
-# Build CLI
 cargo build --release
-
-# Run tests
 cargo test --workspace
+
+cargo make msi             # MSI installer (bundles the VS Code extension)
+cargo make msix            # MSIX package
+cargo make vscode-package  # VS Code extension (.vsix) only
+cargo make gallery-build   # build the example gallery
 ```
 
-### Building Installers
-
-Wixer can build its own installers using cargo-make or CMake:
-
-**Using cargo-make:**
-```bash
-# Build MSI installer (includes VS Code extension)
-cargo make msi
-
-# Build MSIX package
-cargo make msix
-
-# Build all packages (MSI + MSIX)
-cargo make all
-```
-
-**Using CMake:**
-```bash
-# Full MSI build workflow
-cmake --workflow --preset wixer-rel-pkg
-
-# MSIX with auto-generated AppxManifest
-cmake --workflow --preset wixer-auto-msix
-```
-
-### VS Code Extension
-
-The VS Code extension provides syntax highlighting and LSP integration for WiX YAML files:
-
-```bash
-# Build the extension
-cargo make vscode-package
-
-# Install manually
-code --install-extension wixer-vscode/wixer-vscode-*.vsix
-```
-
-The extension is also bundled with the MSI installer as an optional feature.
+Wixer builds its own installers from [wixer.wxs.yaml](wixer.wxs.yaml); `cmake --workflow --preset wixer-rel-pkg` does the same via CMake/CPack. More in [docs/](docs/README.md): architecture, embedded assets and testing.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).

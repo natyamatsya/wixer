@@ -560,7 +560,7 @@ enum Commands {
     },
     /// Recursively export YAML files to WiX XML
     Export {
-        /// Input directory containing .wys, .wyi, .wyl files
+        /// Input directory containing .wxs.yaml, .wxi.yaml, .wxl.yaml files
         #[arg(index = 1)]
         input_dir: PathBuf,
 
