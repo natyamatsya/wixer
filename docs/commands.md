@@ -187,6 +187,40 @@ Provides IDE integration features for `.wxs.yaml` files:
 
 ---
 
+## analyze
+
+Check a WiX project for common authoring issues before building.
+
+```bash
+wixer analyze [path]
+```
+
+Loads all WiX sources (`.wxs`, `.wxi`, `.wxl` and their `.yaml` variants) under `path` (default: current directory) and reports:
+
+| Code | Severity | Check |
+|------|----------|-------|
+| `ICE74` | warning | No `UpgradeCode` in any source |
+| `ICE80` | error | 32-bit component in a 64-bit standard directory |
+| `ICE03` | warning | Custom action / `SetProperty` value longer than 255 characters |
+| `COND001` | error | Condition with unbalanced quotes |
+| `COND002` / `COND003` | warning | Condition uses `&&` / `\|\|` instead of `AND` / `OR` |
+| `YAML001` | warning | XML entity (e.g. `&amp;`) in a YAML file — causes double escaping |
+| `YAML002` | warning | `.yaml` file that contains XML |
+
+`ICE80`, `ICE03` and the `COND*` checks inspect XML sources only; run `wixer export` first to cover YAML sources with them. The command exits non-zero if any error is found.
+
+**Example:**
+
+```bash
+$ wixer analyze ./installer
+WARNING ICE74: No UpgradeCode found. It is strongly recommended to specify an UpgradeCode for your application.
+WARNING YAML001 [installer\demo.wxs.yaml]: YAML file contains XML entity '&amp;' which should be '&'. This may cause double-escaping.
+
+Analysis complete: 0 error(s), 2 warning(s)
+```
+
+---
+
 ## inspect-pdb
 
 Inspect a WiX PDB file to examine installer contents.
