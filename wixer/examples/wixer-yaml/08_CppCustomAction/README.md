@@ -18,7 +18,8 @@ This is a modernized replacement for the legacy WiX SDK-based example in the sub
 ```bash
 cd MyCppCustomAction
 
-# Configure and build (requires CMake 3.25+ and a C++23 compiler)
+# Configure and build (requires CMake 3.25+ and Visual Studio 2022 or later;
+# the presets use the newest installed Visual Studio, no Developer shell needed)
 cmake --preset default
 cmake --build --preset default
 

@@ -10,7 +10,7 @@ prebuild:
       - --preset
       - default
     produces:
-      - MyCppCustomAction/build/build.ninja
+      - MyCppCustomAction/build/CMakeCache.txt
   - tool: cmake
     cwd: MyCppCustomAction
     args:

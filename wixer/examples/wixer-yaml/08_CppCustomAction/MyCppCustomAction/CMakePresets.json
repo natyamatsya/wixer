@@ -4,47 +4,45 @@
     {
       "name": "default",
       "displayName": "Default (x64 Release)",
-      "generator": "Ninja",
+      "description": "Uses CMake's default generator (newest installed Visual Studio), which locates MSVC without a Developer shell",
       "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
       }
     },
     {
       "name": "debug",
       "displayName": "Debug (x64)",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-debug"
     },
     {
       "name": "x86",
       "displayName": "Release (x86)",
-      "generator": "Ninja",
+      "inherits": "default",
       "binaryDir": "${sourceDir}/build-x86",
       "architecture": {
-        "value": "x86",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "value": "Win32",
+        "strategy": "set"
       }
     }
   ],
   "buildPresets": [
     {
       "name": "default",
-      "configurePreset": "default"
+      "configurePreset": "default",
+      "configuration": "Release"
     },
     {
       "name": "debug",
-      "configurePreset": "debug"
+      "configurePreset": "debug",
+      "configuration": "Debug"
     },
     {
       "name": "x86",
-      "configurePreset": "x86"
+      "configurePreset": "x86",
+      "configuration": "Release"
     }
   ]
 }
