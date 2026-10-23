@@ -74,7 +74,9 @@ fn main() {
                                 Ok(f) => f,
                                 Err(_) => continue,
                             };
-                            let name = file.name();
+                            let Ok(name) = file.name() else {
+                                continue;
+                            };
 
                             has_wix |=
                                 name.starts_with("wix-v4-xsd-schemas/") && name.ends_with(".xsd");

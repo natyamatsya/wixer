@@ -61,6 +61,26 @@ fn wix_to_yaml_stores_inner_text_as_value() {
 }
 
 #[test]
+fn wix_to_yaml_unescapes_entities_in_inner_text() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization>
+  <String Id="Terms">  Tom &amp; Jerry &lt;3 &#169; &#x41;  </String>
+</WixLocalization>
+"#;
+
+    let yaml_str =
+        wix_to_yaml::convert_xml_str_to_yaml_str(xml, AttributeStrategy::Inline).unwrap();
+    let root: serde_yaml::Value = serde_yaml::from_str(&yaml_str).unwrap();
+
+    let wxl = support::yaml_get(&root, "WixLocalization");
+    let s = support::yaml_get(wxl, "String");
+    assert_eq!(
+        support::yaml_get(s, "_value").as_str().unwrap(),
+        "Tom & Jerry <3 © A"
+    );
+}
+
+#[test]
 fn wix_to_yaml_converts_include_processing_instruction() {
     let xml = r#"<?xml version="1.0" encoding="utf-8"?>
 <Wix>

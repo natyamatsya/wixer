@@ -29,7 +29,7 @@ type HoverCache = HashMap<Url, HoverDocCache>;
 
 pub struct WixerLsp {
     client: Client,
-    schemas: Arc<RwLock<HashMap<String, jsonschema::JSONSchema>>>,
+    schemas: Arc<RwLock<HashMap<String, jsonschema::Validator>>>,
     docs: Arc<RwLock<HashMap<String, String>>>,
     docs_urls: Arc<RwLock<HashMap<String, String>>>,
     msi_tables: Arc<RwLock<HashMap<String, String>>>,

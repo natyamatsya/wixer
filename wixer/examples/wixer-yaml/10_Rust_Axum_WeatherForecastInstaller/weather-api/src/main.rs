@@ -5,7 +5,7 @@
 
 use axum::{routing::get, Json, Router};
 use chrono::{Duration, Utc};
-use rand::Rng;
+use rand::RngExt;
 use serde::Serialize;
 use std::net::SocketAddr;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -36,18 +36,18 @@ const SUMMARIES: &[&str] = &[
 
 /// GET /weatherforecast - Returns 5 days of random weather forecasts
 async fn get_weather_forecast() -> Json<Vec<WeatherForecast>> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let today = Utc::now();
 
     let forecasts: Vec<WeatherForecast> = (1..=5)
         .map(|i| {
-            let temp_c = rng.gen_range(-20..=55);
+            let temp_c = rng.random_range(-20..=55);
             let date = today + Duration::days(i);
             WeatherForecast {
                 date: date.format("%Y-%m-%d").to_string(),
                 temperature_c: temp_c,
                 temperature_f: 32 + (temp_c as f64 * 1.8) as i32,
-                summary: SUMMARIES[rng.gen_range(0..SUMMARIES.len())],
+                summary: SUMMARIES[rng.random_range(0..SUMMARIES.len())],
             }
         })
         .collect();

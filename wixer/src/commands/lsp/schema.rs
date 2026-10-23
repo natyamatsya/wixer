@@ -306,9 +306,9 @@ fn load_from_describe_db(
 fn compile_schema(
     json: &Value,
     name: &str,
-    schemas: &mut HashMap<String, jsonschema::JSONSchema>,
+    schemas: &mut HashMap<String, jsonschema::Validator>,
 ) -> bool {
-    let compiled = match jsonschema::JSONSchema::compile(json) {
+    let compiled = match jsonschema::validator_for(json) {
         Ok(compiled) => compiled,
         Err(_) => return false,
     };

@@ -44,7 +44,7 @@ pub fn extract_all(output_dir: &Path) -> Result<Vec<PathBuf>> {
             continue;
         }
 
-        let name = file.name().to_string();
+        let name = file.name()?.into_owned();
         let output_path = output_dir.join(&name);
 
         if let Some(parent) = output_path.parent() {
@@ -78,7 +78,7 @@ fn extract_schemas_by_prefix(output_dir: &Path, prefix: &str) -> Result<Vec<Path
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        let name = file.name().to_string();
+        let name = file.name()?.into_owned();
 
         // Skip directories and files not matching our prefix
         if file.is_dir() || !name.starts_with(prefix) {
@@ -129,7 +129,7 @@ pub fn list_embedded_assets() -> Result<Vec<String>> {
     for i in 0..archive.len() {
         let file = archive.by_index(i)?;
         if !file.is_dir() {
-            files.push(file.name().to_string());
+            files.push(file.name()?.into_owned());
         }
     }
     Ok(files)

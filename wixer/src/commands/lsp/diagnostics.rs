@@ -42,22 +42,20 @@ pub async fn validate_document(lsp: &WixerLsp, uri: Url, version: Option<i32>, t
             if let Ok(mut json_val) = serde_json::to_value(&yaml_val) {
                 remove_xmlns(&mut json_val);
 
-                if let Err(errors) = schema.validate(&json_val) {
-                    diags.extend(errors.map(|error| {
-                        let range = find_range(&text, &error.instance_path.to_string());
-                        Diagnostic {
-                            range,
-                            severity: Some(DiagnosticSeverity::ERROR),
-                            code: None,
-                            code_description: None,
-                            source: Some("wixer".to_string()),
-                            message: error.to_string(),
-                            related_information: None,
-                            tags: None,
-                            data: None,
-                        }
-                    }));
-                }
+                diags.extend(schema.iter_errors(&json_val).map(|error| {
+                    let range = find_range(&text, &error.instance_path().to_string());
+                    Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: None,
+                        code_description: None,
+                        source: Some("wixer".to_string()),
+                        message: error.to_string(),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    }
+                }));
             }
 
             // Orphan component detection (with include resolution, cached)

@@ -153,13 +153,13 @@ fn validate_msix_manifest_level1(example_dir: &Path) -> Result<()> {
                 let qname = e.name();
                 let name = qname.as_ref();
                 // Ignore namespaces for validation.
-                let local_name = name.split(|b| *b == b':').next_back().unwrap_or(name);
+                let local_name = name.split(':').next_back().unwrap_or(name);
 
-                if local_name == b"Package" {
+                if local_name == "Package" {
                     has_package = true;
                 }
 
-                if local_name == b"Identity" {
+                if local_name == "Identity" {
                     // Require the usual identity attrs.
                     let mut has_name = false;
                     let mut has_publisher = false;
@@ -167,10 +167,10 @@ fn validate_msix_manifest_level1(example_dir: &Path) -> Result<()> {
                     let mut has_arch = false;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"Name" => has_name = true,
-                            b"Publisher" => has_publisher = true,
-                            b"Version" => has_version = true,
-                            b"ProcessorArchitecture" => has_arch = true,
+                            "Name" => has_name = true,
+                            "Publisher" => has_publisher = true,
+                            "Version" => has_version = true,
+                            "ProcessorArchitecture" => has_arch = true,
                             _ => {}
                         }
                     }
@@ -179,14 +179,14 @@ fn validate_msix_manifest_level1(example_dir: &Path) -> Result<()> {
                     }
                 }
 
-                if local_name == b"Application" {
+                if local_name == "Application" {
                     // Require at least Id + Executable.
                     let mut has_id = false;
                     let mut has_exe = false;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"Id" => has_id = true,
-                            b"Executable" => has_exe = true,
+                            "Id" => has_id = true,
+                            "Executable" => has_exe = true,
                             _ => {}
                         }
                     }
@@ -298,12 +298,11 @@ fn extract_manifest_executable(example_dir: &Path) -> Result<Option<String>> {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let qname = e.name();
                 let name = qname.as_ref();
-                let local_name = name.split(|b| *b == b':').next_back().unwrap_or(name);
-                if local_name == b"Application" {
+                let local_name = name.split(':').next_back().unwrap_or(name);
+                if local_name == "Application" {
                     for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"Executable" {
-                            let value = attr.value.as_ref();
-                            let exe = String::from_utf8_lossy(value).to_string();
+                        if attr.key.as_ref() == "Executable" {
+                            let exe = attr.value.into_owned();
                             return Ok(Some(exe));
                         }
                     }

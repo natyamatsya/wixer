@@ -1,7 +1,6 @@
 use crate::constants::{ALL_SOURCE_EXTENSIONS, EXT_WIXLOC_YAML, EXT_WXL_YAML};
 use crate::embedded_assets;
 use anyhow::{Context, Result};
-use jsonschema::JSONSchema;
 use std::fs;
 use std::path::Path;
 use tracing::{error, info, warn};
@@ -20,8 +19,8 @@ pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
         serde_json::from_str(&schema_content).with_context(|| "Failed to parse schema JSON")?;
 
     // Compile Schema
-    let compiled_schema =
-        JSONSchema::compile(&schema_json).map_err(|e| anyhow::anyhow!("Invalid schema: {}", e))?;
+    let compiled_schema = jsonschema::validator_for(&schema_json)
+        .map_err(|e| anyhow::anyhow!("Invalid schema: {}", e))?;
 
     // Load YAML and convert to JSON
     let yaml_content = fs::read_to_string(yaml_path)
@@ -36,12 +35,12 @@ pub fn validate_file(schema_path: &Path, yaml_path: &Path) -> Result<()> {
     remove_xmlns(&mut json_value);
 
     // Validate
-    let result = compiled_schema.validate(&json_value);
+    let mut errors = compiled_schema.iter_errors(&json_value).peekable();
 
-    if let Err(errors) = result {
+    if errors.peek().is_some() {
         error!("Validation failed:");
         for error in errors {
-            error!("  - {} (at {})", error, error.instance_path);
+            error!("  - {} (at {})", error, error.instance_path());
         }
         anyhow::bail!("Validation failed");
     } else {
@@ -75,8 +74,8 @@ pub fn validate_file_embedded(yaml_path: &Path) -> Result<()> {
     let schema_json: serde_json::Value =
         serde_json::from_str(&schema_content).with_context(|| "Failed to parse schema JSON")?;
 
-    let compiled_schema =
-        JSONSchema::compile(&schema_json).map_err(|e| anyhow::anyhow!("Invalid schema: {}", e))?;
+    let compiled_schema = jsonschema::validator_for(&schema_json)
+        .map_err(|e| anyhow::anyhow!("Invalid schema: {}", e))?;
 
     let yaml_content = fs::read_to_string(yaml_path)
         .with_context(|| format!("Failed to read YAML file: {}", yaml_path.display()))?;
@@ -87,12 +86,12 @@ pub fn validate_file_embedded(yaml_path: &Path) -> Result<()> {
         serde_json::to_value(yaml_value).with_context(|| "Failed to convert YAML to JSON")?;
     remove_xmlns(&mut json_value);
 
-    let result = compiled_schema.validate(&json_value);
+    let mut errors = compiled_schema.iter_errors(&json_value).peekable();
 
-    if let Err(errors) = result {
+    if errors.peek().is_some() {
         error!("Validation failed:");
         for error in errors {
-            error!("  - {} (at {})", error, error.instance_path);
+            error!("  - {} (at {})", error, error.instance_path());
         }
         anyhow::bail!("Validation failed");
     } else {
