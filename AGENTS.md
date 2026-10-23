@@ -240,7 +240,7 @@ The `wixer-gallery` binary tests upgrade/conversion against real WiX examples:
 
 ```bash
 cargo run --bin wixer-gallery -- --help
-cargo run --bin wixer-gallery -- build  # Build all gallery examples
+cargo run --bin wixer-gallery -- --build  # Build all gallery examples
 ```
 
 Examples are configured via `wixer.example.yaml` files in `wixer/examples/configs/`.

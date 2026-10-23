@@ -467,6 +467,7 @@ args = [
     "wixer/examples/configs",
     "--yaml-gallery",
     "wixer/examples/wixer-yaml",
+    "--upgrade",
     "--clean",
 ]
 
@@ -556,6 +557,7 @@ args = [
     "wixer/examples/configs",
     "--yaml-gallery",
     "wixer/examples/wixer-yaml",
+    "--upgrade",
     "--refresh",
     "--clean",
 ]
