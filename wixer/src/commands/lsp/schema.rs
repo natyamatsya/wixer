@@ -619,6 +619,54 @@ fn schema_type_hint(name: &str, schema: &Value) -> Option<String> {
     None
 }
 
+pub fn determine_value_type(schema: &Value) -> Option<SchemaValueType> {
+    let type_node = schema.get("type")?;
+    if let Some(type_str) = type_node.as_str() {
+        return map_type_str(type_str);
+    }
+    if let Some(arr) = type_node.as_array() {
+        for entry in arr {
+            if let Some(type_str) = entry.as_str()
+                && let Some(mapped) = map_type_str(type_str)
+            {
+                return Some(mapped);
+            }
+        }
+    }
+    None
+}
+
+fn map_type_str(type_str: &str) -> Option<SchemaValueType> {
+    match type_str {
+        "boolean" => Some(SchemaValueType::Boolean),
+        "number" => Some(SchemaValueType::Number),
+        "integer" => Some(SchemaValueType::Integer),
+        _ => None,
+    }
+}
+
+pub fn schema_indicates_id(name: &str, schema: &Value) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if lower == "id" || lower.ends_with("id") {
+        return true;
+    }
+    if schema
+        .get("format")
+        .and_then(|v| v.as_str())
+        .map(|s| matches!(s, "uuid" | "guid" | "wix-id"))
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
+        let pattern_lower = pattern.to_ascii_lowercase();
+        if pattern_lower.contains("id") {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod constraints_tests {
     use super::*;
@@ -698,52 +746,4 @@ mod constraints_tests {
         assert!(ctx.constraints.contains_key("Foo.Bar"));
         assert!(ctx.constraints.contains_key("Bar"));
     }
-}
-
-pub fn determine_value_type(schema: &Value) -> Option<SchemaValueType> {
-    let type_node = schema.get("type")?;
-    if let Some(type_str) = type_node.as_str() {
-        return map_type_str(type_str);
-    }
-    if let Some(arr) = type_node.as_array() {
-        for entry in arr {
-            if let Some(type_str) = entry.as_str()
-                && let Some(mapped) = map_type_str(type_str)
-            {
-                return Some(mapped);
-            }
-        }
-    }
-    None
-}
-
-fn map_type_str(type_str: &str) -> Option<SchemaValueType> {
-    match type_str {
-        "boolean" => Some(SchemaValueType::Boolean),
-        "number" => Some(SchemaValueType::Number),
-        "integer" => Some(SchemaValueType::Integer),
-        _ => None,
-    }
-}
-
-pub fn schema_indicates_id(name: &str, schema: &Value) -> bool {
-    let lower = name.to_ascii_lowercase();
-    if lower == "id" || lower.ends_with("id") {
-        return true;
-    }
-    if schema
-        .get("format")
-        .and_then(|v| v.as_str())
-        .map(|s| matches!(s, "uuid" | "guid" | "wix-id"))
-        .unwrap_or(false)
-    {
-        return true;
-    }
-    if let Some(pattern) = schema.get("pattern").and_then(|v| v.as_str()) {
-        let pattern_lower = pattern.to_ascii_lowercase();
-        if pattern_lower.contains("id") {
-            return true;
-        }
-    }
-    false
 }

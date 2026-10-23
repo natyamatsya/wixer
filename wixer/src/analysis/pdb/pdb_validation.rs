@@ -241,33 +241,31 @@ fn check_scheduling_match(
     };
 
     match position {
-        SequencePosition::Before(before_action) => {
-            if actual.before.as_ref() != Some(before_action) {
-                warnings.push(ValidationWarning {
-                    kind: WarningKind::SchedulingMismatch,
-                    message: format!(
-                        "Action '{}' expected Before '{}', but PDB shows Before '{}'",
-                        expected.id,
-                        before_action,
-                        actual.before.as_deref().unwrap_or("<none>")
-                    ),
-                    suggestion: None,
-                });
-            }
+        SequencePosition::Before(before_action)
+            if actual.before.as_ref() != Some(before_action) =>
+        {
+            warnings.push(ValidationWarning {
+                kind: WarningKind::SchedulingMismatch,
+                message: format!(
+                    "Action '{}' expected Before '{}', but PDB shows Before '{}'",
+                    expected.id,
+                    before_action,
+                    actual.before.as_deref().unwrap_or("<none>")
+                ),
+                suggestion: None,
+            });
         }
-        SequencePosition::After(after_action) => {
-            if actual.after.as_ref() != Some(after_action) {
-                warnings.push(ValidationWarning {
-                    kind: WarningKind::SchedulingMismatch,
-                    message: format!(
-                        "Action '{}' expected After '{}', but PDB shows After '{}'",
-                        expected.id,
-                        after_action,
-                        actual.after.as_deref().unwrap_or("<none>")
-                    ),
-                    suggestion: None,
-                });
-            }
+        SequencePosition::After(after_action) if actual.after.as_ref() != Some(after_action) => {
+            warnings.push(ValidationWarning {
+                kind: WarningKind::SchedulingMismatch,
+                message: format!(
+                    "Action '{}' expected After '{}', but PDB shows After '{}'",
+                    expected.id,
+                    after_action,
+                    actual.after.as_deref().unwrap_or("<none>")
+                ),
+                suggestion: None,
+            });
         }
         _ => {}
     }
