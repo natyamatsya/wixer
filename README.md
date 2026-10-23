@@ -4,6 +4,12 @@
 
 Wixer is a Rust CLI tool that wraps the official WiX Toolset, enabling you to write Windows installers in YAML while transparently converting to WiX XML at build time. It also supports migrating WiX projects to MSIX format.
 
+## Important
+
+This repository is an **experimental project** — a personal playground for exploring YAML authoring, language-server tooling, MSI execution simulation, and MSIX migration on top of the WiX Toolset. It is published as-is, purely for anyone curious about that experimentation. There are **no plans for community support**: no issue triage, no roadmap, no release or stability guarantees, and history may be force-rewritten without notice.
+
+If you need a **stable, production-grade installer toolchain**, please use the official [**WiX Toolset**](https://github.com/wixtoolset/wix) directly, which Wixer wraps and builds upon. If you'd like to support that effort, please consider sponsoring its maintainers at <https://github.com/sponsors/wixtoolset>.
+
 ## Features
 
 - **YAML Authoring** — Write `.wxs.yaml` files instead of verbose XML
